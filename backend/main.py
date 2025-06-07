@@ -23,7 +23,7 @@ app.add_middleware(
 
 # Initialize Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel('models/gemini-2.0-flash')
+model = genai.GenerativeModel("models/gemini-2.0-flash")
 
 class FormData(BaseModel):
     content: str
@@ -51,7 +51,13 @@ async def check_privacy(data: FormData):
         }}
         """
         
-        detection_response = model.generate_content(detection_prompt)
+        detection_response = model.generate_content(
+            detection_prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0,
+                max_output_tokens=1000
+            )
+        )
         
         # Parse the response using json.loads
         try:
@@ -66,21 +72,35 @@ async def check_privacy(data: FormData):
                 sensitive_parts = json.loads(content[start:end])
             else:
                 sensitive_parts = []
-        
-        # Synthesize alternative text
-        synthesis_prompt = f"""
-        Replace the sensitive information in the following text with synthetic alternatives while maintaining the same context and meaning:
-        {data.content}
-        
-        Return only the synthesized text.
-        """
-        
-        synthesis_response = model.generate_content(synthesis_prompt)
+
+        # Generate synthetic alternatives for each sensitive part
+        for part in sensitive_parts:
+            synthesis_prompt = f"""
+            Replace the following sensitive information with a synthetic alternative while maintaining the same context and meaning:
+            Original: {part['text']}
+            Type: {part['type']}
+            
+            Return only the synthetic replacement text.
+            """
+            
+            synthesis_response = model.generate_content(
+                synthesis_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0,
+                    max_output_tokens=1000
+                )
+            )
+            part['synthesized_text'] = synthesis_response.text.strip()
+
+        # Generate the complete synthesized text
+        synthesized_text = data.content
+        for part in sensitive_parts:
+            synthesized_text = synthesized_text.replace(part['text'], part['synthesized_text'])
         
         return PrivacyCheckResponse(
             original_text=data.content,
             sensitive_parts=sensitive_parts,
-            synthesized_text=synthesis_response.text
+            synthesized_text=synthesized_text
         )
         
     except Exception as e:
