@@ -35,6 +35,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SaveIcon from '@mui/icons-material/Save';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import axios from 'axios';
 
 const theme = createTheme({
@@ -82,6 +83,14 @@ function App() {
   const [intermediateInputs, setIntermediateInputs] = useState({});
   const [answerIndicators, setAnswerIndicators] = useState({});
   const [optionSuggestions, setOptionSuggestions] = useState([]);
+  const [suggestionHistory, setSuggestionHistory] = useState(() => {
+    const savedHistory = localStorage.getItem('suggestionHistory');
+    return savedHistory ? JSON.parse(savedHistory) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('suggestionHistory', JSON.stringify(suggestionHistory));
+  }, [suggestionHistory]);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -110,7 +119,8 @@ function App() {
     if (!currentQuestion) return;
 
     // Get the saved answer for this question
-    const savedAnswer = answers[currentQuestion.id];
+    const savedAnswer = answers[currentQuestion.id] || {};
+    const savedHistory = suggestionHistory[currentQuestion.id] || {};
 
     // Reset analysis states
     setResult(null);
@@ -128,20 +138,41 @@ function App() {
     setOptionAnchorEl(null);
     setInput('');
 
-    // Update answer indicator
+    // Restore saved answer and suggestion history if they exist
     if (savedAnswer) {
-      setAnswerIndicators(prev => ({
-        ...prev,
-        [currentQuestion.id]: {
-          hasAnswer: true,
-          type: currentQuestion.type,
-          text: savedAnswer.text,
-          selected: savedAnswer.selected,
-          other: savedAnswer.other,
-          skipped: savedAnswer.skipped
-        }
-      }));
+      if (currentQuestion.type === 'text') {
+        const currentText = savedHistory?.text?.current || savedAnswer.text || '';
+        setInput(currentText);
+        setFixedText(new Set(savedAnswer.fixedText || []));
+        setIgnoredText(new Set(savedAnswer.ignoredText || []));
+      } else if (currentQuestion.type === 'multiple_choice') {
+        const currentOptions = (savedAnswer.selected || []).map(opt => 
+          savedHistory?.options?.[opt]?.current || opt
+        );
+        setSelectedOptions(currentOptions);
+        setOtherInput(savedAnswer.other || '');
+        setFixedOptions(new Set(savedAnswer.fixedOptions || []));
+        setIgnoredOptions(new Set(savedAnswer.ignoredOptions || []));
+      }
     }
+
+    // Update answer indicator with suggestion history
+    setAnswerIndicators(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        hasAnswer: Boolean(savedAnswer),
+        type: currentQuestion.type,
+        text: savedHistory?.text?.current || savedAnswer?.text || '',
+        selected: currentQuestion.type === 'multiple_choice' 
+          ? (savedAnswer?.selected || []).map(opt => savedHistory?.options?.[opt]?.current || opt)
+          : undefined,
+        other: savedAnswer?.other || '',
+        skipped: savedAnswer?.skipped || false,
+        suggestionHistory: currentQuestion.type === 'text'
+          ? savedHistory?.text?.suggestions || []
+          : savedHistory?.options || {}
+      }
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -219,11 +250,29 @@ function App() {
   };
 
   const handleNext = () => {
-    if (currentQuestionIndex < questionnaire.questions.length - 1) {
+    if (currentQuestionIndex === questionnaire.questions.length - 1) {
+      // Export answers as JSON when finishing
+      const exportData = {
+        questionnaire: questionnaire,
+        answers: answers,
+        timestamp: new Date().toISOString()
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'questionnaire_answers.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Move to completion page
+      setCurrentPage(3);
+    } else {
       setCurrentQuestionIndex(prev => prev + 1);
       loadCurrentQuestion();
-    } else {
-      setCurrentPage(2); // Move to results page
     }
   };
 
@@ -236,88 +285,88 @@ function App() {
     }
   };
 
-  const handleMultipleChoiceSubmit = async () => {
+  const handleOptionChange = async (e, option) => {
     const currentQuestion = questionnaire.questions[currentQuestionIndex];
+    let newSelectedOptions;
     
-    // If no options selected, just move to next question
-    if (selectedOptions.length === 0) {
-      handleNext();
+    if (currentQuestion.allow_multiple) {
+      // For multiple choice, toggle the option
+      newSelectedOptions = e.target.checked 
+        ? [...selectedOptions, option]
+        : selectedOptions.filter(o => o !== option);
+    } else {
+      // For single choice, replace the selection
+      newSelectedOptions = [option];
+    }
+    
+    setSelectedOptions(newSelectedOptions);
+
+    // If no options selected, just update the state
+    if (newSelectedOptions.length === 0) {
+      setAnswerIndicators(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          hasAnswer: false,
+          type: 'multiple_choice',
+          selected: [],
+          other: otherInput || null
+        }
+      }));
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
+    // Analyze privacy for selected options
     try {
-      const response = await axios.post('http://localhost:8000/analyze', {
-        text: selectedOptions.join(', ') + (otherInput ? `, ${otherInput}` : '')
+      const response = await axios.post('http://localhost:8000/api/check-privacy', {
+        content: newSelectedOptions.join(', ') + (otherInput ? `, ${otherInput}` : ''),
+        type: 'multiple_choice'
       });
 
       if (response.data.sensitive_parts.length > 0) {
         setOptionSuggestions(response.data.sensitive_parts);
         setShowOptionSuggestions(true);
-      } else {
-        // If no sensitive parts, save answer and move to next
-        const answer = {
-          question_id: currentQuestion.id,
-          selected: selectedOptions,
-          other: otherInput || null,
-          otherResult: otherResult,
-          fixedOptions: Array.from(fixedOptions),
-          ignoredOptions: Array.from(ignoredOptions),
-          optionResults: optionResults
-        };
-
-        setAnswers(prev => ({
-          ...prev,
-          [currentQuestion.id]: answer
-        }));
-
-        setAnswerIndicators(prev => ({
-          ...prev,
-          [currentQuestion.id]: {
-            hasAnswer: true,
-            type: 'multiple_choice',
-            selected: selectedOptions,
-            other: otherInput || null,
-            originalSelected: selectedOptions,
-            originalOther: otherInput || null
-          }
-        }));
-        handleNext();
       }
-    } catch (err) {
-      console.error('Error:', err);
-      // If backend is not available, proceed without analysis
-      const answer = {
-        question_id: currentQuestion.id,
-        selected: selectedOptions,
-        other: otherInput || null,
-        otherResult: null,
-        fixedOptions: [],
-        ignoredOptions: [],
-        optionResults: {}
-      };
 
-      setAnswers(prev => ({
-        ...prev,
-        [currentQuestion.id]: answer
-      }));
-
+      // Update answer indicator with current selections
       setAnswerIndicators(prev => ({
         ...prev,
         [currentQuestion.id]: {
           hasAnswer: true,
           type: 'multiple_choice',
-          selected: selectedOptions,
+          selected: newSelectedOptions,
           other: otherInput || null,
-          originalSelected: selectedOptions,
+          originalSelected: newSelectedOptions,
+          originalOther: otherInput || null,
+          suggestionHistory: suggestionHistory[currentQuestion.id]?.options || {}
+        }
+      }));
+
+      // Save the answer
+      setAnswers(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          selected: newSelectedOptions,
+          other: otherInput || null,
+          fixedOptions: Array.from(fixedOptions),
+          ignoredOptions: Array.from(ignoredOptions),
+          optionResults: optionResults
+        }
+      }));
+
+    } catch (err) {
+      console.error('Error analyzing privacy:', err);
+      // If analysis fails, still update the indicator with current selections
+      setAnswerIndicators(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          hasAnswer: true,
+          type: 'multiple_choice',
+          selected: newSelectedOptions,
+          other: otherInput || null,
+          originalSelected: newSelectedOptions,
           originalOther: otherInput || null
         }
       }));
-      handleNext();
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -353,6 +402,27 @@ function App() {
     const currentQuestion = questionnaire.questions[currentQuestionIndex];
     const newText = input.replace(suggestion.text, suggestion.synthesized_text);
     setInput(newText);
+    
+    // Update suggestion history
+    setSuggestionHistory(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        text: {
+          original: input,
+          current: newText,
+          suggestions: [
+            ...(prev[currentQuestion.id]?.text?.suggestions || []),
+            {
+              original: suggestion.text,
+              synthesized: suggestion.synthesized_text,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        }
+      }
+    }));
+
     // Update answer indicator with synthesized text
     setAnswerIndicators(prev => ({
       ...prev,
@@ -360,7 +430,8 @@ function App() {
         hasAnswer: true,
         type: 'text',
         text: newText,
-        originalText: input
+        originalText: input,
+        suggestionHistory: suggestionHistory[currentQuestion.id]?.text?.suggestions || []
       }
     }));
     setFixedText(prev => new Set([...prev, suggestion.text]));
@@ -413,13 +484,61 @@ function App() {
     return result;
   };
 
+  const handleConfirmText = () => {
+    const currentQuestion = questionnaire.questions[currentQuestionIndex];
+    setAnswerIndicators(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        hasAnswer: true,
+        type: 'text',
+        text: input,
+        originalText: input,
+        suggestionHistory: suggestionHistory[currentQuestion.id]?.text?.suggestions || []
+      }
+    }));
+
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        text: input,
+        result: result,
+        fixedText: Array.from(fixedText),
+        ignoredText: Array.from(ignoredText)
+      }
+    }));
+  };
+
+  const handleConfirmOptions = () => {
+    const currentQuestion = questionnaire.questions[currentQuestionIndex];
+    setAnswerIndicators(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        hasAnswer: true,
+        type: 'multiple_choice',
+        selected: selectedOptions,
+        other: otherInput || null,
+        originalSelected: selectedOptions,
+        originalOther: otherInput || null,
+        suggestionHistory: suggestionHistory[currentQuestion.id]?.options || {}
+      }
+    }));
+
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        selected: selectedOptions,
+        other: otherInput || null,
+        fixedOptions: Array.from(fixedOptions),
+        ignoredOptions: Array.from(ignoredOptions),
+        optionResults: optionResults
+      }
+    }));
+  };
+
   const renderTextInputPage = () => {
     const currentQuestion = questionnaire.questions[currentQuestionIndex];
     return (
       <Box>
-        {/* <Typography variant="h6" gutterBottom>
-          {currentQuestion.question}
-        </Typography> */}
         <form onSubmit={handleSubmit}>
           <TextField
             ref={textFieldRef}
@@ -443,6 +562,14 @@ function App() {
               disabled={loading || (currentQuestion.required && !input.trim())}
             >
               {loading ? <CircularProgress size={24} /> : 'Analyze Privacy'}
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleConfirmText}
+              disabled={currentQuestion.required && !input.trim()}
+            >
+              Confirm Answer
             </Button>
             {!currentQuestion.required && (
               <Button
@@ -536,6 +663,39 @@ function App() {
     </Grid>
   );
 
+  const handleReset = () => {
+    setCurrentPage(0);
+    setQuestionnaire(null);
+    setCurrentQuestionIndex(0);
+    setAnswers({});
+    setInput('');
+    setQuestion('');
+    setLoading(false);
+    setResult(null);
+    setError(null);
+    setAnchorEl(null);
+    setSelectedSuggestion(null);
+    setFixedText(new Set());
+    setIgnoredText(new Set());
+    setSelectedOptions([]);
+    setOtherInput('');
+    setOtherResult(null);
+    setAnalyzedOptions(false);
+    setOptionResults({});
+    setFixedOptions(new Set());
+    setIgnoredOptions(new Set());
+    setOptionAnchorEl(null);
+    setSelectedOptionSuggestion(null);
+    setAnalyzingOptions(false);
+    setShowOptionSuggestions(false);
+    setSkippedQuestions(new Set());
+    setPopupAnchorEl(null);
+    setIntermediateResults({});
+    setIntermediateInputs({});
+    setAnswerIndicators({});
+    setOptionSuggestions([]);
+  };
+
   const renderCompletionPage = () => (
     <Grid container spacing={4}>
       <Grid item xs={12}>
@@ -544,15 +704,15 @@ function App() {
             Questionnaire Completed!
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Thank you for completing the questionnaire. You can now export your answers.
+            Thank you for completing the questionnaire. Your answers have been saved.
           </Typography>
           <Button
             variant="contained"
             color="primary"
-            startIcon={<SaveIcon />}
-            onClick={handleExport}
+            startIcon={<RestartAltIcon />}
+            onClick={handleReset}
           >
-            Export Answers
+            Back to Start
           </Button>
         </Paper>
       </Grid>
@@ -649,29 +809,9 @@ function App() {
     );
   };
 
-  const renderNavigationButtons = () => {
-    return (
-      <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={handleBack}
-        >
-          Back
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForwardIcon />}
-          onClick={handleNext}
-        >
-          {currentQuestionIndex === questionnaire.questions.length - 1 ? 'Finish' : 'Next'}
-        </Button>
-      </Stack>
-    );
-  };
-
   const renderQuestionPage = () => {
     const currentQuestion = questionnaire.questions[currentQuestionIndex];
+    if (!currentQuestion) return null;
     
     return (
       <Grid container spacing={4}>
@@ -689,17 +829,37 @@ function App() {
                 )}
               </Box>
               {currentQuestion.type === 'multiple_choice' && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={analyzeOptions}
-                  disabled={analyzingOptions}
-                  startIcon={analyzingOptions ? <CircularProgress size={20} /> : null}
-                >
-                  {analyzingOptions ? 'Analyzing...' : 'Analyze Options Privacy'}
-                </Button>
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleMultipleChoiceSubmit}
+                    disabled={selectedOptions.length === 0 || analyzingOptions}
+                    startIcon={analyzingOptions ? <CircularProgress size={20} /> : null}
+                  >
+                    {analyzingOptions ? 'Analyzing...' : selectedOptions.length === 0 ? 'Make choices before analyze' : 'Analyze Options Privacy'}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={handleConfirmOptions}
+                    disabled={currentQuestion.required && selectedOptions.length === 0}
+                  >
+                    Confirm Selection
+                  </Button>
+                </Stack>
               )}
             </Box>
+
+            {error && (
+              <Alert 
+                severity={error.type || 'error'} 
+                sx={{ mb: 2 }}
+                onClose={() => setError(null)}
+              >
+                {error.message}
+              </Alert>
+            )}
 
             {renderQuestionIndicator(currentQuestion.id)}
 
@@ -712,7 +872,7 @@ function App() {
                 </FormLabel>
                 {currentQuestion.allow_multiple ? (
                   <Box>
-                    {currentQuestion.options.map((option, index) => (
+                    {(currentQuestion.options || []).map((option, index) => (
                       <FormControlLabel
                         key={index}
                         control={
@@ -730,7 +890,7 @@ function App() {
                     value={selectedOptions[0] || ''}
                     onChange={(e) => handleOptionChange(e, e.target.value)}
                   >
-                    {currentQuestion.options.map((option, index) => (
+                    {(currentQuestion.options || []).map((option, index) => (
                       <FormControlLabel
                         key={index}
                         value={option}
@@ -740,7 +900,7 @@ function App() {
                     ))}
                   </RadioGroup>
                 )}
-                {currentQuestion.options.includes('Other') && (
+                {currentQuestion.options?.includes('Other') && (
                   <Box sx={{ mt: 2 }}>
                     <TextField
                       fullWidth
@@ -765,115 +925,10 @@ function App() {
                 )}
               </FormControl>
             )}
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-              <Button
-                variant="outlined"
-                onClick={handleBack}
-              >
-                Back
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={currentQuestion.type === 'multiple_choice' ? handleMultipleChoiceSubmit : handleNext}
-              >
-                {currentQuestionIndex === questionnaire.questions.length - 1 ? 'Finish' : 'Next'}
-              </Button>
-            </Box>
           </Paper>
         </Grid>
       </Grid>
     );
-  };
-
-  const handleOptionChange = (e, option) => {
-    const currentQuestion = questionnaire.questions[currentQuestionIndex];
-    if (currentQuestion.allow_multiple) {
-      // For multiple choice, toggle the option
-      setSelectedOptions(prev => 
-        e.target.checked 
-          ? [...prev, option]
-          : prev.filter(o => o !== option)
-      );
-    } else {
-      // For single choice, replace the selection
-      setSelectedOptions([option]);
-    }
-  };
-
-  const handleOptionSuggestionClick = (option, suggestion, event) => {
-    setSelectedOptionSuggestion({ option, suggestion });
-    setOptionAnchorEl(event.currentTarget);
-  };
-
-  const handleOptionSuggestionClose = () => {
-    setOptionAnchorEl(null);
-    setSelectedOptionSuggestion(null);
-  };
-
-  const applyOptionSuggestion = (option, suggestion) => {
-    const currentQuestion = questionnaire.questions[currentQuestionIndex];
-    const newOption = option.replace(suggestion.text, suggestion.synthesized_text);
-    
-    // Update the selected options with the revised text
-    const newSelectedOptions = selectedOptions.map(opt => 
-      opt === option ? newOption : opt
-    );
-    setSelectedOptions(newSelectedOptions);
-
-    // Update answer indicator with revised options
-    setAnswerIndicators(prev => ({
-      ...prev,
-      [currentQuestion.id]: {
-        hasAnswer: true,
-        type: 'multiple_choice',
-        selected: newSelectedOptions,
-        other: otherInput || null,
-        originalSelected: selectedOptions,
-        originalOther: otherInput || null
-      }
-    }));
-
-    setFixedOptions(prev => new Set([...prev, option]));
-    setShowOptionSuggestions(false);
-  };
-
-  const ignoreOptionSuggestion = (option) => {
-    setIgnoredOptions(prev => new Set([...prev, option]));
-    setShowOptionSuggestions(false);
-  };
-
-  const toggleOptionSuggestion = (option) => {
-    setShowOptionSuggestions(prev => ({
-      ...prev,
-      [option]: !prev[option]
-    }));
-  };
-
-  const analyzeOptions = async () => {
-    const currentQuestion = questionnaire.questions[currentQuestionIndex];
-    setAnalyzingOptions(true);
-    setError(null);
-
-    try {
-      const results = {};
-      for (const option of currentQuestion.options) {
-        if (option === 'Other') continue;
-        
-        const response = await axios.post('http://localhost:8000/api/check-privacy', {
-          content: option,
-          type: 'text'
-        });
-        results[option] = response.data;
-      }
-      setOptionResults(results);
-    } catch (err) {
-      console.error('API Error:', err);
-      setError(err.response?.data?.detail || 'Failed to analyze options. Please try again.');
-    } finally {
-      setAnalyzingOptions(false);
-    }
   };
 
   const handleOtherSubmit = async () => {
@@ -981,6 +1036,158 @@ function App() {
     );
   };
 
+  const handleOptionSuggestionClick = (option, suggestion, event) => {
+    setSelectedOptionSuggestion({ option, suggestion });
+    setOptionAnchorEl(event.currentTarget);
+  };
+
+  const handleOptionSuggestionClose = () => {
+    setOptionAnchorEl(null);
+    setSelectedOptionSuggestion(null);
+  };
+
+  const applyOptionSuggestion = (option, suggestion) => {
+    const currentQuestion = questionnaire.questions[currentQuestionIndex];
+    const newOption = option.replace(suggestion.text, suggestion.synthesized_text);
+    
+    // Update the selected options with the revised text
+    const newSelectedOptions = selectedOptions.map(opt => 
+      opt === option ? newOption : opt
+    );
+    setSelectedOptions(newSelectedOptions);
+
+    // Update suggestion history
+    setSuggestionHistory(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        options: {
+          ...prev[currentQuestion.id]?.options,
+          [option]: {
+            original: option,
+            current: newOption,
+            suggestions: [
+              ...(prev[currentQuestion.id]?.options?.[option]?.suggestions || []),
+              {
+                original: suggestion.text,
+                synthesized: suggestion.synthesized_text,
+                timestamp: new Date().toISOString()
+              }
+            ]
+          }
+        }
+      }
+    }));
+
+    // Update answer indicator with revised options
+    setAnswerIndicators(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        hasAnswer: true,
+        type: 'multiple_choice',
+        selected: newSelectedOptions,
+        other: otherInput || null,
+        originalSelected: selectedOptions,
+        originalOther: otherInput || null,
+        suggestionHistory: suggestionHistory[currentQuestion.id]?.options || {}
+      }
+    }));
+
+    setFixedOptions(prev => new Set([...prev, option]));
+    setShowOptionSuggestions(false);
+  };
+
+  const ignoreOptionSuggestion = (option) => {
+    setIgnoredOptions(prev => new Set([...prev, option]));
+    setShowOptionSuggestions(false);
+  };
+
+  const toggleOptionSuggestion = (option) => {
+    setShowOptionSuggestions(prev => ({
+      ...prev,
+      [option]: !prev[option]
+    }));
+  };
+
+  const handleMultipleChoiceSubmit = async () => {
+    console.log('Starting privacy analysis for options:', selectedOptions);
+    if (selectedOptions.length === 0) {
+      console.log('No options selected, returning');
+      return;
+    }
+    
+    setAnalyzingOptions(true);
+    setError(null);
+
+    try {
+      console.log('Making API call to check privacy');
+      const response = await axios.post('http://localhost:8000/api/check-privacy', {
+        content: selectedOptions.join(', ') + (otherInput ? `, ${otherInput}` : ''),
+        type: 'multiple_choice'
+      });
+      console.log('API response:', response.data);
+
+      // Store the results for each option
+      const newOptionResults = {};
+      response.data.sensitive_parts.forEach(part => {
+        const option = part.text;
+        newOptionResults[option] = {
+          sensitive_parts: [part],
+          synthesized_text: part.synthesized_text
+        };
+      });
+      setOptionResults(newOptionResults);
+
+      if (response.data.sensitive_parts.length > 0) {
+        setOptionSuggestions(response.data.sensitive_parts);
+        setShowOptionSuggestions(true);
+      } else {
+        // Show success notification when no privacy issues are found
+        setOptionSuggestions([]);
+        setShowOptionSuggestions(false);
+        setError({
+          type: 'success',
+          message: 'No privacy issues found in your selections.'
+        });
+      }
+
+      // Update answer indicator with current selections
+      setAnswerIndicators(prev => ({
+        ...prev,
+        [questionnaire.questions[currentQuestionIndex].id]: {
+          hasAnswer: true,
+          type: 'multiple_choice',
+          selected: selectedOptions,
+          other: otherInput || null,
+          originalSelected: selectedOptions,
+          originalOther: otherInput || null,
+          suggestionHistory: suggestionHistory[questionnaire.questions[currentQuestionIndex].id]?.options || {}
+        }
+      }));
+
+      // Save the answer
+      setAnswers(prev => ({
+        ...prev,
+        [questionnaire.questions[currentQuestionIndex].id]: {
+          selected: selectedOptions,
+          other: otherInput || null,
+          fixedOptions: Array.from(fixedOptions),
+          ignoredOptions: Array.from(ignoredOptions),
+          optionResults: newOptionResults
+        }
+      }));
+
+    } catch (err) {
+      console.error('Error analyzing privacy:', err);
+      setError({
+        type: 'error',
+        message: err.response?.data?.detail || 'Failed to connect to the server. Please try again.'
+      });
+    } finally {
+      setAnalyzingOptions(false);
+    }
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1023,7 +1230,7 @@ function App() {
                 <Button
                   variant="contained"
                   endIcon={<ArrowForwardIcon />}
-                  onClick={currentQuestionIndex === questionnaire?.questions.length - 1 ? handleMultipleChoiceSubmit : handleNext}
+                  onClick={handleNext}
                 >
                   {currentQuestionIndex === questionnaire?.questions.length - 1 ? 'Finish' : 'Next'}
                 </Button>
