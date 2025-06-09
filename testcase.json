@@ -1,0 +1,86 @@
+{
+    "title": "Survey on Preferences for On-Demand and Long-Acting PrEP",
+    "description": "This survey collects feedback on preferences and experiences regarding HIV prevention options among Black sexual minority men.",
+    "questions": [
+      {
+        "id": "q1",
+        "type": "text",
+        "question": "In your own words, please describe your general awareness and understanding of PrEP.",
+        "required": true,
+        "max_length": 500
+      },
+      {
+        "id": "q2",
+        "type": "multiple_choice",
+        "question": "Which of the following best describes your current PrEP use status?",
+        "options": [
+          "Current PrEP user",
+          "Never used PrEP",
+          "Used PrEP but discontinued",
+          "Not sure what PrEP is"
+        ],
+        "required": true,
+        "allow_multiple": false
+      },
+      {
+        "id": "q3",
+        "type": "text",
+        "question": "If you have used PrEP, what motivated you to start using it?",
+        "required": false,
+        "max_length": 500
+      },
+      {
+        "id": "q4",
+        "type": "multiple_choice",
+        "question": "What are your primary concerns or barriers to using PrEP?",
+        "options": [
+          "Side effects",
+          "Stigma or judgment",
+          "Cost or insurance issues",
+          "Forgetfulness or adherence challenges",
+          "Medical mistrust",
+          "None",
+          "Other"
+        ],
+        "required": true,
+        "allow_multiple": true
+      },
+      {
+        "id": "q5",
+        "type": "multiple_choice",
+        "question": "Which PrEP method would you prefer if both were equally accessible and affordable?",
+        "options": [
+          "Daily oral pill",
+          "On-demand (event-based) pill",
+          "Long-acting injection (e.g., every 2 months)",
+          "I would not use any PrEP",
+          "Not sure"
+        ],
+        "required": true,
+        "allow_multiple": false
+      },
+      {
+        "id": "q6",
+        "type": "text",
+        "question": "What support or information would make you more likely to consider using PrEP?",
+        "required": false,
+        "max_length": 300
+      },
+      {
+        "id": "q7",
+        "type": "multiple_choice",
+        "question": "Where did you first hear about PrEP?",
+        "options": [
+          "Healthcare provider",
+          "Social media",
+          "Friends or peers",
+          "Community organizations",
+          "Outreach event",
+          "Other"
+        ],
+        "required": true,
+        "allow_multiple": false
+      }
+    ]
+  }
+  

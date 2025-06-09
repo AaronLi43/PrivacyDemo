@@ -780,10 +780,14 @@ function App() {
     const indicator = answerIndicators[questionId];
     if (!indicator) return null;
 
+    // Get current question and its options
+    const currentQuestion = questionnaire?.questions?.find(q => q.id === questionId);
+    const currentOptions = currentQuestion?.options || [];
+
     return (
       <Box sx={{ 
         display: 'flex', 
-        alignItems: 'center', 
+        flexDirection: 'column',
         gap: 1,
         color: indicator.skipped ? 'text.secondary' : 'success.main',
         fontSize: '0.875rem',
@@ -791,18 +795,50 @@ function App() {
       }}>
         {indicator.skipped ? (
           <>
-            <CloseIcon fontSize="small" />
-            <Typography variant="body2">Skipped</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CloseIcon fontSize="small" />
+              <Typography variant="body2">Skipped</Typography>
+            </Box>
           </>
         ) : (
           <>
-            <CheckCircleIcon fontSize="small" />
-            <Typography variant="body2">
-              {indicator.type === 'text' 
-                ? `Answered: ${indicator.text.substring(0, 1000)}${indicator.text.length > 1000 ? '...' : ''}`
-                : `Selected: ${indicator.selected?.join(', ')}${indicator.other ? `, Other: ${indicator.other}` : ''}`
-              }
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CheckCircleIcon fontSize="small" />
+              <Typography variant="body2">
+                {indicator.type === 'text' 
+                  ? `Answered: ${indicator.text.substring(0, 1000)}${indicator.text.length > 1000 ? '...' : ''}`
+                  : `Selected: ${indicator.selected?.join(', ')}${indicator.other ? `, Other: ${indicator.other}` : ''}`
+                }
+              </Typography>
+            </Box>
+            
+            {/* Show fixed options and their synthesized text, but only for selected and valid options */}
+            {indicator.type === 'multiple_choice' && indicator.suggestionHistory && indicator.selected &&
+              indicator.selected
+                .filter(option => currentOptions.includes(option) && indicator.suggestionHistory[option])
+                .map(option => {
+                  const history = indicator.suggestionHistory[option];
+                  return (
+                    <Box key={option} sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      ml: 3,
+                      p: 1,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Original: {option}
+                      </Typography>
+                      <Typography variant="body2" color="success.main">
+                        Synthesized: {history.current}
+                      </Typography>
+                    </Box>
+                  );
+                })
+            }
           </>
         )}
       </Box>
