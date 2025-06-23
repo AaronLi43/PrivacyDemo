@@ -173,4 +173,40 @@ This application is designed for research and educational purposes. Please ensur
 
 ## Support
 
-For issues or questions, please refer to the Streamlit documentation or create an issue in the repository. 
+For issues or questions, please refer to the Streamlit documentation or create an issue in the repository.
+
+## 🚀 Deploy with Docker
+
+1. **Build the Docker image:**
+   ```bash
+   docker build -t privacy-demo .
+   ```
+2. **Run the container:**
+   ```bash
+   docker run -d -p 8501:8501 --name privacy-demo privacy-demo
+   ```
+   The app will be available at `http://<your-server-ip>:8501/`.
+
+3. **(Optional) Clean up:**
+   ```bash
+   docker stop privacy-demo && docker rm privacy-demo
+   ```
+
+## 📤 Exporting and Returning Conversation Logs
+
+- After chatting, use the export button to download your conversation log as a JSON file.
+- To send your log back to the server/owner:
+  1. Go to the sidebar section "Return Your Conversation Log".
+  2. Upload your exported JSON file using the uploader.
+  3. You will see a success message when your file is received.
+
+Uploaded logs are saved to the `uploaded_logs/` directory on the server.
+
+## 🔑 API Key Setup
+
+See the in-app sidebar for instructions on configuring your Gemini API key.
+
+## 🛡️ Security Notes
+- Use HTTPS in production.
+- Never expose your API key in public.
+- Regularly clean up the `uploaded_logs/` directory as needed. 
