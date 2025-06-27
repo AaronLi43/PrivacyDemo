@@ -31,14 +31,14 @@ st.markdown("""
 /* Light mode (default) - Using new color palette */
 :root {
     --bg-color: #C0F5FA;
-    --text-color: #582B11;
+    --text-color: #2C1810;
     --border-color: #BD8B9C;
     --sidebar-bg: #87F1FF;
     --container-bg: #ffffff;
     --user-msg-bg: #87F1FF;
     --bot-msg-bg: #C0F5FA;
     --privacy-warning-bg: #BD8B9C;
-    --privacy-warning-text: #582B11;
+    --privacy-warning-text: #ffffff;
     --primary-button: #AF125A;
     --primary-button-hover: #8a0e47;
     --secondary-button: #BD8B9C;
@@ -46,7 +46,7 @@ st.markdown("""
     --danger-button: #AF125A;
     --danger-button-hover: #8a0e47;
     --focus-color: #87F1FF;
-    --caption-color: #582B11;
+    --caption-color: #2C1810;
 }
 
 /* Improve text contrast and readability */
@@ -166,6 +166,45 @@ hr {
     background-color: var(--container-bg);
 }
 
+/* Force black text and full opacity for disabled text areas in privacy modal */
+.stTextArea > div > div > textarea:disabled,
+[aria-label="Original Message"] textarea:disabled,
+[aria-label="Suggested Safer Text"] textarea:disabled {
+    color: #000 !important;
+    background-color: #f8f9fa !important;
+    border: 2px solid #BD8B9C !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: #000 !important; /* For Safari */
+}
+
+/* Privacy warning modal markdown text styling */
+.stMarkdown p {
+    color: var(--text-color);
+}
+
+/* Specific styling for privacy warning modal text */
+.privacy-warning-modal .stMarkdown p,
+.privacy-warning-modal .stMarkdown strong {
+    color: #ffffff !important;
+}
+
+/* More specific styling for privacy warning modal */
+div[data-testid="stMarkdown"] p {
+    color: var(--text-color);
+}
+
+/* Override for privacy warning modal specifically */
+div[data-testid="stMarkdown"] p:has(strong:contains("Issue Type")),
+div[data-testid="stMarkdown"] p:has(strong:contains("Explanation")) {
+    color: #ffffff !important;
+}
+
+/* Alternative approach - target by proximity to warning */
+.stAlert + div[data-testid="stMarkdown"] p,
+.stAlert + div[data-testid="stMarkdown"] strong {
+    color: #ffffff !important;
+}
+
 /* Edit mode label styling */
 .stTextArea > label {
     color: var(--text-color);
@@ -211,6 +250,38 @@ hr {
     background-color: var(--danger-button-hover);
     color: white;
 }
+
+.conversation-container p {{
+    color: var(--text-color);
+    margin: 8px 0;
+    line-height: 1.5;
+}}
+.conversation-container strong {{
+    color: var(--text-color);
+}}
+.user-message p {{
+    color: var(--text-color);
+    margin: 0;
+}}
+.bot-message p {{
+    color: var(--text-color);
+    margin: 0;
+}}
+.privacy-warning {{
+    background-color: var(--privacy-warning-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 10px 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}}
+.privacy-warning p {{
+    color: var(--privacy-warning-text);
+    margin: 5px 0;
+}}
+.privacy-warning strong {{
+    color: var(--privacy-warning-text);
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -415,16 +486,16 @@ Message: "{user_message}"'''
         return {"leakage": False, "type": None, "suggestion": None, "explanation": f"Unexpected error: {str(e)}"}
 
 # Chat function
-def chat(user_message: str, use_suggestion: bool = False):
+def chat(user_message: str, use_suggestion: bool = False, skip_privacy_check: bool = False):
     history = st.session_state.conversation_log[-5:]  # last 5 turns for context
     
     # Privacy detection before sending to chatbot
     privacy_result = None
-    if st.session_state.mode == "featured" and not use_suggestion:
+    if st.session_state.mode == "featured" and not use_suggestion and not skip_privacy_check:
         privacy_result = gemini_privacy_detection(user_message)
     
     # If privacy issue detected and we haven't processed it yet, show warning modal
-    if privacy_result and privacy_result.get("leakage") and not use_suggestion:
+    if privacy_result and privacy_result.get("leakage") and not use_suggestion and not skip_privacy_check:
         # Store privacy result in session state for modal
         st.session_state.privacy_warning = {
             "original": user_message,
@@ -450,15 +521,28 @@ def chat(user_message: str, use_suggestion: bool = False):
         }
         # Clear the privacy warning after processing
         del st.session_state.privacy_warning
-    elif privacy_result and privacy_result.get("leakage"):
-        # User proceeded with original text
-        privacy_info = {
-            "original": user_message,
-            "type": privacy_result.get("type"),
-            "suggestion": privacy_result.get("suggestion"),
-            "explanation": privacy_result.get("explanation"),
-            "used_suggestion": False
-        }
+    elif (privacy_result and privacy_result.get("leakage")) or skip_privacy_check:
+        # User proceeded with original text (either from new detection or explicit choice)
+        if skip_privacy_check and hasattr(st.session_state, 'privacy_warning') and st.session_state.privacy_warning:
+            # Use stored privacy info from the warning
+            privacy_info = {
+                "original": user_message,
+                "type": st.session_state.privacy_warning.get("type"),
+                "suggestion": st.session_state.privacy_warning.get("suggestion"),
+                "explanation": st.session_state.privacy_warning.get("explanation"),
+                "used_suggestion": False
+            }
+            # Clear the privacy warning after processing
+            del st.session_state.privacy_warning
+        elif privacy_result and privacy_result.get("leakage"):
+            # User proceeded with original text from new detection
+            privacy_info = {
+                "original": user_message,
+                "type": privacy_result.get("type"),
+                "suggestion": privacy_result.get("suggestion"),
+                "explanation": privacy_result.get("explanation"),
+                "used_suggestion": False
+            }
     
     # Send to chatbot
     bot_message = gemini_chatbot_reply(history, message_to_send)
@@ -474,7 +558,7 @@ def chat(user_message: str, use_suggestion: bool = False):
 # Main app
 def main():
     st.title("🔒 Privacy Demo Chatbot")
-    st.markdown("A chatbot with privacy detection capabilities for data collection")
+    st.markdown(f'<p style="color: #ffffff;">A chatbot with privacy detection capabilities for data collection</p>', unsafe_allow_html=True)
     
     # Sidebar for configuration
     with st.sidebar:
@@ -759,6 +843,14 @@ def main():
             .conversation-container strong {{
                 color: var(--text-color);
             }}
+            .user-message p {{
+                color: var(--text-color);
+                margin: 0;
+            }}
+            .bot-message p {{
+                color: var(--text-color);
+                margin: 0;
+            }}
             .privacy-warning {{
                 background-color: var(--privacy-warning-bg);
                 border: 1px solid var(--border-color);
@@ -883,7 +975,7 @@ def main():
             col1_stats, col2_stats, col3_stats = st.columns([2, 1, 1])
             
             with col1_stats:
-                st.caption(f"📊 Showing {len(st.session_state.conversation_log)} messages • Scroll to see more")
+                st.caption(f'<p style="color: #ffffff;"><strong>📊 Showing {len(st.session_state.conversation_log)} messages • Scroll to see more</strong></p>', unsafe_allow_html=True)
             
             with col2_stats:
                 if st.button("⬇️ Scroll to Bottom", help="Scroll to the latest message"):
@@ -926,18 +1018,18 @@ def main():
         col1_warning, col2_warning = st.columns([1, 1])
         
         with col1_warning:
-            st.markdown("**Original Message:**")
+            st.markdown(f'<p style="color: #ffffff;"><strong>**Original Message:**</strong></p>', unsafe_allow_html=True)
             st.text_area("Original Message", value=warning['original'], height=100, disabled=True, key="original_msg", label_visibility="collapsed")
             
-            st.markdown(f"**Issue Type:** {warning['type']}")
-            st.markdown(f"**Explanation:** {warning['explanation']}")
+            st.markdown(f'<p style="color: #ffffff;"><strong>Issue Type:</strong> {warning["type"]}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="color: #ffffff;"><strong>Explanation:</strong> {warning["explanation"]}</p>', unsafe_allow_html=True)
         
         with col2_warning:
             if warning['suggestion']:
-                st.markdown("**Suggested Safer Text:**")
+                st.markdown(f'<p style="color: #ffffff;"><strong>**Suggested Safer Text:**</strong></p>', unsafe_allow_html=True)
                 st.text_area("Suggested Safer Text", value=warning['suggestion'], height=100, disabled=True, key="suggested_msg", label_visibility="collapsed")
                 
-                st.markdown("**Choose your action:**")
+                st.markdown(f'<p style="color: #ffffff;"><strong>**Choose your action:**</strong></p>', unsafe_allow_html=True)
                 
                 if st.button("✅ Accept Suggestion", type="primary"):
                     st.session_state.privacy_accepted = True
@@ -948,17 +1040,17 @@ def main():
                 
                 if st.button("⚠️ Proceed with Original"):
                     st.session_state.privacy_accepted = False
-                    # Re-process the message with original text
+                    # Re-process the message with original text, skipping privacy check
                     with st.spinner("Processing with original text..."):
-                        chat(warning['original'], False)
+                        chat(warning['original'], False, True)
                     st.rerun()
             else:
                 st.warning("No suggestion available")
                 if st.button("⚠️ Proceed Anyway"):
                     st.session_state.privacy_accepted = False
-                    # Re-process the message with original text
+                    # Re-process the message with original text, skipping privacy check
                     with st.spinner("Processing with original text..."):
-                        chat(warning['original'], False)
+                        chat(warning['original'], False, True)
                     st.rerun()
 
 if __name__ == "__main__":
