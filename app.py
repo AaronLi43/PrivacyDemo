@@ -300,6 +300,12 @@ if 'editable_log' not in st.session_state:
     st.session_state.editable_log = []
 if 'conversation_height' not in st.session_state:
     st.session_state.conversation_height = 400
+if 'analyzed_log' not in st.session_state:
+    st.session_state.analyzed_log = []
+if 'show_privacy_analysis' not in st.session_state:
+    st.session_state.show_privacy_analysis = False
+if 'privacy_choices' not in st.session_state:
+    st.session_state.privacy_choices = {}
 
 # Gemini API configuration
 def get_gemini_api_key():
@@ -486,74 +492,79 @@ Message: "{user_message}"'''
         return {"leakage": False, "type": None, "suggestion": None, "explanation": f"Unexpected error: {str(e)}"}
 
 # Chat function
-def chat(user_message: str, use_suggestion: bool = False, skip_privacy_check: bool = False):
+def chat(user_message: str):
     history = st.session_state.conversation_log[-5:]  # last 5 turns for context
     
-    # Privacy detection before sending to chatbot
-    privacy_result = None
-    if st.session_state.mode == "featured" and not use_suggestion and not skip_privacy_check:
-        privacy_result = gemini_privacy_detection(user_message)
+    # Send to chatbot directly (no privacy detection during chat)
+    bot_message = gemini_chatbot_reply(history, user_message)
     
-    # If privacy issue detected and we haven't processed it yet, show warning modal
-    if privacy_result and privacy_result.get("leakage") and not use_suggestion and not skip_privacy_check:
-        # Store privacy result in session state for modal
-        st.session_state.privacy_warning = {
-            "original": user_message,
-            "type": privacy_result.get("type"),
-            "suggestion": privacy_result.get("suggestion"),
-            "explanation": privacy_result.get("explanation"),
-        }
-        return  # Exit early, let the modal handle the rest
-    
-    # Get the message to send to chatbot (either original or suggested)
-    message_to_send = user_message
-    privacy_info = None
-    
-    if use_suggestion and hasattr(st.session_state, 'privacy_warning') and st.session_state.privacy_warning:
-        # Use suggested text if user accepted it
-        message_to_send = st.session_state.privacy_warning.get('suggestion', user_message)
-        privacy_info = {
-            "original": user_message,
-            "type": st.session_state.privacy_warning.get("type"),
-            "suggestion": st.session_state.privacy_warning.get("suggestion"),
-            "explanation": st.session_state.privacy_warning.get("explanation"),
-            "used_suggestion": True
-        }
-        # Clear the privacy warning after processing
-        del st.session_state.privacy_warning
-    elif (privacy_result and privacy_result.get("leakage")) or skip_privacy_check:
-        # User proceeded with original text (either from new detection or explicit choice)
-        if skip_privacy_check and hasattr(st.session_state, 'privacy_warning') and st.session_state.privacy_warning:
-            # Use stored privacy info from the warning
-            privacy_info = {
-                "original": user_message,
-                "type": st.session_state.privacy_warning.get("type"),
-                "suggestion": st.session_state.privacy_warning.get("suggestion"),
-                "explanation": st.session_state.privacy_warning.get("explanation"),
-                "used_suggestion": False
-            }
-            # Clear the privacy warning after processing
-            del st.session_state.privacy_warning
-        elif privacy_result and privacy_result.get("leakage"):
-            # User proceeded with original text from new detection
-            privacy_info = {
-                "original": user_message,
-                "type": privacy_result.get("type"),
-                "suggestion": privacy_result.get("suggestion"),
-                "explanation": privacy_result.get("explanation"),
-                "used_suggestion": False
-            }
-    
-    # Send to chatbot
-    bot_message = gemini_chatbot_reply(history, message_to_send)
-    
-    # Store in conversation log
+    # Store in conversation log (no privacy info during chat)
     st.session_state.conversation_log.append({
         "user": user_message, 
         "bot": bot_message, 
-        "privacy": privacy_info
+        "privacy": None  # Will be populated during export if needed
     })
     st.session_state.current_step += 1
+
+# Function to run privacy detection on all user messages in conversation log
+def run_privacy_analysis_on_log(conversation_log: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Run privacy detection on all user messages in the conversation log"""
+    analyzed_log = []
+    
+    for turn in conversation_log:
+        user_message = turn["user"]
+        
+        # Run privacy detection on user message
+        privacy_result = gemini_privacy_detection(user_message)
+        
+        # Create new turn with privacy analysis
+        analyzed_turn = {
+            "user": user_message,
+            "bot": turn["bot"],
+            "privacy": privacy_result if privacy_result.get("leakage") else None
+        }
+        
+        analyzed_log.append(analyzed_turn)
+    
+    return analyzed_log
+
+# Function to generate final log based on user privacy choices
+def generate_final_log_with_choices(analyzed_log: List[Dict[str, Any]], privacy_choices: Dict[int, str]) -> List[Dict[str, Any]]:
+    """Generate final conversation log based on user choices for each privacy issue"""
+    final_log = []
+    
+    for i, turn in enumerate(analyzed_log):
+        if turn.get('privacy') and i in privacy_choices:
+            # User made a choice for this privacy issue
+            choice = privacy_choices[i]
+            if choice == "accept" and turn['privacy'].get('suggestion'):
+                # Use suggested text
+                final_turn = {
+                    "user": turn['privacy']['suggestion'],
+                    "bot": turn['bot'],
+                    "privacy": {
+                        **turn['privacy'],
+                        "user_choice": "accepted_suggestion",
+                        "original_text": turn['user']
+                    }
+                }
+            else:
+                # Use original text
+                final_turn = {
+                    "user": turn['user'],
+                    "bot": turn['bot'],
+                    "privacy": {
+                        **turn['privacy'],
+                        "user_choice": "kept_original"
+                    }
+                }
+        else:
+            # No privacy issue or no choice made, keep as is
+            final_turn = turn.copy()
+        
+        final_log.append(final_turn)
+    
+    return final_log
 
 # Main app
 def main():
@@ -572,16 +583,21 @@ def main():
             help="Naive mode: Regular chatbot. Featured mode: Privacy detection enabled."
         )
         
-        # Clear edit mode if switching from naive to featured
-        if st.session_state.mode != mode and st.session_state.mode == "naive" and mode == "featured":
+        # Clear edit mode and analysis if switching modes
+        if st.session_state.mode != mode:
             st.session_state.edit_mode = False
             st.session_state.editable_log = []
+            st.session_state.analyzed_log = []
+            st.session_state.show_privacy_analysis = False
+            st.session_state.privacy_choices = {}
         
         st.session_state.mode = mode
         
-        # Show edit mode info for naive mode
+        # Show mode info
         if mode == "naive":
             st.info("💡 **Naive Mode**: You can edit your conversation log before exporting!")
+        else:
+            st.info("🔒 **Featured Mode**: Privacy analysis runs when you export the conversation log!")
         
         # Conversation display settings
         st.subheader("⚙️ Display Settings")
@@ -634,6 +650,9 @@ def main():
             st.session_state.current_step = 0
             st.session_state.edit_mode = False
             st.session_state.editable_log = []
+            st.session_state.analyzed_log = []
+            st.session_state.show_privacy_analysis = False
+            st.session_state.privacy_choices = {}
             st.rerun()
         
         # Export conversation
@@ -655,8 +674,16 @@ def main():
                         mime="application/json"
                     )
             else:
-                # In featured mode, direct export only
-                if st.button("📥 Export Conversation"):
+                # In featured mode, run privacy analysis before export
+                if st.button("🔍 Analyze & Export"):
+                    with st.spinner("Running privacy analysis on all messages..."):
+                        analyzed_log = run_privacy_analysis_on_log(st.session_state.conversation_log)
+                        st.session_state.analyzed_log = analyzed_log
+                        st.session_state.show_privacy_analysis = True
+                    st.rerun()
+                
+                # Direct export option (without privacy analysis)
+                if st.button("📥 Export Direct"):
                     log_data = st.session_state.conversation_log.copy()
                     st.download_button(
                         label="Download JSON",
@@ -676,11 +703,15 @@ def main():
             st.metric("Edit Mode", edit_status)
         st.metric("Messages", len(st.session_state.conversation_log))
         st.metric("Step", st.session_state.current_step)
-        privacy_warnings = sum(1 for turn in st.session_state.conversation_log if turn.get('privacy'))
-        accepted_suggestions = sum(1 for turn in st.session_state.conversation_log if turn.get('privacy') and turn['privacy'].get('used_suggestion'))
-        st.metric("Privacy Warnings", privacy_warnings)
-        if privacy_warnings > 0:
-            st.metric("Accepted Suggestions", accepted_suggestions)
+        if st.session_state.mode == "featured":
+            if st.session_state.analyzed_log:
+                privacy_warnings = sum(1 for turn in st.session_state.analyzed_log if turn.get('privacy'))
+                st.metric("Privacy Issues Found", privacy_warnings)
+            else:
+                st.metric("Privacy Analysis", "Not Run")
+        else:
+            privacy_warnings = sum(1 for turn in st.session_state.conversation_log if turn.get('privacy'))
+            st.metric("Privacy Warnings", privacy_warnings)
         if GEMINI_API_KEY:
             st.success(f"✅ Gemini API Key: Configured")
             if st.button("🧪 Test API Connection"):
@@ -942,22 +973,18 @@ def main():
                 conversation_html += f'<p><strong>🤖 Bot:</strong> {turn["bot"]}</p>'
                 conversation_html += '</div>'
                 
-                # Add privacy warning if present
+                # Add privacy warning if present (from analysis)
                 if turn.get('privacy'):
                     privacy_info = turn['privacy']
                     conversation_html += f'<div class="privacy-warning">'
-                    conversation_html += f'<p><strong>⚠️ Privacy Warning:</strong></p>'
+                    conversation_html += f'<p><strong>🔍 Privacy Analysis Result:</strong></p>'
                     conversation_html += f'<p><strong>Type:</strong> {privacy_info["type"]}</p>'
                     conversation_html += f'<p><strong>Explanation:</strong> {privacy_info["explanation"]}</p>'
                     
                     if privacy_info.get('suggestion'):
                         conversation_html += f'<p><strong>Suggestion:</strong> {privacy_info["suggestion"]}</p>'
-                        if privacy_info.get('used_suggestion'):
-                            conversation_html += '<p style="color: var(--primary-button);"><strong>✅ User accepted the suggestion</strong></p>'
-                        else:
-                            conversation_html += '<p style="color: var(--secondary-button);"><strong>⚠️ User proceeded with original text</strong></p>'
                     else:
-                        conversation_html += '<p style="color: var(--danger-button);"><strong>⚠️ User proceeded despite privacy warning</strong></p>'
+                        conversation_html += '<p style="color: var(--danger-button);"><strong>⚠️ No safer alternative suggested</strong></p>'
                     conversation_html += '</div>'
                 
                 conversation_html += '</div>'
@@ -1009,49 +1036,139 @@ def main():
             chat(user_input)
         st.rerun()
     
-    # Privacy warning modal - moved back to left column for direct user notification
-    if hasattr(st.session_state, 'privacy_warning') and st.session_state.privacy_warning:
-        warning = st.session_state.privacy_warning
+    # Privacy Analysis Results Display (for featured mode export)
+    if st.session_state.show_privacy_analysis and st.session_state.analyzed_log:
+        st.subheader("🔍 Privacy Analysis Results")
+        st.info("Privacy analysis has been completed on all messages. Review the results below.")
         
-        st.warning("⚠️ **Privacy Warning Detected!**")
+        # Show summary statistics
+        privacy_issues = [turn for turn in st.session_state.analyzed_log if turn.get('privacy')]
+        st.metric("Total Messages", len(st.session_state.analyzed_log))
+        st.metric("Privacy Issues Found", len(privacy_issues))
         
-        col1_warning, col2_warning = st.columns([1, 1])
-        
-        with col1_warning:
-            st.markdown(f'<p style="color: #ffffff;"><strong>**Original Message:**</strong></p>', unsafe_allow_html=True)
-            st.text_area("Original Message", value=warning['original'], height=100, disabled=True, key="original_msg", label_visibility="collapsed")
+        if privacy_issues:
+            st.warning(f"⚠️ **{len(privacy_issues)} privacy issues detected**")
             
-            st.markdown(f'<p style="color: #ffffff;"><strong>Issue Type:</strong> {warning["type"]}</p>', unsafe_allow_html=True)
-            st.markdown(f'<p style="color: #ffffff;"><strong>Explanation:</strong> {warning["explanation"]}</p>', unsafe_allow_html=True)
+            # Display privacy issues with individual choices
+            for i, turn in enumerate(st.session_state.analyzed_log):
+                if turn.get('privacy'):
+                    with st.expander(f"Message {i+1}: Privacy Issue", expanded=True):
+                        col1_analysis, col2_analysis = st.columns([1, 1])
+                        
+                        with col1_analysis:
+                            st.markdown(f'<p style="color: #ffffff;"><strong>Original Message:</strong></p>', unsafe_allow_html=True)
+                            st.text_area("Original", value=turn['user'], height=80, disabled=True, key=f"analysis_orig_{i}", label_visibility="collapsed")
+                            st.markdown(f'<p style="color: #ffffff;"><strong>Issue Type: {turn["privacy"]["type"]}</strong></p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="color: #ffffff;"><strong>Explanation: {turn["privacy"]["explanation"]}</strong></p>', unsafe_allow_html=True)
+                        
+                        with col2_analysis:
+                            if turn['privacy'].get('suggestion'):
+                                st.markdown(f'<p style="color: #ffffff;"><strong>Suggested Safer Text:</strong></p>', unsafe_allow_html=True)
+                                st.text_area("Suggestion", value=turn['privacy']['suggestion'], height=80, disabled=True, key=f"analysis_sugg_{i}", label_visibility="collapsed")
+                            else:
+                                st.markdown(f'<p style="color: #ffffff;"><strong>No suggestion available</strong></p>', unsafe_allow_html=True)
+                                st.text_area("No suggestion", value="No safer alternative suggested", height=80, disabled=True, key=f"analysis_none_{i}", label_visibility="collapsed")
+                        
+                        # Individual choice buttons for this privacy issue
+                        st.markdown(f'<p style="color: #ffffff;"><strong>Your Choice:</strong></p>', unsafe_allow_html=True)
+                        col_choice1, col_choice2, col_choice3 = st.columns([1, 1, 1])
+                        
+                        current_choice = st.session_state.privacy_choices.get(i, "none")
+                        
+                        with col_choice1:
+                            if st.button(f"✅ Accept Suggestion", key=f"accept_{i}", 
+                                       type="primary" if current_choice == "accept" else "secondary",
+                                       disabled=not turn['privacy'].get('suggestion')):
+                                st.session_state.privacy_choices[i] = "accept"
+                                st.rerun()
+                        
+                        with col_choice2:
+                            if st.button(f"⚠️ Keep Original", key=f"keep_{i}",
+                                       type="primary" if current_choice == "keep" else "secondary"):
+                                st.session_state.privacy_choices[i] = "keep"
+                                st.rerun()
+                        
+                        with col_choice3:
+                            if st.button(f"❓ Undecided", key=f"none_{i}",
+                                       type="primary" if current_choice == "none" else "secondary"):
+                                if i in st.session_state.privacy_choices:
+                                    del st.session_state.privacy_choices[i]
+                                st.rerun()
+                        
+                        # Show current choice status
+                        if current_choice == "accept":
+                            st.success("✅ **Choice: Accept Suggestion** - Will use safer text in export")
+                        elif current_choice == "keep":
+                            st.warning("⚠️ **Choice: Keep Original** - Will use original text in export")
+                        else:
+                            st.info("❓ **Choice: Undecided** - Please make a choice before exporting")
+        else:
+            st.success("✅ **No privacy issues detected** - All messages appear to be safe for export.")
         
-        with col2_warning:
-            if warning['suggestion']:
-                st.markdown(f'<p style="color: #ffffff;"><strong>**Suggested Safer Text:**</strong></p>', unsafe_allow_html=True)
-                st.text_area("Suggested Safer Text", value=warning['suggestion'], height=100, disabled=True, key="suggested_msg", label_visibility="collapsed")
+        # Show summary of user choices
+        if privacy_issues:
+            st.subheader("📋 Summary of Your Choices")
+            choices_made = len(st.session_state.privacy_choices)
+            total_issues = len(privacy_issues)
+            
+            if choices_made == total_issues:
+                st.success(f"✅ **All {total_issues} privacy issues have been addressed!**")
                 
-                st.markdown(f'<p style="color: #ffffff;"><strong>**Choose your action:**</strong></p>', unsafe_allow_html=True)
+                # Show breakdown of choices
+                accepted_count = sum(1 for choice in st.session_state.privacy_choices.values() if choice == "accept")
+                kept_count = sum(1 for choice in st.session_state.privacy_choices.values() if choice == "keep")
                 
-                if st.button("✅ Accept Suggestion", type="primary"):
-                    st.session_state.privacy_accepted = True
-                    # Re-process the message with the suggestion
-                    with st.spinner("Processing with suggested text..."):
-                        chat(warning['original'], True)
-                    st.rerun()
-                
-                if st.button("⚠️ Proceed with Original"):
-                    st.session_state.privacy_accepted = False
-                    # Re-process the message with original text, skipping privacy check
-                    with st.spinner("Processing with original text..."):
-                        chat(warning['original'], False, True)
-                    st.rerun()
+                col_summary1, col_summary2, col_summary3 = st.columns([1, 1, 1])
+                with col_summary1:
+                    st.metric("Total Issues", total_issues)
+                with col_summary2:
+                    st.metric("Accepted Suggestions", accepted_count)
+                with col_summary3:
+                    st.metric("Kept Original", kept_count)
             else:
-                st.warning("No suggestion available")
-                if st.button("⚠️ Proceed Anyway"):
-                    st.session_state.privacy_accepted = False
-                    # Re-process the message with original text, skipping privacy check
-                    with st.spinner("Processing with original text..."):
-                        chat(warning['original'], False, True)
-                    st.rerun()
+                st.warning(f"⚠️ **{choices_made}/{total_issues} privacy issues addressed** - Please make choices for all issues before exporting")
+        
+        # Export buttons for analyzed log
+        col_export_analyzed, col_export_original, col_close = st.columns([1, 1, 1])
+        
+        with col_export_analyzed:
+            if privacy_issues and len(st.session_state.privacy_choices) == len(privacy_issues):
+                # Generate final log with user choices
+                final_log = generate_final_log_with_choices(st.session_state.analyzed_log, st.session_state.privacy_choices)
+                st.download_button(
+                    label="📥 Export with Your Choices",
+                    data=json.dumps(final_log, indent=2),
+                    file_name=f"conversation_log_with_choices_{st.session_state.current_step}.json",
+                    mime="application/json",
+                    help="Export the conversation log with your privacy choices applied"
+                )
+            else:
+                st.download_button(
+                    label="📥 Export with Privacy Analysis",
+                    data=json.dumps(st.session_state.analyzed_log, indent=2),
+                    file_name=f"conversation_log_with_privacy_analysis_{st.session_state.current_step}.json",
+                    mime="application/json",
+                    help="Export the conversation log with privacy analysis results included",
+                    disabled=privacy_issues and len(st.session_state.privacy_choices) != len(privacy_issues)
+                )
+        
+        with col_export_original:
+            st.download_button(
+                label="📥 Export Original Log",
+                data=json.dumps(st.session_state.conversation_log, indent=2),
+                file_name=f"conversation_log_original_{st.session_state.current_step}.json",
+                mime="application/json",
+                help="Export the original conversation log without privacy analysis"
+            )
+        
+        with col_close:
+            if st.button("❌ Close Analysis"):
+                st.session_state.show_privacy_analysis = False
+                st.session_state.analyzed_log = []
+                st.session_state.privacy_choices = {}
+                st.rerun()
+    
+
 
 if __name__ == "__main__":
     main() 
