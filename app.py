@@ -306,6 +306,8 @@ if 'show_privacy_analysis' not in st.session_state:
     st.session_state.show_privacy_analysis = False
 if 'privacy_choices' not in st.session_state:
     st.session_state.privacy_choices = {}
+if 'original_log' not in st.session_state:
+    st.session_state.original_log = []
 
 # Gemini API configuration
 def get_gemini_api_key():
@@ -498,6 +500,14 @@ def chat(user_message: str):
     # Send to chatbot directly (no privacy detection during chat)
     bot_message = gemini_chatbot_reply(history, user_message)
     
+    # Store original message for tracking
+    original_turn = {
+        "user": user_message,
+        "bot": bot_message,
+        "timestamp": st.session_state.current_step
+    }
+    st.session_state.original_log.append(original_turn)
+    
     # Store in conversation log (no privacy info during chat)
     st.session_state.conversation_log.append({
         "user": user_message, 
@@ -566,6 +576,57 @@ def generate_final_log_with_choices(analyzed_log: List[Dict[str, Any]], privacy_
     
     return final_log
 
+# Function to generate export data with original log information for naive mode
+def generate_naive_export_data(current_log: List[Dict[str, Any]], original_log: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate export data for naive mode that includes both current and original log information"""
+    export_data = {
+        "metadata": {
+            "mode": "naive",
+            "export_timestamp": st.session_state.current_step,
+            "total_messages": len(current_log),
+            "has_edits": len(current_log) == len(original_log) and any(
+                current_log[i]["user"] != original_log[i]["user"] or 
+                current_log[i]["bot"] != original_log[i]["bot"] 
+                for i in range(len(current_log))
+            )
+        },
+        "current_conversation": current_log,
+        "original_conversation": original_log,
+        "edit_summary": []
+    }
+    
+    # Generate edit summary if there are edits
+    if export_data["metadata"]["has_edits"]:
+        for i, (current, original) in enumerate(zip(current_log, original_log)):
+            if current["user"] != original["user"] or current["bot"] != original["bot"]:
+                edit_info = {
+                    "turn": i + 1,
+                    "user_edited": current["user"] != original["user"],
+                    "bot_edited": current["bot"] != original["bot"],
+                    "original_user": original["user"],
+                    "current_user": current["user"],
+                    "original_bot": original["bot"],
+                    "current_bot": current["bot"]
+                }
+                export_data["edit_summary"].append(edit_info)
+    
+    return export_data
+
+# Function to generate export data for neutral mode
+def generate_neutral_export_data(current_log: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate export data for neutral mode that exports the conversation log without any modifications"""
+    export_data = {
+        "metadata": {
+            "mode": "neutral",
+            "export_timestamp": st.session_state.current_step,
+            "total_messages": len(current_log),
+            "has_edits": False
+        },
+        "conversation": current_log
+    }
+    
+    return export_data
+
 # Main app
 def main():
     st.title("🔒 Privacy Demo Chatbot")
@@ -578,9 +639,9 @@ def main():
         # Mode selection
         mode = st.selectbox(
             "Select Mode",
-            ["naive", "featured"],
-            index=0 if st.session_state.mode == "naive" else 1,
-            help="Naive mode: Regular chatbot. Featured mode: Privacy detection enabled."
+            ["naive", "neutral", "featured"],
+            index=0 if st.session_state.mode == "naive" else (1 if st.session_state.mode == "neutral" else 2),
+            help="Naive mode: Regular chatbot with editing. Neutral mode: Export without modifications. Featured mode: Privacy detection enabled."
         )
         
         # Clear edit mode and analysis if switching modes
@@ -596,6 +657,8 @@ def main():
         # Show mode info
         if mode == "naive":
             st.info("💡 **Naive Mode**: You can edit your conversation log before exporting!")
+        elif mode == "neutral":
+            st.info("⚖️ **Neutral Mode**: Export conversation log without any modifications!")
         else:
             st.info("🔒 **Featured Mode**: Privacy analysis runs when you export the conversation log!")
         
@@ -653,6 +716,7 @@ def main():
             st.session_state.analyzed_log = []
             st.session_state.show_privacy_analysis = False
             st.session_state.privacy_choices = {}
+            st.session_state.original_log = []
             st.rerun()
         
         # Export conversation
@@ -666,10 +730,20 @@ def main():
                 
                 # Direct export option
                 if st.button("📥 Export Direct"):
-                    log_data = st.session_state.conversation_log.copy()
+                    export_data = generate_naive_export_data(st.session_state.conversation_log, st.session_state.original_log)
                     st.download_button(
                         label="Download JSON",
-                        data=json.dumps(log_data, indent=2),
+                        data=json.dumps(export_data, indent=2),
+                        file_name=f"conversation_log_{st.session_state.current_step}.json",
+                        mime="application/json"
+                    )
+            elif st.session_state.mode == "neutral":
+                # In neutral mode, export without any modifications
+                if st.button("📥 Export Log"):
+                    export_data = generate_neutral_export_data(st.session_state.conversation_log)
+                    st.download_button(
+                        label="Download JSON",
+                        data=json.dumps(export_data, indent=2),
                         file_name=f"conversation_log_{st.session_state.current_step}.json",
                         mime="application/json"
                     )
@@ -695,7 +769,12 @@ def main():
     # Main chat interface
     with st.expander("📊 Statistics", expanded=False):
         # Current mode
-        mode_icon = "🔒" if st.session_state.mode == "featured" else "😊"
+        if st.session_state.mode == "featured":
+            mode_icon = "🔒"
+        elif st.session_state.mode == "neutral":
+            mode_icon = "⚖️"
+        else:
+            mode_icon = "😊"
         st.metric("Mode", f"{mode_icon} {st.session_state.mode.title()}")
         # Edit mode status (naive mode only)
         if st.session_state.mode == "naive":
@@ -709,6 +788,8 @@ def main():
                 st.metric("Privacy Issues Found", privacy_warnings)
             else:
                 st.metric("Privacy Analysis", "Not Run")
+        elif st.session_state.mode == "neutral":
+            st.metric("Privacy Analysis", "Disabled")
         else:
             privacy_warnings = sum(1 for turn in st.session_state.conversation_log if turn.get('privacy'))
             st.metric("Privacy Warnings", privacy_warnings)
@@ -779,26 +860,30 @@ def main():
             
             for i, turn in enumerate(st.session_state.editable_log):
                 with st.container():
-                    st.markdown(f"**Turn {i+1}:**")
+                    st.markdown(f'<p style="color: #ffffff;"><strong>Turn {i+1}:</strong></p>', unsafe_allow_html=True)
                     
                     col1_edit, col2_edit = st.columns([1, 1])
                     
                     with col1_edit:
                         # Editable user message
+                        st.markdown(f'<p style="color: #ffffff;"><strong>User Message</strong></p>', unsafe_allow_html=True)
                         user_msg = st.text_area(
-                            "User Message",
+                            label="User Message",
                             value=turn['user'],
                             key=f"user_edit_{i}",
-                            height=100
+                            height=100,
+                            label_visibility="collapsed"
                         )
                     
                     with col2_edit:
                         # Editable bot message
+                        st.markdown(f'<p style="color: #ffffff;"><strong>Bot Message</strong></p>', unsafe_allow_html=True)
                         bot_msg = st.text_area(
-                            "Bot Message", 
+                            label="Bot Message", 
                             value=turn['bot'],
                             key=f"bot_edit_{i}",
-                            height=100
+                            height=100,
+                            label_visibility="collapsed"
                         )
                     
                     # Delete button for this turn
@@ -831,9 +916,40 @@ def main():
             
             with col_export:
                 if st.button("📥 Export Edited"):
+                    # Create a modified version of the export function for edited logs
+                    edited_export_data = {
+                        "metadata": {
+                            "mode": "naive_edited",
+                            "export_timestamp": st.session_state.current_step,
+                            "total_messages": len(edited_log),
+                            "original_total_messages": len(st.session_state.original_log),
+                            "has_edits": True,
+                            "deletions": len(st.session_state.original_log) - len(edited_log)
+                        },
+                        "edited_conversation": edited_log,
+                        "original_conversation": st.session_state.original_log,
+                        "edit_summary": []
+                    }
+                    
+                    # Generate edit summary for edited log
+                    for i, edited_turn in enumerate(edited_log):
+                        if i < len(st.session_state.original_log):
+                            original_turn = st.session_state.original_log[i]
+                            if edited_turn["user"] != original_turn["user"] or edited_turn["bot"] != original_turn["bot"]:
+                                edit_info = {
+                                    "turn": i + 1,
+                                    "user_edited": edited_turn["user"] != original_turn["user"],
+                                    "bot_edited": edited_turn["bot"] != original_turn["bot"],
+                                    "original_user": original_turn["user"],
+                                    "edited_user": edited_turn["user"],
+                                    "original_bot": original_turn["bot"],
+                                    "edited_bot": edited_turn["bot"]
+                                }
+                                edited_export_data["edit_summary"].append(edit_info)
+                    
                     st.download_button(
                         label="Download JSON",
-                        data=json.dumps(edited_log, indent=2),
+                        data=json.dumps(edited_export_data, indent=2),
                         file_name=f"edited_conversation_log_{st.session_state.current_step}.json",
                         mime="application/json"
                     )
