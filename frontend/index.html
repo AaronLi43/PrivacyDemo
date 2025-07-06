@@ -3,254 +3,238 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy-Aware Chatbot Demo</title>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script crossorigin src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f4f6fa; margin: 0; }
-    .container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px #0001; padding: 32px; }
-    .title { font-size: 2rem; font-weight: bold; margin-bottom: 24px; text-align: center; }
-    .mode-switch { display: flex; justify-content: center; margin-bottom: 24px; }
-    .mode-btn { padding: 8px 20px; margin: 0 8px; border: none; border-radius: 6px; background: #e0e7ff; color: #333; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    .mode-btn.active { background: #6366f1; color: #fff; }
-    .import-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 24px; }
-    .import-btn { margin-top: 8px; }
-    .start-btn { margin-top: 24px; padding: 10px 32px; font-size: 1.1rem; border: none; border-radius: 6px; background: #6366f1; color: #fff; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-    .start-btn:disabled { background: #c7d2fe; color: #888; cursor: not-allowed; }
-    .chatbot-area { display: flex; height: 500px; }
-    .chat-left { flex: 1; background: #f1f5f9; border-radius: 10px 0 0 10px; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; }
-    .chat-right { flex: 1; background: #fef9c3; border-radius: 0 10px 10px 0; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; }
-    .message-row { display: flex; align-items: flex-start; margin-bottom: 18px; }
-    .msg-bubble { max-width: 70%; padding: 12px 18px; border-radius: 16px; font-size: 1.05rem; line-height: 1.5; position: relative; }
-    .msg-user { background: #6366f1; color: #fff; align-self: flex-end; margin-left: auto; }
-    .msg-bot { background: #fff; color: #222; border: 1px solid #e0e7ff; align-self: flex-start; margin-right: auto; }
-    .privacy-comment { background: #fde68a; border: 1px solid #fbbf24; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
-    .privacy-actions { margin-top: 10px; }
-    .privacy-btn { margin-right: 10px; padding: 6px 16px; border: none; border-radius: 6px; background: #fbbf24; color: #fff; font-weight: 600; cursor: pointer; }
-    .privacy-btn.ignore { background: #d1d5db; color: #333; }
-    .privacy-choice { font-size: 0.95em; color: #888; margin-top: 6px; }
-    .chat-input-row { display: flex; margin-top: auto; }
-    .chat-input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 1rem; }
-    .send-btn { margin-left: 10px; padding: 10px 24px; border: none; border-radius: 6px; background: #6366f1; color: #fff; font-weight: bold; cursor: pointer; }
-    .send-btn:disabled { background: #c7d2fe; color: #888; cursor: not-allowed; }
-    .finish-btn { position: absolute; top: 24px; right: 32px; padding: 8px 20px; border: none; border-radius: 6px; background: #ef4444; color: #fff; font-weight: bold; cursor: pointer; }
-    .popup { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0008; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .popup-content { background: #fff; padding: 32px; border-radius: 12px; box-shadow: 0 2px 12px #0002; text-align: center; }
-    .log-review { width: 100%; min-height: 200px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 1rem; margin-bottom: 16px; }
-    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-    .typing { display: inline-block; animation: blink 1s infinite; }
-  </style>
+  <title>🔒 Privacy Demo Chatbot</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useRef, useEffect } = React;
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <h1><i class="fas fa-lock"></i> Privacy Demo Chatbot</h1>
+          <p>A chatbot with privacy detection capabilities for data collection</p>
+        </div>
+        <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
+          <i class="fas fa-bars"></i> Hide Config
+        </button>
+      </div>
+    </header>
 
-    function App() {
-      const [page, setPage] = useState('init');
-      const [mode, setMode] = useState('naive');
-      const [questions, setQuestions] = useState([]);
-      const [questionsLoaded, setQuestionsLoaded] = useState(false);
-      const [chatLog, setChatLog] = useState([]);
-      const [input, setInput] = useState('');
-      const [step, setStep] = useState(0);
-      const [botTyping, setBotTyping] = useState(false);
-      const [privacyComments, setPrivacyComments] = useState([]);
-      const [showPopup, setShowPopup] = useState(false);
-      const [popupContent, setPopupContent] = useState('');
-      const [logReview, setLogReview] = useState('');
-      const [logEditable, setLogEditable] = useState(false);
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3><i class="fas fa-cog"></i> Configuration</h3>
+        
+        <!-- Mode Selection -->
+        <div class="form-group">
+          <label for="mode-select">Select Mode:</label>
+          <select id="mode-select" class="form-control">
+            <option value="naive">😊 Naive Mode</option>
+            <option value="neutral">⚖️ Neutral Mode</option>
+            <option value="featured">🔒 Featured Mode</option>
+          </select>
+        </div>
 
-      // Scroll chat to bottom
-      const chatEndRef = useRef(null);
-      useEffect(() => { if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [chatLog, botTyping]);
+        <!-- Mode Info -->
+        <div id="mode-info" class="info-box">
+          <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
+        </div>
 
-      // Handle file import
-      const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/api/upload_questions', { method: 'POST', body: formData });
-        if (res.ok) {
-          const data = await res.json();
-          setQuestionsLoaded(true);
-          setQuestions(Array(data.count).fill(''));
-        }
-      };
+        <!-- Display Settings -->
+        <div class="form-group">
+          <label for="conversation-height">Conversation Height (px):</label>
+          <input type="range" id="conversation-height" min="200" max="800" value="400" step="50" class="form-control">
+          <span id="height-value">400px</span>
+        </div>
 
-      // Handle mode switch
-      const handleModeSwitch = (m) => {
-        setMode(m);
-        fetch('/api/set_mode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: m }) });
-      };
+        <!-- File Upload for Questions -->
+        <div class="form-group">
+          <label for="questions-file">Upload Questions (JSON):</label>
+          <input type="file" id="questions-file" accept=".json" class="form-control">
+        </div>
 
-      // Start chat
-      const handleStart = () => {
-        setPage('chat');
-        setStep(0);
-        setChatLog([]);
-        setPrivacyComments([]);
-        setInput('');
-        setBotTyping(false);
-      };
+        <!-- File Upload for Return Logs -->
+        <div class="form-group">
+          <label for="return-file">Return Your Conversation Log:</label>
+          <input type="file" id="return-file" accept=".json" class="form-control">
+        </div>
 
-      // Send message
-      const handleSend = async () => {
-        if (!input.trim()) return;
-        const userMsg = input;
-        setChatLog(log => [...log, { sender: 'user', text: userMsg }]);
-        setInput('');
-        setBotTyping(true);
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMsg, step })
-        });
-        const data = await res.json();
-        // Animate bot typing
-        let botText = '';
-        for (let i = 0; i <= data.bot.length; i++) {
-          await new Promise(r => setTimeout(r, 18));
-          botText = data.bot.slice(0, i);
-          setChatLog(log => {
-            const last = log[log.length - 1];
-            if (last && last.sender === 'bot') {
-              return [...log.slice(0, -1), { sender: 'bot', text: botText }];
-            } else {
-              return [...log, { sender: 'bot', text: botText }];
-            }
-          });
-        }
-        setBotTyping(false);
-        setStep(data.step);
-        // Privacy comment
-        if (mode === 'featured' && data.privacy) {
-          setPrivacyComments(comments => [...comments, { ...data.privacy, choice: null, idx: chatLog.length }]);
-        }
-      };
+        <!-- Action Buttons -->
+        <div class="button-group">
+          <button id="reset-btn" class="btn btn-secondary">
+            <i class="fas fa-redo"></i> Reset Conversation
+          </button>
+        </div>
 
-      // Handle privacy choice
-      const handlePrivacyChoice = (idx, choice) => {
-        setPrivacyComments(comments => comments.map((c, i) => i === idx ? { ...c, choice } : c));
-      };
+        <!-- Export Buttons -->
+        <div id="export-buttons" class="button-group" style="display: none;">
+          <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
+            <i class="fas fa-edit"></i> Edit & Export
+          </button>
+          <button id="export-direct-btn" class="btn btn-success">
+            <i class="fas fa-download"></i> Export Direct
+          </button>
+          <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
+            <i class="fas fa-search"></i> Analyze & Export
+          </button>
+        </div>
+      </div>
 
-      // Finish conversation
-      const handleFinish = async () => {
-        const res = await fetch('/api/finish', { method: 'POST' });
-        const data = await res.json();
-        if (mode === 'naive') {
-          setLogReview(JSON.stringify(data.log, null, 2));
-          setLogEditable(true);
-        } else {
-          setPopupContent('Conversation finished! Please save and upload the log data.');
-          setShowPopup(true);
-        }
-      };
-
-      // Save log after review
-      const handleSaveLog = () => {
-        const blob = new Blob([logReview], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'chat_log.json';
-        a.click();
-        setShowPopup(true);
-        setPopupContent('Log saved! Please upload the log data.');
-        setLogEditable(false);
-      };
-
-      // Render
-      if (page === 'init') {
-        return (
-          <div className="container">
-            <div className="title">Privacy-Aware Chatbot Demo</div>
-            <div className="mode-switch">
-              <button className={`mode-btn${mode === 'naive' ? ' active' : ''}`} onClick={() => handleModeSwitch('naive')}>Naive Page</button>
-              <button className={`mode-btn${mode === 'featured' ? ' active' : ''}`} onClick={() => handleModeSwitch('featured')}>Featured Page</button>
-            </div>
-            <div className="import-section">
-              <input type="file" accept="application/json" onChange={handleFileChange} className="import-btn" />
-              <div style={{ marginTop: 8, color: questionsLoaded ? '#16a34a' : '#888' }}>
-                {questionsLoaded ? 'Questions JSON loaded!' : 'Please import a questions JSON file.'}
-              </div>
-            </div>
-            <button className="start-btn" disabled={!questionsLoaded} onClick={handleStart}>Start</button>
+      <!-- Statistics -->
+      <div class="sidebar-section">
+        <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">Mode:</span>
+            <span id="stat-mode" class="stat-value">😊 Naive</span>
           </div>
-        );
-      }
-
-      if (page === 'chat') {
-        return (
-          <div className="container" style={{ position: 'relative' }}>
-            <button className="finish-btn" onClick={handleFinish}>Finish</button>
-            <div className="mode-switch">
-              <button className={`mode-btn${mode === 'naive' ? ' active' : ''}`} onClick={() => handleModeSwitch('naive')}>Naive Page</button>
-              <button className={`mode-btn${mode === 'featured' ? ' active' : ''}`} onClick={() => handleModeSwitch('featured')}>Featured Page</button>
-            </div>
-            <div className="chatbot-area">
-              <div className="chat-left">
-                {chatLog.map((msg, i) => (
-                  <div className="message-row" key={i}>
-                    <div className={`msg-bubble msg-${msg.sender}`}>{msg.text}</div>
-                  </div>
-                ))}
-                {botTyping && (
-                  <div className="message-row">
-                    <div className="msg-bubble msg-bot"><span className="typing">...</span></div>
-                  </div>
-                )}
-                <div ref={chatEndRef}></div>
-                <div className="chat-input-row">
-                  <input className="chat-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={botTyping} placeholder="Type your message..." />
-                  <button className="send-btn" onClick={handleSend} disabled={botTyping || !input.trim()}>Send</button>
-                </div>
-              </div>
-              {mode === 'featured' && (
-                <div className="chat-right">
-                  {privacyComments.map((c, i) => (
-                    <div className="privacy-comment" key={i}>
-                      <div><b>Original:</b> {c.original}</div>
-                      <div><b>Type:</b> {c.type}</div>
-                      <div><b>Suggestion:</b> {c.suggestion}</div>
-                      {c.choice ? (
-                        <div className="privacy-choice">You chose: <b>{c.choice}</b></div>
-                      ) : (
-                        <div className="privacy-actions">
-                          <button className="privacy-btn" onClick={() => handlePrivacyChoice(i, 'Accept')}>Accept</button>
-                          <button className="privacy-btn ignore" onClick={() => handlePrivacyChoice(i, 'Ignore')}>Ignore</button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {showPopup && (
-              <div className="popup">
-                <div className="popup-content">
-                  <div>{popupContent}</div>
-                  <button className="start-btn" onClick={() => { setShowPopup(false); setPage('init'); }}>OK</button>
-                </div>
-              </div>
-            )}
-            {logEditable && (
-              <div className="popup">
-                <div className="popup-content">
-                  <div style={{ marginBottom: 12 }}>Review and edit your conversation log before saving:</div>
-                  <textarea className="log-review" value={logReview} onChange={e => setLogReview(e.target.value)} />
-                  <button className="start-btn" onClick={handleSaveLog}>Save Log</button>
-                </div>
-              </div>
-            )}
+          <div class="stat-item">
+            <span class="stat-label">Messages:</span>
+            <span id="stat-messages" class="stat-value">0</span>
           </div>
-        );
-      }
-      return null;
-    }
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+          <div class="stat-item">
+            <span class="stat-label">Step:</span>
+            <span id="stat-step" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Privacy Issues:</span>
+            <span id="stat-privacy" class="stat-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Status -->
+      <div class="sidebar-section">
+        <h3><i class="fas fa-key"></i> API Status</h3>
+        <div id="api-status" class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Checking...</span>
+        </div>
+        <button id="test-api-btn" class="btn btn-sm btn-secondary">
+          <i class="fas fa-vial"></i> Test Connection
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Chat Interface -->
+      <div class="chat-container">
+        <div class="chat-header">
+          <h2><i class="fas fa-comments"></i> Chat Interface</h2>
+        </div>
+
+        <!-- Conversation Display -->
+        <div id="conversation-container" class="conversation-container">
+          <div class="empty-state">
+            <i class="fas fa-comment-dots"></i>
+            <p>Start a conversation by typing a message below!</p>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chat-input-container">
+          <div class="input-group">
+            <input type="text" id="chat-input" placeholder="Type your message here..." class="form-control">
+            <button id="send-btn" class="btn btn-primary">
+              <i class="fas fa-paper-plane"></i> Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Privacy Analysis Results -->
+      <div id="privacy-analysis" class="privacy-analysis" style="display: none;">
+        <div class="analysis-header">
+          <h3><i class="fas fa-search"></i> Privacy Analysis Results</h3>
+          <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
+        </div>
+
+        <div class="analysis-stats">
+          <div class="stat-card">
+            <span class="stat-number" id="total-messages">0</span>
+            <span class="stat-label">Total Messages</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="privacy-issues">0</span>
+            <span class="stat-label">Privacy Issues</span>
+          </div>
+        </div>
+
+        <div id="privacy-choices" class="privacy-choices">
+          <!-- Privacy choice buttons will be generated here -->
+        </div>
+
+        <div class="export-options">
+          <button id="export-with-choices" class="btn btn-success">
+            <i class="fas fa-download"></i> Export with Your Choices
+          </button>
+          <button id="export-with-analysis" class="btn btn-warning">
+            <i class="fas fa-download"></i> Export with Analysis
+          </button>
+          <button id="export-original" class="btn btn-secondary">
+            <i class="fas fa-download"></i> Export Original
+          </button>
+          <button id="close-analysis" class="btn btn-danger">
+            <i class="fas fa-times"></i> Close Analysis
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Privacy Popup Modal -->
+  <div id="privacy-popup" class="privacy-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closePrivacyPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4 id="popup-title"></h4>
+      <div id="popup-explanation"></div>
+      <div id="popup-suggestion" class="suggestion-box"></div>
+      <button id="popup-apply-btn" class="btn btn-success" style="display: none;">
+        <i class="fas fa-check"></i> Apply This Fix
+      </button>
+    </div>
+  </div>
+
+  <!-- Privacy Tooltip Container -->
+  <div id="privacy-tooltip-container" class="privacy-tooltip">
+    <div class="tooltip-header">
+      <span class="tooltip-title" id="tooltip-title">Privacy Issue</span>
+      <span class="tooltip-severity" id="tooltip-severity">Medium</span>
+    </div>
+    <div class="tooltip-content">
+      <div class="tooltip-explanation" id="tooltip-explanation">
+        This text contains potentially sensitive information.
+      </div>
+      <div class="tooltip-suggestion" id="tooltip-suggestion" style="display: none;">
+        <strong>Suggested Fix:</strong>
+        <span id="tooltip-suggestion-text"></span>
+      </div>
+    </div>
+    <div class="tooltip-actions">
+      <button class="tooltip-btn apply" id="tooltip-apply-btn" style="display: none;">
+        <i class="fas fa-check"></i> Apply Fix
+      </button>
+      <button class="tooltip-btn close" id="tooltip-close-btn">
+        <i class="fas fa-times"></i> Close
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Processing...</p>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="api.js"></script>
+  <script src="script.js"></script>
 </body>
 </html> 

@@ -414,8 +414,22 @@ def gemini_privacy_detection(user_message: str) -> Dict[str, Any]:
     if not GEMINI_API_URL:
         return {"leakage": False, "type": None, "suggestion": None, "explanation": "Gemini API key not configured."}
     
-    prompt = f'''Analyze this message for privacy issues. Respond with ONLY valid JSON:
-{{"leakage": true/false, "type": "issue_type_or_null", "suggestion": "safer_text_or_null", "explanation": "brief_explanation_or_null"}}
+    prompt = f'''Analyze this message for privacy and security issues. Look for:
+1. Personal identifiable information (names, addresses, phone numbers, emails)
+2. Sensitive personal data (financial info, health data, passwords)
+3. Location information that could compromise privacy
+4. Information that could be used for identity theft
+5. Overly specific personal details
+
+Respond with ONLY valid JSON in this exact format:
+{{
+    "leakage": true/false,
+    "type": "issue_type_or_null",
+    "suggestion": "safer_alternative_text_or_null",
+    "explanation": "brief_explanation_of_the_privacy_concern_or_null",
+    "severity": "high/medium/low_or_null",
+    "affected_text": "exact_text_that_poses_privacy_risk_or_null"
+}}
 
 Message: "{user_message}"'''
     
@@ -472,7 +486,11 @@ Message: "{user_message}"'''
                 if json_start != -1 and json_end != -1:
                     json_text = text[json_start:json_end]
                     try:
-                        return json.loads(json_text)
+                        result = json.loads(json_text)
+                        # Ensure all required fields are present
+                        result.setdefault("severity", "medium")
+                        result.setdefault("affected_text", "")
+                        return result
                     except json.JSONDecodeError as e:
                         print(f"JSON decode error: {e}")
                         print(f"Attempted to parse: {json_text}")
@@ -626,6 +644,33 @@ def generate_neutral_export_data(current_log: List[Dict[str, Any]]) -> Dict[str,
     }
     
     return export_data
+
+# Function to apply privacy corrections
+def apply_privacy_correction(message_index: int, original_text: str, corrected_text: str) -> bool:
+    """Apply a privacy correction to a specific message in the analyzed log"""
+    try:
+        if (st.session_state.analyzed_log and 
+            0 <= message_index < len(st.session_state.analyzed_log) and
+            st.session_state.analyzed_log[message_index]['user'] == original_text):
+            
+            # Update the analyzed log
+            st.session_state.analyzed_log[message_index]['user'] = corrected_text
+            
+            # Update the original conversation log if it exists
+            if (st.session_state.conversation_log and 
+                0 <= message_index < len(st.session_state.conversation_log)):
+                st.session_state.conversation_log[message_index]['user'] = corrected_text
+            
+            # Mark this privacy issue as resolved
+            if message_index in st.session_state.privacy_choices:
+                st.session_state.privacy_choices[message_index] = "accept"
+            
+            return True
+        else:
+            return False
+    except Exception as e:
+        st.error(f"Error applying correction: {e}")
+        return False
 
 # Main app
 def main():
@@ -1076,21 +1121,190 @@ def main():
             # Create scrollable container for conversation
             conversation_html = '<div class="conversation-container">'
             
+            # Add CSS for privacy error highlighting if privacy analysis has been run
+            if st.session_state.analyzed_log:
+                conversation_html += '''
+                <style>
+                .privacy-error {
+                    text-decoration: underline wavy #dc3545;
+                    background-color: rgba(220, 53, 69, 0.1);
+                    cursor: pointer;
+                    position: relative;
+                    display: inline-block;
+                    padding: 1px 2px;
+                    border-radius: 2px;
+                }
+                .privacy-error:active {
+                    background-color: rgba(220, 53, 69, 0.2);
+                }
+                #privacy-global-popup {
+                    display: none;
+                    position: fixed;
+                    z-index: 9999;
+                    min-width: 280px;
+                    max-width: 400px;
+                    background: #fff;
+                    border: 2px solid #dc3545;
+                    border-radius: 10px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+                    padding: 20px 18px 16px 18px;
+                    font-size: 15px;
+                    color: #2C1810;
+                    transition: opacity 0.15s;
+                }
+                #privacy-global-popup h4 {
+                    color: #dc3545;
+                    margin: 0 0 8px 0;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+                #privacy-global-popup .suggestion {
+                    background: #d4edda;
+                    border-left: 3px solid #28a745;
+                    border-radius: 4px;
+                    padding: 8px;
+                    margin: 10px 0 10px 0;
+                }
+                #privacy-global-popup .apply-suggestion-btn {
+                    background: #28a745;
+                    color: #fff;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 7px 16px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    margin-top: 8px;
+                    width: 100%;
+                }
+                #privacy-global-popup .apply-suggestion-btn:hover {
+                    background: #218838;
+                }
+                #privacy-global-popup .close-popup-btn {
+                    position: absolute;
+                    top: 8px;
+                    right: 12px;
+                    background: none;
+                    border: none;
+                    font-size: 18px;
+                    color: #dc3545;
+                    cursor: pointer;
+                }
+                </style>
+                <div id="privacy-global-popup">
+                    <button class="close-popup-btn" onclick="document.getElementById('privacy-global-popup').style.display='none';">Close</button>
+                    <h4 id="popup-title"></h4>
+                    <div id="popup-explanation"></div>
+                    <div id="popup-suggestion" class="suggestion"></div>
+                    <button id="popup-apply-btn" class="apply-suggestion-btn" style="display:none;"></button>
+                </div>
+                <script>
+                (function() {
+                    let popup = document.getElementById('privacy-global-popup');
+                    let popupTitle = document.getElementById('popup-title');
+                    let popupExplanation = document.getElementById('popup-explanation');
+                    let popupSuggestion = document.getElementById('popup-suggestion');
+                    let popupApplyBtn = document.getElementById('popup-apply-btn');
+                    let lastTarget = null;
+                    document.querySelectorAll('.privacy-error').forEach(function(el) {
+                        el.addEventListener('click', function(e) {
+                            console.log('clicked');
+                            e.stopPropagation();
+                            let type = el.getAttribute('data-type');
+                            let explanation = el.getAttribute('data-explanation');
+                            let suggestion = el.getAttribute('data-suggestion');
+                            let msgIdx = el.getAttribute('data-message-index');
+                            // Set popup content
+                            popupTitle.textContent = '🔒 Privacy Issue: ' + (type || '');
+                            popupExplanation.textContent = explanation || '';
+                            if (suggestion) {
+                                popupSuggestion.textContent = suggestion;
+                                popupApplyBtn.style.display = '';
+                                popupApplyBtn.textContent = '✅ Apply This Fix';
+                                popupApplyBtn.onclick = function(ev) {
+                                    ev.stopPropagation();
+                                    fetch('/api/apply_privacy_correction', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            message_index: parseInt(msgIdx),
+                                            original_text: el.textContent,
+                                            corrected_text: suggestion
+                                        })
+                                    }).then(r => r.json()).then(data => {
+                                        if (data.success) {
+                                            el.textContent = suggestion;
+                                            el.classList.remove('privacy-error');
+                                            el.classList.add('privacy-corrected');
+                                            popup.style.display = 'none';
+                                        }
+                                    });
+                                };
+                            } else {
+                                popupSuggestion.textContent = 'No automatic fix available. Please review manually.';
+                                popupApplyBtn.style.display = 'none';
+                            }
+                            // Position popup at mouse
+                            popup.style.display = 'block';
+                            let x = e.clientX, y = e.clientY;
+                            let w = popup.offsetWidth, h = popup.offsetHeight;
+                            let winW = window.innerWidth, winH = window.innerHeight;
+                            // Adjust if popup would go off screen
+                            if (x + w > winW) x = winW - w - 20;
+                            if (y + h > winH) y = winH - h - 20;
+                            popup.style.left = x + 'px';
+                            popup.style.top = y + 'px';
+                            lastTarget = el;
+                        });
+                    });
+                    // Hide popup on outside click
+                    document.addEventListener('click', function(e) {
+                        if (popup.style.display === 'block') {
+                            popup.style.display = 'none';
+                        }
+                    });
+                })();
+                </script>
+                '''
+            
             for i, turn in enumerate(st.session_state.conversation_log):
                 conversation_html += f'<div style="margin-bottom: 20px;">'
                 
-                # User message with styling
-                conversation_html += f'<div class="user-message">'
-                conversation_html += f'<p><strong>👤 User:</strong> {turn["user"]}</p>'
-                conversation_html += '</div>'
+                # User message with styling - check if privacy analysis has been run and this message has privacy issues
+                user_text = turn["user"]
+                if st.session_state.analyzed_log and i < len(st.session_state.analyzed_log):
+                    analyzed_turn = st.session_state.analyzed_log[i]
+                    if analyzed_turn.get('privacy'):
+                        privacy_info = analyzed_turn['privacy']
+                        # Store suggestion and info as data attributes
+                        error_text = (
+                            f'<span class="privacy-error" '
+                            f'data-type="{privacy_info["type"]}" '
+                            f'data-explanation="{privacy_info["explanation"]}" '
+                            f'data-suggestion="{privacy_info.get("suggestion", "")}" '
+                            f'data-message-index="{i}">' 
+                            f'{user_text}'
+                            f'</span>'
+                        )
+                        conversation_html += f'<div class="user-message">'
+                        conversation_html += f'<p><strong>👤 User:</strong> {error_text}</p>'
+                        conversation_html += '</div>'
+                    else:
+                        conversation_html += f'<div class="user-message">'
+                        conversation_html += f'<p><strong>👤 User:</strong> {user_text}</p>'
+                        conversation_html += '</div>'
+                else:
+                    conversation_html += f'<div class="user-message">'
+                    conversation_html += f'<p><strong>👤 User:</strong> {user_text}</p>'
+                    conversation_html += '</div>'
                 
                 # Bot message with styling
                 conversation_html += f'<div class="bot-message">'
                 conversation_html += f'<p><strong>🤖 Bot:</strong> {turn["bot"]}</p>'
                 conversation_html += '</div>'
                 
-                # Add privacy warning if present (from analysis)
-                if turn.get('privacy'):
+                # Add privacy warning if present (from analysis) - only show if not already highlighted
+                if turn.get('privacy') and not st.session_state.analyzed_log:
                     privacy_info = turn['privacy']
                     conversation_html += f'<div class="privacy-warning">'
                     conversation_html += f'<p><strong>🔍 Privacy Analysis Result:</strong></p>'
@@ -1155,7 +1369,7 @@ def main():
     # Privacy Analysis Results Display (for featured mode export)
     if st.session_state.show_privacy_analysis and st.session_state.analyzed_log:
         st.subheader("🔍 Privacy Analysis Results")
-        st.info("Privacy analysis has been completed on all messages. Review the results below.")
+        st.info("Privacy analysis has been completed on all messages. The red wavy underlines in the conversation above indicate privacy issues.")
         
         # Show summary statistics
         privacy_issues = [turn for turn in st.session_state.analyzed_log if turn.get('privacy')]
@@ -1164,47 +1378,33 @@ def main():
         
         if privacy_issues:
             st.warning(f"⚠️ **{len(privacy_issues)} privacy issues detected**")
+            st.info("🔍 Click on the red underlined text in the conversation above to see suggestions and apply corrections.")
             
-            # Display privacy issues with individual choices
+            # Individual choice buttons for each privacy issue
+            st.subheader("🎯 Make Your Privacy Choices")
+            st.info("Choose how to handle each privacy issue before exporting.")
+            
             for i, turn in enumerate(st.session_state.analyzed_log):
                 if turn.get('privacy'):
-                    with st.expander(f"Message {i+1}: Privacy Issue", expanded=True):
-                        col1_analysis, col2_analysis = st.columns([1, 1])
-                        
-                        with col1_analysis:
-                            st.markdown(f'<p style="color: #ffffff;"><strong>Original Message:</strong></p>', unsafe_allow_html=True)
-                            st.text_area("Original", value=turn['user'], height=80, disabled=True, key=f"analysis_orig_{i}", label_visibility="collapsed")
-                            st.markdown(f'<p style="color: #ffffff;"><strong>Issue Type: {turn["privacy"]["type"]}</strong></p>', unsafe_allow_html=True)
-                            st.markdown(f'<p style="color: #ffffff;"><strong>Explanation: {turn["privacy"]["explanation"]}</strong></p>', unsafe_allow_html=True)
-                        
-                        with col2_analysis:
-                            if turn['privacy'].get('suggestion'):
-                                st.markdown(f'<p style="color: #ffffff;"><strong>Suggested Safer Text:</strong></p>', unsafe_allow_html=True)
-                                st.text_area("Suggestion", value=turn['privacy']['suggestion'], height=80, disabled=True, key=f"analysis_sugg_{i}", label_visibility="collapsed")
-                            else:
-                                st.markdown(f'<p style="color: #ffffff;"><strong>No suggestion available</strong></p>', unsafe_allow_html=True)
-                                st.text_area("No suggestion", value="No safer alternative suggested", height=80, disabled=True, key=f"analysis_none_{i}", label_visibility="collapsed")
-                        
-                        # Individual choice buttons for this privacy issue
-                        st.markdown(f'<p style="color: #ffffff;"><strong>Your Choice:</strong></p>', unsafe_allow_html=True)
-                        col_choice1, col_choice2, col_choice3 = st.columns([1, 1, 1])
+                    with st.expander(f"Message {i+1}: Privacy Choice", expanded=False):
+                        col1_choice, col2_choice, col3_choice = st.columns([1, 1, 1])
                         
                         current_choice = st.session_state.privacy_choices.get(i, "none")
                         
-                        with col_choice1:
+                        with col1_choice:
                             if st.button(f"✅ Accept Suggestion", key=f"accept_{i}", 
                                        type="primary" if current_choice == "accept" else "secondary",
                                        disabled=not turn['privacy'].get('suggestion')):
                                 st.session_state.privacy_choices[i] = "accept"
                                 st.rerun()
                         
-                        with col_choice2:
+                        with col2_choice:
                             if st.button(f"⚠️ Keep Original", key=f"keep_{i}",
                                        type="primary" if current_choice == "keep" else "secondary"):
                                 st.session_state.privacy_choices[i] = "keep"
                                 st.rerun()
                         
-                        with col_choice3:
+                        with col3_choice:
                             if st.button(f"❓ Undecided", key=f"none_{i}",
                                        type="primary" if current_choice == "none" else "secondary"):
                                 if i in st.session_state.privacy_choices:
