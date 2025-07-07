@@ -418,8 +418,44 @@ body {
     gap: 0.5rem;
 }
 
+.edit-indicator {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--success-color);
+    background-color: rgba(40, 167, 69, 0.1);
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--success-color);
+}
+
 .message-content {
     line-height: 1.6;
+}
+
+/* Editable message input styles */
+.message-edit-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    background-color: var(--container-bg);
+    color: var(--text-color);
+    resize: vertical;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.message-edit-input:focus {
+    outline: none;
+    border-color: var(--focus-color);
+    box-shadow: 0 0 0 3px rgba(135, 241, 255, 0.25);
+}
+
+.message-edit-input:hover {
+    border-color: var(--primary-button);
 }
 
 /* Privacy Warning */
@@ -782,6 +818,49 @@ body {
     margin: 1rem 0;
 }
 
+/* Consent Popup */
+.consent-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.consent-explanation {
+    margin: 1.5rem 0;
+    line-height: 1.6;
+}
+
+.consent-explanation p {
+    margin-bottom: 1rem;
+}
+
+.consent-explanation ul {
+    margin: 0.5rem 0 1rem 1.5rem;
+}
+
+.consent-explanation li {
+    margin-bottom: 0.5rem;
+}
+
+.consent-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: center;
+}
+
+.consent-actions .btn {
+    flex: 1;
+    max-width: 200px;
+}
+
 /* Loading Overlay */
 .loading-overlay {
     position: fixed;
@@ -790,7 +869,7 @@ body {
     width: 100vw;
     height: 100vh;
     background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     z-index: 2000;
@@ -862,6 +941,14 @@ body {
     
     .choice-buttons {
         flex-direction: column;
+    }
+    
+    .consent-actions {
+        flex-direction: column;
+    }
+    
+    .consent-actions .btn {
+        max-width: none;
     }
     
     .header-content {

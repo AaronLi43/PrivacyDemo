@@ -66,6 +66,9 @@
           <button id="reset-btn" class="btn btn-secondary">
             <i class="fas fa-redo"></i> Reset Conversation
           </button>
+          <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
+            <i class="fas fa-times"></i> Exit Edit Mode
+          </button>
         </div>
 
         <!-- Export Buttons -->
@@ -168,14 +171,8 @@
         </div>
 
         <div class="export-options">
-          <button id="export-with-choices" class="btn btn-success">
-            <i class="fas fa-download"></i> Export with Your Choices
-          </button>
-          <button id="export-with-analysis" class="btn btn-warning">
-            <i class="fas fa-download"></i> Export with Analysis
-          </button>
-          <button id="export-original" class="btn btn-secondary">
-            <i class="fas fa-download"></i> Export Original
+          <button id="export-comprehensive" class="btn btn-success">
+            <i class="fas fa-download"></i> Export Comprehensive Data
           </button>
           <button id="close-analysis" class="btn btn-danger">
             <i class="fas fa-times"></i> Close Analysis
@@ -197,6 +194,39 @@
       <button id="popup-apply-btn" class="btn btn-success" style="display: none;">
         <i class="fas fa-check"></i> Apply This Fix
       </button>
+    </div>
+  </div>
+
+  <!-- Consent Popup Modal -->
+  <div id="consent-popup" class="consent-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closeConsentPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4><i class="fas fa-user-shield"></i> Data Collection Consent</h4>
+      <div class="consent-explanation">
+        <p>To improve our privacy detection system, we would like to collect your original conversation data along with the modifications made.</p>
+        <p><strong>What we collect:</strong></p>
+        <ul>
+          <li>Your original conversation messages</li>
+          <li>The modifications you made to the conversation</li>
+          <li>Your privacy choices and preferences</li>
+        </ul>
+        <p><strong>How it's used:</strong></p>
+        <ul>
+          <li>To improve privacy detection algorithms</li>
+          <li>To understand user privacy preferences</li>
+          <li>For research purposes only</li>
+        </ul>
+      </div>
+      <div class="consent-actions">
+        <button id="consent-agree-btn" class="btn btn-success">
+          <i class="fas fa-check"></i> I Agree - Include Original Data
+        </button>
+        <button id="consent-decline-btn" class="btn btn-secondary">
+          <i class="fas fa-times"></i> I Decline - Export Modified Only
+        </button>
+      </div>
     </div>
   </div>
 
