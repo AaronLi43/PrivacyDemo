@@ -60,14 +60,14 @@ body {
 
 .header-content {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     max-width: 1200px;
     margin: 0 auto;
 }
 
 .header-left {
-    text-align: left;
+    text-align: center;
 }
 
 .toggle-sidebar-btn {
@@ -350,7 +350,7 @@ body {
     padding: 1.5rem;
     overflow-y: auto;
     background-color: var(--container-bg);
-    max-height: 400px;
+    height: 800px;
     border: 2px solid var(--border-color);
     border-radius: 8px;
     margin: 1rem;
@@ -470,31 +470,6 @@ body {
 
 .privacy-warning strong {
     color: var(--privacy-warning-text);
-}
-
-/* Privacy Error Highlighting */
-.privacy-error {
-    text-decoration: underline wavy var(--error-color);
-    background-color: rgba(220, 53, 69, 0.1);
-    cursor: pointer;
-    position: relative;
-    display: inline-block;
-    padding: 1px 2px;
-    border-radius: 2px;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-
-.privacy-error:hover {
-    background-color: rgba(220, 53, 69, 0.2);
-    border-color: var(--error-color);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
-}
-
-.privacy-error:active {
-    background-color: rgba(220, 53, 69, 0.3);
-    transform: translateY(0);
 }
 
 /* Privacy Tooltip */
@@ -629,23 +604,58 @@ body {
     background-color: var(--secondary-button-hover);
 }
 
-/* Enhanced privacy error with different severities */
-.privacy-error.severity-high {
+/* Real-time privacy detection styles */
+.realtime-privacy-error {
     text-decoration: underline wavy var(--error-color);
-    background-color: rgba(220, 53, 69, 0.15);
+    background-color: rgba(220, 53, 69, 0.1);
+    cursor: pointer;
+    position: relative;
+    display: inline-block;
+    padding: 1px 2px;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    animation: privacyPulse 2s infinite;
+}
+
+@keyframes privacyPulse {
+    0%, 100% {
+        background-color: rgba(220, 53, 69, 0.05);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.3);
+    }
+    50% {
+        background-color: rgba(220, 53, 69, 0.15);
+        box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.1);
+    }
+}
+
+.realtime-privacy-error:hover {
+    background-color: rgba(220, 53, 69, 0.2);
     border-color: var(--error-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+    animation: none;
 }
 
-.privacy-error.severity-medium {
-    text-decoration: underline wavy var(--warning-color);
-    background-color: rgba(255, 193, 7, 0.15);
-    border-color: var(--warning-color);
+.realtime-privacy-error:active {
+    background-color: rgba(220, 53, 69, 0.3);
+    transform: translateY(0);
 }
 
-.privacy-error.severity-low {
-    text-decoration: underline wavy var(--info-color);
-    background-color: rgba(23, 162, 184, 0.15);
-    border-color: var(--info-color);
+/* Real-time warning indicator */
+#realtime-warning {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { 
+        transform: translateX(100%); 
+        opacity: 0; 
+    }
+    to { 
+        transform: translateX(0); 
+        opacity: 1; 
+    }
 }
 
 /* Chat Input */
@@ -760,6 +770,54 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
+}
+
+/* Action Buttons Panel - Fixed Position */
+.action-buttons-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    background-color: var(--container-bg);
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    border: 2px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 200px;
+}
+
+.config-button-container {
+    display: flex;
+    justify-content: center;
+}
+
+.config-button-container .btn {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    width: 100%;
+}
+
+/* Export Buttons Container */
+.export-buttons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.export-buttons-container .btn {
+    min-width: 150px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    width: 100%;
 }
 
 /* Privacy Popup */
@@ -937,6 +995,44 @@ body {
     
     .export-options {
         grid-template-columns: 1fr;
+    }
+    
+    .action-buttons-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .action-buttons-panel {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        min-width: auto;
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .config-button-container {
+        flex: 1;
+        min-width: 120px;
+        max-width: 200px;
+    }
+    
+    .export-buttons-container {
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        flex: 2;
+    }
+    
+    .export-buttons-container .btn {
+        min-width: 120px;
+        height: 44px;
+        flex: 1;
+        max-width: 200px;
     }
     
     .choice-buttons {

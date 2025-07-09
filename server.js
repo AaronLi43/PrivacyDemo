@@ -303,36 +303,57 @@ function detectPrivacyWithPatterns(userMessage) {
             pattern: /\b\d{3}-\d{2}-\d{4}\b/, 
             type: 'Social Security Number',
             severity: 'high',
-            suggestion: 'Consider removing or redacting the SSN',
-            explanation: 'Social Security Numbers are highly sensitive personal identifiers'
+            suggestion: 'Use "XXX-XX-XXXX" instead',
+            explanation: 'Social Security Numbers are highly sensitive personal identifiers that should be redacted'
         },
         { 
             pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, 
             type: 'Credit Card Number',
             severity: 'high',
-            suggestion: 'Consider removing or redacting the credit card number',
-            explanation: 'Credit card numbers are sensitive financial information'
+            suggestion: 'Use "****-****-****-****" instead',
+            explanation: 'Credit card numbers are sensitive financial information that should be masked'
         },
         { 
             pattern: /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, 
             type: 'Phone Number',
             severity: 'medium',
-            suggestion: 'Consider using a generic format or removing the number',
+            suggestion: 'Use "(555) 123-4567" format or remove',
             explanation: 'Phone numbers can be used to identify individuals'
         },
         { 
             pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, 
             type: 'Email Address',
             severity: 'medium',
-            suggestion: 'Consider using a generic email format',
+            suggestion: 'Use "user@example.com" instead',
             explanation: 'Email addresses can be used to identify and contact individuals'
         },
         { 
             pattern: /\b\d+\s+[A-Za-z\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr)\b/i, 
             type: 'Full Address',
             severity: 'high',
-            suggestion: 'Consider using a generic location description',
+            suggestion: 'Use "City, State" format instead',
             explanation: 'Complete addresses can reveal personal location information'
+        },
+        {
+            pattern: /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
+            type: 'Full Name',
+            severity: 'medium',
+            suggestion: 'Use "First Name" or "Last Name" instead',
+            explanation: 'Full names can be used to identify individuals'
+        },
+        {
+            pattern: /\b\d{1,2}\/\d{1,2}\/\d{4}\b/,
+            type: 'Date of Birth',
+            severity: 'high',
+            suggestion: 'Use "MM/DD/YYYY" format or remove',
+            explanation: 'Birth dates are sensitive personal information'
+        },
+        {
+            pattern: /\b\d{3}-\d{2}-\d{4}\b/,
+            type: 'SSN Pattern',
+            severity: 'high',
+            suggestion: 'Use "XXX-XX-XXXX" format',
+            explanation: 'This appears to be a Social Security Number pattern'
         }
     ];
 

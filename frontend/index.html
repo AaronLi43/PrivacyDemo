@@ -16,9 +16,6 @@
           <h1><i class="fas fa-lock"></i> Privacy Demo Chatbot</h1>
           <p>A chatbot with privacy detection capabilities for data collection</p>
         </div>
-        <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
-          <i class="fas fa-bars"></i> Hide Config
-        </button>
       </div>
     </header>
 
@@ -42,24 +39,19 @@
           <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
         </div>
 
-        <!-- Display Settings -->
-        <div class="form-group">
-          <label for="conversation-height">Conversation Height (px):</label>
-          <input type="range" id="conversation-height" min="200" max="800" value="400" step="50" class="form-control">
-          <span id="height-value">400px</span>
-        </div>
+
 
         <!-- File Upload for Questions -->
-        <div class="form-group">
+        <!-- <div class="form-group">
           <label for="questions-file">Upload Questions (JSON):</label>
           <input type="file" id="questions-file" accept=".json" class="form-control">
-        </div>
+        </div> -->
 
         <!-- File Upload for Return Logs -->
-        <div class="form-group">
+        <!-- <div class="form-group">
           <label for="return-file">Return Your Conversation Log:</label>
           <input type="file" id="return-file" accept=".json" class="form-control">
-        </div>
+        </div> -->
 
         <!-- Action Buttons -->
         <div class="button-group">
@@ -71,18 +63,7 @@
           </button>
         </div>
 
-        <!-- Export Buttons -->
-        <div id="export-buttons" class="button-group" style="display: none;">
-          <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
-            <i class="fas fa-edit"></i> Edit & Export
-          </button>
-          <button id="export-direct-btn" class="btn btn-success">
-            <i class="fas fa-download"></i> Export Direct
-          </button>
-          <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
-            <i class="fas fa-search"></i> Analyze & Export
-          </button>
-        </div>
+
       </div>
 
       <!-- Statistics -->
@@ -146,6 +127,9 @@
             </button>
           </div>
         </div>
+
+
+      </div>
       </div>
 
       <!-- Privacy Analysis Results -->
@@ -180,6 +164,29 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Action Buttons Panel - Fixed Position -->
+  <div class="action-buttons-panel">
+    <!-- Config Button -->
+    <div class="config-button-container">
+      <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
+        <i class="fas fa-bars"></i> Hide Config
+      </button>
+    </div>
+
+    <!-- Export Buttons -->
+    <div id="export-buttons" class="export-buttons-container" style="display: none;">
+      <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
+        <i class="fas fa-edit"></i> Edit & Export
+      </button>
+      <button id="export-direct-btn" class="btn btn-success">
+        <i class="fas fa-download"></i> Export Direct
+      </button>
+      <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
+        <i class="fas fa-search"></i> Analyze & Export
+      </button>
+    </div>
   </div>
 
   <!-- Privacy Popup Modal -->

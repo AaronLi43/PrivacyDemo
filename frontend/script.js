@@ -16,7 +16,11 @@ class PrivacyDemoApp {
             apiConnected: false,
             sidebarHidden: false,
             consentGiven: false,
-            pendingExportAction: null
+            pendingExportAction: null,
+            // New properties for featured mode
+            realTimeDetection: false,
+            privacyDetectionQueue: [],
+            isDetecting: false
         };
 
         this.init();
@@ -38,19 +42,16 @@ class PrivacyDemoApp {
             this.setMode(e.target.value);
         });
 
-        // Conversation height slider
-        document.getElementById('conversation-height').addEventListener('input', (e) => {
-            this.setConversationHeight(e.target.value);
-        });
+
 
         // File uploads
-        document.getElementById('questions-file').addEventListener('change', (e) => {
-            this.handleQuestionsUpload(e.target.files[0]);
-        });
+        // document.getElementById('questions-file').addEventListener('change', (e) => {
+        //     this.handleQuestionsUpload(e.target.files[0]);
+        // });
 
-        document.getElementById('return-file').addEventListener('change', (e) => {
-            this.handleReturnUpload(e.target.files[0]);
-        });
+        // document.getElementById('return-file').addEventListener('change', (e) => {
+        //     this.handleReturnUpload(e.target.files[0]);
+        // });
 
         // Action buttons
         document.getElementById('reset-btn').addEventListener('click', () => {
@@ -77,14 +78,22 @@ class PrivacyDemoApp {
             this.showConsentPopup('analyzeAndExport');
         });
 
-        // Chat input
+        // Chat input with real-time privacy detection
         document.getElementById('send-btn').addEventListener('click', () => {
             this.sendMessage();
         });
 
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.sendMessage();
+            }
+        });
+
+        // Real-time privacy detection for featured mode
+        chatInput.addEventListener('input', (e) => {
+            if (this.state.mode === 'featured') {
+                this.handleRealTimePrivacyDetection(e.target.value);
             }
         });
 
@@ -116,28 +125,6 @@ class PrivacyDemoApp {
         document.getElementById('tooltip-close-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             this.hidePrivacyTooltip();
-        });
-
-        // Privacy error hover events (delegated)
-        document.addEventListener('mouseenter', (e) => {
-            if (e.target.classList.contains('privacy-error')) {
-                this.showPrivacyTooltip(e.target);
-            }
-        });
-
-        document.addEventListener('mouseleave', (e) => {
-            if (e.target.classList.contains('privacy-error')) {
-                this.hidePrivacyTooltip();
-            }
-        });
-
-        // Close tooltip when clicking outside
-        document.addEventListener('click', (e) => {
-            const privacyTooltip = e.target.closest('.privacy-tooltip');
-            const privacyError = e.target.closest('.privacy-error');
-            if (!privacyTooltip && !privacyError) {
-                this.hidePrivacyTooltip();
-            }
         });
 
         // Privacy popup (legacy)
@@ -181,6 +168,12 @@ class PrivacyDemoApp {
         this.state.analyzedLog = [];
         this.state.showPrivacyAnalysis = false;
         this.state.privacyChoices = {};
+        
+        // Enable/disable real-time detection based on mode
+        this.state.realTimeDetection = (mode === 'featured');
+        
+        // Clear any existing real-time detection
+        this.clearRealTimeDetection();
 
         // Skip API call for mode setting - focus on frontend functionality
         this.updateModeInfo();
@@ -198,21 +191,131 @@ class PrivacyDemoApp {
         };
         const modeDescriptions = {
             naive: '💡 Naive Mode: You can edit your conversation log before exporting!',
-            neutral: '⚖️ Neutral Mode: Export conversation log without any modifications!',
-            featured: '🔒 Featured Mode: Privacy analysis runs when you export the conversation log!'
+            neutral: '⚖️ Neutral Mode: Privacy analysis runs when you export the conversation log!',
+            featured: '🔒 Featured Mode: Real-time privacy detection with interactive corrections!'
         };
-
-        modeInfo.innerHTML = `<p><strong>${modeDescriptions[this.state.mode]}</strong></p>`;
+        
+        modeInfo.innerHTML = `<p><strong>${modeIcons[this.state.mode]} ${modeDescriptions[this.state.mode]}</strong></p>`;
         document.getElementById('stat-mode').textContent = `${modeIcons[this.state.mode]} ${this.state.mode.charAt(0).toUpperCase() + this.state.mode.slice(1)}`;
     }
 
-    // Set conversation height
-    setConversationHeight(height) {
-        this.state.conversationHeight = parseInt(height);
-        document.getElementById('height-value').textContent = `${height}px`;
-        document.getElementById('conversation-container').style.maxHeight = `${height}px`;
-        this.saveToLocalStorage();
+    // Handle real-time privacy detection for featured mode
+    async handleRealTimePrivacyDetection(text) {
+        if (!this.state.realTimeDetection || !text.trim()) {
+            this.clearRealTimeDetection();
+            return;
+        }
+
+        // Debounce the detection to avoid too many API calls
+        clearTimeout(this.detectionTimeout);
+        this.detectionTimeout = setTimeout(async () => {
+            await this.performRealTimeDetection(text);
+        }, 500); // 500ms delay
     }
+
+    // Perform real-time privacy detection
+    async performRealTimeDetection(text) {
+        try {
+            const response = await fetch('/api/privacy_detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ user_message: text })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                // Only use the actual API response for privacy detection
+                if (result.privacy_issue) {
+                    this.displayRealTimePrivacyIssues(text, result);
+                } else {
+                    this.clearRealTimeDetection();
+                }
+            } else {
+                // Only fallback if the API is unreachable or returns an error
+                this.clearRealTimeDetection();
+            }
+        } catch (error) {
+            console.error('Real-time privacy detection error:', error);
+            // Fallback to client-side detection ONLY if API is unreachable
+            // (Optional: you can remove the fallback entirely if strict API-only is desired)
+            // this.displayRealTimePrivacyIssues(text, this.clientSidePatternDetection(text));
+            this.clearRealTimeDetection();
+        }
+    }
+
+    // Display real-time privacy issues in the input field
+    displayRealTimePrivacyIssues(text, privacyResult) {
+        const chatInput = document.getElementById('chat-input');
+        
+        if (!privacyResult.privacy_issue) {
+            this.clearRealTimeDetection();
+            return;
+        }
+
+        // No highlight: just show warning
+        this.showRealTimeWarning(privacyResult);
+    }
+
+    // Show real-time warning indicator
+    showRealTimeWarning(privacyResult) {
+        // Create warning indicator
+        const warning = document.createElement('div');
+        warning.id = 'realtime-warning';
+        warning.style.position = 'fixed';
+        warning.style.top = '20px';
+        warning.style.right = '20px';
+        warning.style.backgroundColor = '#dc3545';
+        warning.style.color = 'white';
+        warning.style.padding = '10px 15px';
+        warning.style.borderRadius = '8px';
+        warning.style.zIndex = '1000';
+        warning.style.fontSize = '14px';
+        warning.style.fontWeight = 'bold';
+        warning.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.3)';
+        warning.style.animation = 'slideIn 0.3s ease-out';
+        warning.innerHTML = `
+            <i class="fas fa-exclamation-triangle"></i>
+            Privacy Issue Detected: ${privacyResult.type}
+            <button onclick="window.app.clearRealTimeDetection()" style="background: none; border: none; color: white; margin-left: 10px; cursor: pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        document.body.appendChild(warning);
+    }
+
+    // Clear real-time detection
+    clearRealTimeDetection() {
+        // Remove overlay
+        if (this.state.realTimeOverlay && typeof this.state.realTimeOverlay.remove === 'function') {
+            this.state.realTimeOverlay.remove();
+            this.state.realTimeOverlay = null;
+        } else {
+            this.state.realTimeOverlay = null;
+        }
+
+        // Remove warning
+        const warning = document.getElementById('realtime-warning');
+        if (warning) {
+            warning.remove();
+        }
+
+        // Clear timeout
+        if (this.detectionTimeout) {
+            clearTimeout(this.detectionTimeout);
+            this.detectionTimeout = null;
+        }
+    }
+
+    // Escape regex special characters
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Set conversation height
+
 
     // Toggle sidebar visibility
     toggleSidebar() {
@@ -236,46 +339,46 @@ class PrivacyDemoApp {
     }
 
     // Handle questions file upload
-    async handleQuestionsUpload(file) {
-        if (!file) return;
+    // async handleQuestionsUpload(file) {
+    //     if (!file) return;
 
-        try {
-            API.validateFile(file, ['.json']);
+    //     try {
+    //         API.validateFile(file, ['.json']);
             
-            // Mock API response for questions upload
-            setTimeout(() => {
-                this.state.questions = [
-                    "What is your name?",
-                    "What is your email address?",
-                    "What is your phone number?"
-                ];
-                this.showNotification(`✅ Loaded ${this.state.questions.length} questions`, 'success');
-                this.saveToLocalStorage();
-            }, 500);
+    //         // Mock API response for questions upload
+    //         setTimeout(() => {
+    //             this.state.questions = [
+    //                 "What is your name?",
+    //                 "What is your email address?",
+    //                 "What is your phone number?"
+    //             ];
+    //             this.showNotification(`✅ Loaded ${this.state.questions.length} questions`, 'success');
+    //             this.saveToLocalStorage();
+    //         }, 500);
             
-        } catch (error) {
-            console.error('Questions upload error:', error);
-            this.showNotification(`❌ Error loading file: ${error.message}`, 'error');
-        }
-    }
+    //     } catch (error) {
+    //         console.error('Questions upload error:', error);
+    //         this.showNotification(`❌ Error loading file: ${error.message}`, 'error');
+    //     }
+    // }
 
     // Handle return log upload
-    async handleReturnUpload(file) {
-        if (!file) return;
+    // async handleReturnUpload(file) {
+    //     if (!file) return;
 
-        try {
-            API.validateFile(file, ['.json']);
+    //     try {
+    //         API.validateFile(file, ['.json']);
             
-            // Mock API response for return upload
-            setTimeout(() => {
-                this.showNotification('✅ Thank you! Your file has been received.', 'success');
-            }, 500);
+    //         // Mock API response for return upload
+    //         setTimeout(() => {
+    //             this.showNotification('✅ Thank you! Your file has been received.', 'success');
+    //         }, 500);
             
-        } catch (error) {
-            console.error('Return upload error:', error);
-            this.showNotification(`❌ Error uploading file: ${error.message}`, 'error');
-        }
-    }
+    //     } catch (error) {
+    //         console.error('Return upload error:', error);
+    //         this.showNotification(`❌ Error uploading file: ${error.message}`, 'error');
+    //     }
+    // }
 
     // Reset conversation
     async resetConversation() {
@@ -309,6 +412,9 @@ class PrivacyDemoApp {
         
         if (!message) return;
 
+        // Clear real-time detection when sending message
+        this.clearRealTimeDetection();
+
         try {
             API.validateMessage(message);
             
@@ -324,27 +430,29 @@ class PrivacyDemoApp {
             this.updateUI();
             this.showLoading(true);
 
-            // Mock API response for frontend testing
-            setTimeout(() => {
+            // Send message to backend API and update bot response
+            try {
                 const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
-                lastMessage.bot = `This is a mock response to: "${message}". The API functionality is working correctly.`;
-                
-                // Mock privacy detection for featured mode
-                if (this.state.mode === 'featured' && message.toLowerCase().includes('name')) {
-                    lastMessage.privacy = {
-                        type: 'Personal Information',
-                        severity: 'medium',
-                        explanation: 'This message may contain personal information.',
-                        affected_text: message,
-                        suggestion: message.replace(/name/gi, '[REDACTED]')
-                    };
+                const response = await API.sendMessage(message, this.state.currentStep);
+                if (response && response.bot_response) {
+                    lastMessage.bot = response.bot_response;
+                } else {
+                    lastMessage.bot = '⚠️ No response from server.';
                 }
-
+                // Optionally handle privacy detection for featured mode
+                if (this.state.mode === 'featured' && response && response.privacy_detection) {
+                    lastMessage.privacy = response.privacy_detection;
+                }
                 this.updateUI();
                 this.saveToLocalStorage();
                 this.scrollToBottom();
                 this.showLoading(false);
-            }, 1000);
+            } catch (apiError) {
+                const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
+                lastMessage.bot = `❌ Error: ${apiError.message}`;
+                this.updateUI();
+                this.showLoading(false);
+            }
 
         } catch (error) {
             console.error('Send message error:', error);
@@ -413,39 +521,80 @@ class PrivacyDemoApp {
         try {
             this.showLoading(true);
             
-            // Mock privacy analysis for frontend testing
-            setTimeout(() => {
-                this.state.analyzedLog = this.state.conversationLog.map((turn, index) => {
-                    const mockAnalysis = {
-                        user: turn.user,
-                        bot: turn.bot,
-                        privacy: null
-                    };
-                    
-                    // Mock privacy detection for messages containing certain keywords
-                    if (turn.user.toLowerCase().includes('name') || 
-                        turn.user.toLowerCase().includes('email') ||
-                        turn.user.toLowerCase().includes('phone')) {
-                        mockAnalysis.privacy = {
-                            type: 'Personal Information',
-                            severity: 'medium',
-                            explanation: 'This message may contain personal information.',
-                            affected_text: turn.user,
-                            suggestion: turn.user.replace(/name|email|phone/gi, '[REDACTED]')
-                        };
-                    }
-                    
-                    return mockAnalysis;
-                });
+            // Use real backend API for privacy analysis
+            const analyzedLog = [];
+            
+            for (let i = 0; i < this.state.conversationLog.length; i++) {
+                const turn = this.state.conversationLog[i];
                 
-                this.state.showPrivacyAnalysis = true;
-                this.state.editMode = true; // Enable edit mode for all messages
-                // Store original conversation for consent-based export
-                this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
-                this.updateUI();
-                this.showNotification('🔍 Privacy analysis completed - All messages are now editable!', 'success');
-                this.showLoading(false);
-            }, 1500);
+                // Analyze user message for privacy issues
+                let userPrivacyResult = null;
+                if (turn.user && turn.user.trim()) {
+                    try {
+                        const response = await fetch('/api/privacy_detection', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ user_message: turn.user })
+                        });
+                        
+                        if (response.ok) {
+                            userPrivacyResult = await response.json();
+                        } else {
+                            console.error(`Privacy detection failed for user message ${i}:`, response.status);
+                        }
+                    } catch (error) {
+                        console.error(`Privacy detection error for user message ${i}:`, error);
+                    }
+                }
+                
+                // Analyze bot message for privacy issues (if any)
+                let botPrivacyResult = null;
+                if (turn.bot && turn.bot.trim()) {
+                    try {
+                        const response = await fetch('/api/privacy_detection', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ user_message: turn.bot })
+                        });
+                        
+                        if (response.ok) {
+                            botPrivacyResult = await response.json();
+                        } else {
+                            console.error(`Privacy detection failed for bot message ${i}:`, response.status);
+                        }
+                    } catch (error) {
+                        console.error(`Privacy detection error for bot message ${i}:`, error);
+                    }
+                }
+                
+                // Create analysis entry
+                const analysisEntry = {
+                    user: turn.user,
+                    bot: turn.bot,
+                    userPrivacy: userPrivacyResult,
+                    botPrivacy: botPrivacyResult,
+                    hasPrivacyIssues: (userPrivacyResult && userPrivacyResult.privacy_issue) || 
+                                     (botPrivacyResult && botPrivacyResult.privacy_issue)
+                };
+                
+                analyzedLog.push(analysisEntry);
+            }
+            
+            this.state.analyzedLog = analyzedLog;
+            this.state.showPrivacyAnalysis = true;
+            this.state.editMode = true; // Enable edit mode for all messages
+            // Store original conversation for consent-based export
+            this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
+            this.updateUI();
+            
+            // Count privacy issues found
+            const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
+            this.showNotification(`🔍 Privacy analysis completed - Found ${totalIssues} messages with privacy issues!`, 'success');
+            this.showLoading(false);
             
         } catch (error) {
             console.error('Analysis error:', error);
@@ -593,8 +742,6 @@ class PrivacyDemoApp {
                 const element = document.querySelector(`[data-message-index="${messageIndex}"]`);
                 if (element) {
                     element.textContent = correctedText;
-                    element.classList.remove('privacy-error');
-                    element.classList.add('privacy-corrected');
                 }
                 
                 this.closePrivacyPopup();
@@ -664,7 +811,8 @@ class PrivacyDemoApp {
             exportLog.push({
                 user: currentTurn.user, // Use edited user message
                 bot: currentTurn.bot,
-                privacy: analyzedTurn ? analyzedTurn.privacy : null, // Include privacy analysis if available
+                userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null, // Include user privacy analysis
+                botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null, // Include bot privacy analysis
                 original_user: analyzedTurn ? analyzedTurn.user : currentTurn.user, // Keep original for reference
                 has_edits: analyzedTurn && analyzedTurn.user !== currentTurn.user // Flag if message was edited
             });
@@ -675,7 +823,7 @@ class PrivacyDemoApp {
                 mode: 'featured_with_analysis',
                 export_timestamp: this.state.currentStep,
                 total_messages: exportLog.length,
-                privacy_issues: this.state.analyzedLog.filter(turn => turn.privacy).length,
+                privacy_issues: this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues).length,
                 has_edits: this.state.editMode,
                 export_type: 'analysis_with_edits',
                 consent_given: this.state.consentGiven
@@ -699,23 +847,16 @@ class PrivacyDemoApp {
         for (let i = 0; i < this.state.conversationLog.length; i++) {
             const currentTurn = this.state.conversationLog[i]; // Use current (potentially edited) messages
             const analyzedTurn = this.state.analyzedLog[i];
-            const choice = this.state.privacyChoices[i];
+            const choices = this.state.privacyChoices[i] || {};
             
-            if (analyzedTurn && analyzedTurn.privacy && choice === 'accept' && analyzedTurn.privacy.suggestion) {
-                finalLog.push({
-                    user: analyzedTurn.privacy.suggestion,
-                    bot: currentTurn.bot,
-                    privacy: analyzedTurn.privacy,
-                    choice: choice
-                });
-            } else {
-                finalLog.push({
-                    user: currentTurn.user, // Use edited user message
-                    bot: currentTurn.bot,
-                    privacy: analyzedTurn ? analyzedTurn.privacy : null,
-                    choice: choice || 'none'
-                });
-            }
+            // Use the current conversation log directly since privacy corrections are applied immediately
+            finalLog.push({
+                user: currentTurn.user,
+                bot: currentTurn.bot,
+                userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null,
+                botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null,
+                choice: choices
+            });
         }
         
         const exportData = {
@@ -723,7 +864,7 @@ class PrivacyDemoApp {
                 mode: 'featured_comprehensive',
                 export_timestamp: this.state.currentStep,
                 total_messages: finalLog.length,
-                privacy_issues: this.state.analyzedLog.filter(turn => turn.privacy).length,
+                privacy_issues: this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues).length,
                 privacy_choices_made: Object.keys(this.state.privacyChoices).length,
                 has_edits: this.state.editMode,
                 edited_messages_count: this.state.conversationLog.filter(turn => turn.edited).length,
@@ -747,23 +888,43 @@ class PrivacyDemoApp {
     // Generate privacy choices summary
     generatePrivacyChoicesSummary() {
         const summary = {
-            total_choices: Object.keys(this.state.privacyChoices).length,
+            total_choices: 0,
             accepted_suggestions: 0,
             kept_original: 0,
             undecided: 0
         };
         
-        Object.values(this.state.privacyChoices).forEach(choice => {
-            switch (choice) {
-                case 'accept':
-                    summary.accepted_suggestions++;
-                    break;
-                case 'keep':
-                    summary.kept_original++;
-                    break;
-                default:
-                    summary.undecided++;
-                    break;
+        Object.values(this.state.privacyChoices).forEach(choiceObj => {
+            // Handle both old format (string) and new format (object with user/bot properties)
+            if (typeof choiceObj === 'string') {
+                summary.total_choices++;
+                switch (choiceObj) {
+                    case 'accept':
+                        summary.accepted_suggestions++;
+                        break;
+                    case 'keep':
+                        summary.kept_original++;
+                        break;
+                    default:
+                        summary.undecided++;
+                        break;
+                }
+            } else {
+                // New format: object with user/bot properties
+                Object.values(choiceObj).forEach(choice => {
+                    summary.total_choices++;
+                    switch (choice) {
+                        case 'accept':
+                            summary.accepted_suggestions++;
+                            break;
+                        case 'keep':
+                            summary.kept_original++;
+                            break;
+                        default:
+                            summary.undecided++;
+                            break;
+                    }
+                });
             }
         });
         
@@ -801,45 +962,23 @@ class PrivacyDemoApp {
             
             // User message - make editable if in edit mode
             let userContent;
-            if (this.state.editMode) {
+            if (this.state.editMode && this.state.mode === 'featured') {
                 // Create editable textarea for user message
+                userContent = `<div style="position:relative;display:flex;align-items:center;gap:0.5rem;">
+                    <textarea class="message-edit-input" data-message-index="${i}" 
+                        placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>`;
+                // If privacy detected, show concise icon/marker
+                if (this.state.analyzedLog[i] && this.state.analyzedLog[i].hasPrivacyIssues) {
+                    userContent += `<span title="Privacy issue detected" style="font-size:1.1em;line-height:1;vertical-align:middle;color:#dc3545;">&#9888;</span>`;
+                }
+                userContent += `</div>`;
+            } else if (this.state.editMode) {
+                // Naive/neutral edit mode: just textarea
                 userContent = `<textarea class="message-edit-input" data-message-index="${i}" 
                     placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>`;
             } else {
-                // Regular display with privacy highlighting
-                let userText = turn.user;
-                if (this.state.analyzedLog[i] && this.state.analyzedLog[i].privacy) {
-                    const privacy = this.state.analyzedLog[i].privacy;
-                    const severity = privacy.severity || 'medium';
-                    const affectedText = privacy.affected_text || turn.user;
-                    
-                    // If we have specific affected text, highlight only that part
-                    if (privacy.affected_text && privacy.affected_text !== turn.user) {
-                        const escapedAffectedText = this.escapeHtml(privacy.affected_text);
-                        const escapedFullText = this.escapeHtml(turn.user);
-                        const highlightedText = escapedFullText.replace(
-                            escapedAffectedText,
-                            `<span class="privacy-error severity-${severity}" 
-                                data-type="${privacy.type}" 
-                                data-explanation="${this.escapeHtml(privacy.explanation)}" 
-                                data-suggestion="${this.escapeHtml(privacy.suggestion || '')}" 
-                                data-message-index="${i}"
-                                data-severity="${severity}">${escapedAffectedText}</span>`
-                        );
-                        userText = highlightedText;
-                    } else {
-                        // Highlight the entire message
-                        userText = `<span class="privacy-error severity-${severity}" 
-                            data-type="${privacy.type}" 
-                            data-explanation="${this.escapeHtml(privacy.explanation)}" 
-                            data-suggestion="${this.escapeHtml(privacy.suggestion || '')}" 
-                            data-message-index="${i}"
-                            data-severity="${severity}">${this.escapeHtml(turn.user)}</span>`;
-                    }
-                } else {
-                    userText = this.escapeHtml(turn.user);
-                }
-                userContent = userText;
+                // Regular display, no privacy highlight in featured mode
+                userContent = this.escapeHtml(turn.user);
             }
             
             html += `
@@ -977,7 +1116,7 @@ class PrivacyDemoApp {
         if (this.state.showPrivacyAnalysis && this.state.analyzedLog.length > 0) {
             analysisSection.style.display = 'block';
             
-            const privacyIssues = this.state.analyzedLog.filter(turn => turn.privacy);
+            const privacyIssues = this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues);
             document.getElementById('total-messages').textContent = this.state.analyzedLog.length;
             document.getElementById('privacy-issues').textContent = privacyIssues.length;
             
@@ -990,7 +1129,7 @@ class PrivacyDemoApp {
     // Update privacy choices
     updatePrivacyChoices() {
         const choicesContainer = document.getElementById('privacy-choices');
-        const privacyIssues = this.state.analyzedLog.filter(turn => turn.privacy);
+        const privacyIssues = this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues);
         
         if (privacyIssues.length === 0) {
             choicesContainer.innerHTML = '<p class="text-center">✅ No privacy issues detected</p>';
@@ -1001,49 +1140,101 @@ class PrivacyDemoApp {
         
         for (let i = 0; i < this.state.analyzedLog.length; i++) {
             const turn = this.state.analyzedLog[i];
-            if (!turn.privacy) continue;
+            if (!turn.hasPrivacyIssues) continue;
             
-            const currentChoice = this.state.privacyChoices[i] || 'none';
+            // Ensure privacyChoices[i] is an object
+            if (!this.state.privacyChoices[i]) this.state.privacyChoices[i] = {};
+            const currentChoices = this.state.privacyChoices[i];
             
-            html += `
-                <div class="choice-item">
-                    <h4>Message ${i + 1}: Privacy Choice</h4>
-                    <p><strong>Issue:</strong> ${turn.privacy.type}</p>
-                    <p><strong>Explanation:</strong> ${turn.privacy.explanation}</p>
-                    ${turn.privacy.suggestion ? `<p><strong>Suggestion:</strong> ${turn.privacy.suggestion}</p>` : ''}
-                    
-                    <div class="choice-buttons">
-                        <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'accept')" 
-                                ${!turn.privacy.suggestion ? 'disabled' : ''}>
-                            ✅ Accept Suggestion
-                        </button>
-                        <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'keep')">
-                            ⚠️ Keep Original
-                        </button>
-                        <button class="btn btn-secondary" onclick="app.makePrivacyChoice(${i}, 'none')">
-                            ❓ Undecided
-                        </button>
+            // Handle user message privacy issues
+            if (turn.userPrivacy && turn.userPrivacy.privacy_issue) {
+                const userChoice = currentChoices.user || 'none';
+                html += `
+                    <div class="choice-item">
+                        <h4>Message ${i + 1}: User Message Privacy Issue</h4>
+                        <p><strong>Issue:</strong> ${turn.userPrivacy.type}</p>
+                        <p><strong>Severity:</strong> ${turn.userPrivacy.severity}</p>
+                        <p><strong>Explanation:</strong> ${turn.userPrivacy.explanation}</p>
+                        ${turn.userPrivacy.suggestion ? `<p><strong>Suggestion:</strong> ${turn.userPrivacy.suggestion}</p>` : ''}
+                        <p><strong>Affected Text:</strong> "${turn.userPrivacy.affected_text}"</p>
+                        <div class="choice-buttons">
+                            <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'user', 'accept')" 
+                                    ${!turn.userPrivacy.suggestion ? 'disabled' : ''}>
+                                ✅ Accept Suggestion
+                            </button>
+                            <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'user', 'keep')">
+                                ⚠️ Keep Original
+                            </button>
+                            <button class="btn btn-secondary" onclick="app.makePrivacyChoice(${i}, 'user', 'none')">
+                                ❓ Undecided
+                            </button>
+                        </div>
+                        <div class="choice-status ${userChoice}">
+                            ${this.getChoiceStatusText(userChoice)}
+                        </div>
                     </div>
-                    
-                    <div class="choice-status ${currentChoice}">
-                        ${this.getChoiceStatusText(currentChoice)}
+                `;
+            }
+            
+            // Handle bot message privacy issues
+            if (turn.botPrivacy && turn.botPrivacy.privacy_issue) {
+                const botChoice = currentChoices.bot || 'none';
+                html += `
+                    <div class="choice-item">
+                        <h4>Message ${i + 1}: Bot Response Privacy Issue</h4>
+                        <p><strong>Issue:</strong> ${turn.botPrivacy.type}</p>
+                        <p><strong>Severity:</strong> ${turn.botPrivacy.severity}</p>
+                        <p><strong>Explanation:</strong> ${turn.botPrivacy.explanation}</p>
+                        ${turn.botPrivacy.suggestion ? `<p><strong>Suggestion:</strong> ${turn.botPrivacy.suggestion}</p>` : ''}
+                        <p><strong>Affected Text:</strong> "${turn.botPrivacy.affected_text}"</p>
+                        <div class="choice-buttons">
+                            <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept')" 
+                                    ${!turn.botPrivacy.suggestion ? 'disabled' : ''}>
+                                ✅ Accept Suggestion
+                            </button>
+                            <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'bot', 'keep')">
+                                ⚠️ Keep Original
+                            </button>
+                            <button class="btn btn-secondary" onclick="app.makePrivacyChoice(${i}, 'bot', 'none')">
+                                ❓ Undecided
+                            </button>
+                        </div>
+                        <div class="choice-status ${botChoice}">
+                            ${this.getChoiceStatusText(botChoice)}
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
         
         choicesContainer.innerHTML = html;
     }
 
-    // Make privacy choice
-    makePrivacyChoice(index, choice) {
+    // Make privacy choice (now per message and per issue type)
+    makePrivacyChoice(index, issueType, choice) {
+        if (!this.state.privacyChoices[index]) this.state.privacyChoices[index] = {};
         if (choice === 'none') {
-            delete this.state.privacyChoices[index];
+            delete this.state.privacyChoices[index][issueType];
         } else {
-            this.state.privacyChoices[index] = choice;
+            this.state.privacyChoices[index][issueType] = choice;
+        }
+        // Clean up empty objects
+        if (Object.keys(this.state.privacyChoices[index]).length === 0) {
+            delete this.state.privacyChoices[index];
+        }
+        
+        // Apply privacy correction immediately if choice is 'accept'
+        if (choice === 'accept' && this.state.analyzedLog[index]) {
+            const analyzedTurn = this.state.analyzedLog[index];
+            if (issueType === 'user' && analyzedTurn.userPrivacy && analyzedTurn.userPrivacy.privacy_issue && analyzedTurn.userPrivacy.suggestion) {
+                this.state.conversationLog[index].user = analyzedTurn.userPrivacy.suggestion;
+            } else if (issueType === 'bot' && analyzedTurn.botPrivacy && analyzedTurn.botPrivacy.privacy_issue && analyzedTurn.botPrivacy.suggestion) {
+                this.state.conversationLog[index].bot = analyzedTurn.botPrivacy.suggestion;
+            }
         }
         
         this.updatePrivacyChoices();
+        this.updateConversationDisplay(); // Update the UI to show the change
         this.saveToLocalStorage();
     }
 
@@ -1149,9 +1340,22 @@ class PrivacyDemoApp {
         const suggestionText = document.getElementById('tooltip-suggestion-text');
         const applyBtn = document.getElementById('tooltip-apply-btn');
 
-        // Get privacy data from element
+        // Get privacy data from element (support both analyzed log and real-time data)
+        let privacyData = null;
         const messageIndex = parseInt(element.dataset.messageIndex);
-        const privacyData = this.state.analyzedLog[messageIndex]?.privacy;
+        
+        if (messageIndex !== undefined && this.state.analyzedLog[messageIndex]) {
+            privacyData = this.state.analyzedLog[messageIndex].privacy;
+        } else if (element.dataset.privacyType) {
+            // Real-time detection data
+            privacyData = {
+                type: element.dataset.privacyType,
+                severity: element.dataset.privacySeverity,
+                explanation: element.dataset.privacyExplanation,
+                suggestion: element.dataset.privacySuggestion,
+                affected_text: element.textContent
+            };
+        }
         
         if (!privacyData) return;
 
@@ -1168,9 +1372,18 @@ class PrivacyDemoApp {
             suggestion.style.display = 'block';
             suggestionText.textContent = privacyData.suggestion;
             applyBtn.style.display = 'inline-block';
-            applyBtn.dataset.messageIndex = messageIndex;
-            applyBtn.dataset.originalText = element.textContent;
-            applyBtn.dataset.suggestionText = privacyData.suggestion;
+            
+            // Store data for applying suggestion
+            if (messageIndex !== undefined) {
+                applyBtn.dataset.messageIndex = messageIndex;
+                applyBtn.dataset.originalText = element.textContent;
+                applyBtn.dataset.suggestionText = privacyData.suggestion;
+            } else {
+                // For real-time detection, apply to input field
+                applyBtn.dataset.realtime = 'true';
+                applyBtn.dataset.originalText = element.textContent;
+                applyBtn.dataset.suggestionText = privacyData.suggestion;
+            }
         } else {
             suggestion.style.display = 'none';
             applyBtn.style.display = 'none';
@@ -1194,24 +1407,48 @@ class PrivacyDemoApp {
     // Apply tooltip suggestion
     async applyTooltipSuggestion() {
         const applyBtn = document.getElementById('tooltip-apply-btn');
-        const messageIndex = parseInt(applyBtn.dataset.messageIndex);
-        const originalText = applyBtn.dataset.originalText;
-        const suggestionText = applyBtn.dataset.suggestionText;
-
-        try {
-            // Apply the correction
-            const success = await this.applyPrivacyCorrection(messageIndex, originalText, suggestionText);
+        const isRealTime = applyBtn.dataset.realtime === 'true';
+        
+        if (isRealTime) {
+            // Apply suggestion to input field for real-time detection
+            const chatInput = document.getElementById('chat-input');
+            const originalText = applyBtn.dataset.originalText;
+            const suggestionText = applyBtn.dataset.suggestionText;
             
-            if (success) {
-                this.showNotification('Privacy fix applied successfully!', 'success');
-                this.hidePrivacyTooltip();
-                this.updateConversationDisplay();
-            } else {
-                this.showNotification('Failed to apply privacy fix', 'error');
+            // Replace the original text with suggestion in the input field
+            const currentValue = chatInput.value;
+            const newValue = currentValue.replace(originalText, suggestionText);
+            chatInput.value = newValue;
+            
+            // Clear real-time detection and trigger new detection
+            this.clearRealTimeDetection();
+            if (newValue.trim()) {
+                this.handleRealTimePrivacyDetection(newValue);
             }
-        } catch (error) {
-            console.error('Error applying privacy fix:', error);
-            this.showNotification('Error applying privacy fix', 'error');
+            
+            this.showNotification('Privacy fix applied to input field!', 'success');
+            this.hidePrivacyTooltip();
+        } else {
+            // Apply to existing message in conversation
+            const messageIndex = parseInt(applyBtn.dataset.messageIndex);
+            const originalText = applyBtn.dataset.originalText;
+            const suggestionText = applyBtn.dataset.suggestionText;
+
+            try {
+                // Apply the correction
+                const success = await this.applyPrivacyCorrection(messageIndex, originalText, suggestionText);
+                
+                if (success) {
+                    this.showNotification('Privacy fix applied successfully!', 'success');
+                    this.hidePrivacyTooltip();
+                    this.updateConversationDisplay();
+                } else {
+                    this.showNotification('Failed to apply privacy fix', 'error');
+                }
+            } catch (error) {
+                console.error('Error applying privacy fix:', error);
+                this.showNotification('Error applying privacy fix', 'error');
+            }
         }
     }
 }
