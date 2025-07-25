@@ -47,16 +47,15 @@ let activeChatSession = null; // Store the active chat session for context
 
 // Helper function to manage conversation context
 function manageConversationContext() {
-    // If conversation gets too long, we might need to reset the session
-    // This prevents token limits and maintains performance
-    const maxMessages = 50; // Adjust based on your needs
+    // Keep track of conversation context without resetting
+    // This allows for continuous conversation tracking
+    const maxMessages = 1000; // Increased limit to allow longer conversations
     
     if (conversationHistory.length > maxMessages) {
-        console.log('Conversation getting long, resetting chat session for performance');
-        activeChatSession = null;
+        console.log('Conversation getting very long, keeping context but trimming history for performance');
         
-        // Keep only recent messages in history for reference
-        conversationHistory = conversationHistory.slice(-20);
+        // Keep only recent messages in history for reference but maintain chat session
+        conversationHistory = conversationHistory.slice(-100);
     }
 }
 
@@ -76,13 +75,24 @@ app.get('/api/test_connection', (req, res) => {
     });
 });
 
+// Debug API to show conversation context
+app.get('/api/debug_context', (req, res) => {
+    res.json({
+        conversation_history: conversationHistory,
+        active_chat_session: activeChatSession !== null,
+        current_mode: currentMode,
+        uploaded_questions: uploadedQuestions,
+        uploaded_return_log: uploadedReturnLog
+    });
+});
+
 // Chat API
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, step = 0 } = req.body;
+        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], conversationTurns = 0 } = req.body;
         
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
+        if (!message || message.trim() === '') {
+            return res.status(400).json({ error: 'Message is required and cannot be empty' });
         }
 
         // Add user message to history
@@ -92,16 +102,43 @@ app.post('/api/chat', async (req, res) => {
             timestamp: new Date().toISOString(),
             step: step
         });
+        
+        console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}", turns=${conversationTurns}`);
 
         // Manage conversation context (reset if too long)
         manageConversationContext();
 
         // Generate AI response using Gemini or fallback
         let aiResponse;
+        let questionCompleted = false;
+        
         if (model) {
             try {
-                // Enhanced system prompt for the chatbot
-                const systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Keep your responses short and concise.`;
+                // Enhanced system prompt for the chatbot with question guidance
+                let systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Keep your responses short and concise.`;
+                
+                // If in question mode, enhance the system prompt with predefined questions
+                if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
+                    systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+
+Your role is to ask the predefined questions naturally and engage in follow-up conversation based on the user's responses. You should:
+
+1. Ask the current question naturally and conversationally
+2. Based on the user's response, ask relevant follow-up questions to gather more information
+3. Show genuine interest in their answers
+4. Keep responses concise but engaging
+5. Move to the next predefined question after two follow-up questions
+
+Current question context: ${currentQuestion || 'Starting conversation'}
+
+Predefined questions to cover: ${predefinedQuestions.join(', ')}
+
+IMPORTANT: After asking 2 follow-up questions for the current predefined question, you should indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response. This helps the system track progress.
+
+You will receive context about which question you're currently asking and how many turns have been made. Pay attention to this context and move to the next question when appropriate.
+
+Remember to be conversational and ask follow-up questions based on what the user shares.`;
+                }
 
                 // Initialize or maintain chat session for conversation context
                 if (!activeChatSession) {
@@ -117,21 +154,79 @@ app.post('/api/chat', async (req, res) => {
                     
                     // Send system prompt to initialize the session
                     await activeChatSession.sendMessage(systemPrompt);
+                } else if (questionMode && !activeChatSession) {
+                    // Only create new session if one doesn't exist, maintain context otherwise
+                    activeChatSession = model.startChat({
+                        generationConfig: {
+                            temperature: 0.7,
+                            topK: 40,
+                            topP: 0.95,
+                            maxOutputTokens: 1024,
+                        },
+                    });
+                    await activeChatSession.sendMessage(systemPrompt);
                 }
 
                 // Send user message to existing chat session (maintains context)
-                const result = await activeChatSession.sendMessage(message);
+                let messageToSend = message;
+                
+                // Ensure we have a valid message to send
+                if (!messageToSend || messageToSend.trim() === '') {
+                    messageToSend = "Hello"; // Fallback message
+                }
+                
+                // If in question mode, add context to help the AI understand the current state
+                if (questionMode && currentQuestion) {
+                    messageToSend = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. After 2 follow-up questions, you should move to the next question.]\n\nUser: ${messageToSend}`;
+                    console.log(`Question Mode Context: Current question="${currentQuestion}", Turn=${conversationTurns}, Message="${messageToSend}"`);
+                }
+                
+                const result = await activeChatSession.sendMessage(messageToSend);
                 aiResponse = result.response.text();
+                
+                // Check if LLM signaled question completion
+                if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
+                    questionCompleted = true;
+                    aiResponse = aiResponse.replace('NEXT_QUESTION:', '').trim();
+                }
+                
+                // Fallback: If we've had too many exchanges without completion, force move to next question
+                if (questionMode && !questionCompleted && conversationTurns >= 6) { // 1 initial + 2 follow-ups = 3 exchanges per question, allow 2 extra
+                    questionCompleted = true;
+                    console.log('Forcing question completion due to too many exchanges');
+                }
+                
+                // Additional fallback: If this is the first turn and no question was asked, force completion
+                if (questionMode && !questionCompleted && conversationTurns === 1 && !aiResponse.toLowerCase().includes('?')) {
+                    questionCompleted = true;
+                    console.log('Forcing question completion - no question asked on first turn');
+                }
+                
+                // Smart completion detection: If AI response doesn't contain a question and we've had at least 2 turns, complete
+                if (questionMode && !questionCompleted && conversationTurns >= 3 && !aiResponse.toLowerCase().includes('?')) {
+                    questionCompleted = true;
+                    console.log('Forcing question completion - no question in response after multiple turns');
+                }
+                
             } catch (aiError) {
                 console.error('AI API error:', aiError);
                 aiResponse = `I apologize, but I'm having trouble processing your request right now. Please try again later. (Error: ${aiError.message})`;
                 
-                // Reset chat session on error to prevent cascading failures
-                activeChatSession = null;
+                // Only reset chat session on critical errors, not on temporary issues
+                if (aiError.message.includes('400 Bad Request') || aiError.message.includes('contents.parts must not be empty')) {
+                    console.log('Resetting chat session due to malformed request');
+                    activeChatSession = null;
+                }
+                // For other errors, keep the session to maintain context
             }
         } else {
             // Fallback response when AI is not available
-            aiResponse = `This is a simulated response to: "${message}". In a real implementation, this would be processed by an AI model. To enable real AI responses, please configure a valid GEMINI_API_KEY environment variable.`;
+            if (questionMode && currentQuestion) {
+                aiResponse = `Thank you for sharing that information about "${message}". Let me ask you the next question: ${currentQuestion}`;
+                questionCompleted = true; // Force completion in fallback mode
+            } else {
+                aiResponse = `This is a simulated response to: "${message}". In a real implementation, this would be processed by an AI model. To enable real AI responses, please configure a valid GEMINI_API_KEY environment variable.`;
+            }
         }
         
         conversationHistory.push({
@@ -160,7 +255,8 @@ app.post('/api/chat', async (req, res) => {
             bot_response: aiResponse,
             conversation_history: conversationHistory,
             step: step,
-            privacy_detection: privacyDetection
+            privacy_detection: privacyDetection,
+            question_completed: questionCompleted
         });
     } catch (error) {
         console.error('Chat API error:', error);
@@ -631,6 +727,11 @@ app.post('/api/export', (req, res) => {
 // Serve the main page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
+
+// Serve the thanks page
+app.get('/thanks', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'thanks.html'));
 });
 
 // Error handling middleware

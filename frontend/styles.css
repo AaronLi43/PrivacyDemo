@@ -472,6 +472,35 @@ body {
     color: var(--privacy-warning-text);
 }
 
+.privacy-warning-sign {
+    font-size: 1.2em;
+    margin-right: 0.5em;
+    vertical-align: middle;
+    position: relative;
+}
+
+.privacy-warning-sign::after {
+    content: "Click to view details";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 1000;
+}
+
+.privacy-warning-sign:hover::after {
+    opacity: 1;
+}
+
 /* Privacy Tooltip */
 .privacy-tooltip {
     position: absolute;
@@ -672,6 +701,34 @@ body {
 
 .input-group .form-control {
     flex: 1;
+}
+
+/* Edit Export Container */
+.edit-export-container {
+    margin-top: 1rem;
+}
+
+.edit-export-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.edit-export-buttons .btn {
+    min-width: 150px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Edit mode header styles */
+.chat-header.edit-mode {
+    background: linear-gradient(135deg, var(--warning-color), #ff8c00);
+    color: white;
+}
+
+.chat-header.edit-mode h2 {
+    color: white;
 }
 
 /* Privacy Analysis */
@@ -890,6 +947,30 @@ body {
     z-index: 1000;
 }
 
+.consent-popup .popup-content {
+    background-color: var(--container-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 700px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--primary-button);
+}
+
+.consent-popup .popup-content h4 {
+    color: var(--primary-button);
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-align: center;
+}
+
 .consent-explanation {
     margin: 1.5rem 0;
     line-height: 1.6;
@@ -897,14 +978,38 @@ body {
 
 .consent-explanation p {
     margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: var(--text-color);
 }
 
-.consent-explanation ul {
+.consent-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border-left: 4px solid var(--primary-button);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.consent-section h5 {
+    color: var(--primary-button);
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+
+.consent-section ul {
     margin: 0.5rem 0 1rem 1.5rem;
+    color: var(--text-color);
 }
 
-.consent-explanation li {
-    margin-bottom: 0.5rem;
+.consent-section li {
+    margin-bottom: 0.8rem;
+    font-size: 1rem;
+    line-height: 1.5;
 }
 
 .consent-actions {
@@ -912,11 +1017,231 @@ body {
     gap: 1rem;
     margin-top: 2rem;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .consent-actions .btn {
     flex: 1;
-    max-width: 200px;
+    max-width: 250px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+}
+
+/* Prolific ID Popup */
+.prolific-id-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.prolific-id-popup .popup-content {
+    background-color: var(--container-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    position: relative;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--primary-button);
+}
+
+.prolific-id-popup .popup-content h4 {
+    color: var(--primary-button);
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.prolific-id-explanation {
+    color: var(--text-color);
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.prolific-id-explanation p {
+    margin-bottom: 0.5rem;
+}
+
+.prolific-id-input {
+    margin-bottom: 2rem;
+}
+
+.prolific-id-input .form-control {
+    font-size: 1.1rem;
+    padding: 1rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+.prolific-id-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.prolific-id-actions .btn {
+    min-width: 150px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Congratulation Popup */
+.congratulation-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.congratulation-popup .popup-content {
+    background-color: var(--container-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    position: relative;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--success-color);
+}
+
+.congratulation-popup .popup-content h4 {
+    color: var(--success-color);
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.congratulation-message {
+    color: var(--text-color);
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.congratulation-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.congratulation-actions .btn {
+    min-width: 150px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Survey Popup */
+.survey-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.survey-popup .popup-content {
+    background-color: var(--container-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 800px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    text-align: left;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--primary-button);
+}
+
+.survey-popup .popup-content h4 {
+    color: var(--primary-button);
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-align: center;
+}
+
+.survey-container {
+    margin-top: 1rem;
+}
+
+.survey-intro {
+    color: var(--text-color);
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+    text-align: center;
+    font-style: italic;
+}
+
+.survey-question {
+    margin-bottom: 2rem;
+}
+
+.survey-question label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 1.1rem;
+}
+
+.survey-question .form-control {
+    font-size: 1rem;
+    padding: 0.75rem;
+}
+
+.survey-question textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.survey-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.survey-actions .btn {
+    min-width: 200px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
 }
 
 /* Loading Overlay */
@@ -1056,6 +1381,19 @@ body {
     .header-left {
         text-align: center;
     }
+
+    .consent-actions {
+        flex-direction: column;
+    }
+    
+    .consent-actions .btn {
+        max-width: 100%;
+    }
+    
+    .consent-popup .popup-content {
+        padding: 1.5rem;
+        margin: 1rem;
+    }
 }
 
 /* Utility Classes */
@@ -1147,4 +1485,120 @@ body {
 
 .notification-close:hover {
     background-color: rgba(0,0,0,0.1);
+} 
+
+.two-column-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 80vh;
+  gap: 2rem;
+}
+.left-column, .right-column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.left-column {
+  border-right: 1px solid var(--border-color);
+  padding-right: 1rem;
+  overflow-y: auto;
+}
+.right-column {
+  padding-left: 1rem;
+  overflow-y: auto;
+}
+@media (max-width: 900px) {
+  .two-column-layout {
+    flex-direction: column;
+    height: auto;
+    gap: 0.5rem;
+  }
+  .left-column, .right-column {
+    border: none;
+    padding: 0;
+    min-width: 0;
+    height: auto;
+  }
+} 
+
+.privacy-issue-highlight {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+    box-shadow: none;
+}
+
+.nav-highlight {
+    background-color: #fff3cd !important;
+    transition: background-color 1s;
+    animation: navHighlightFade 2s forwards;
+}
+
+@keyframes navHighlightFade {
+    0% { background-color: #fff3cd; }
+    80% { background-color: #fff3cd; }
+    100% { background-color: transparent; }
+}
+
+.privacy-issues-collapsible {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+}
+.privacy-issues-toggle {
+  background: none;
+  border: none;
+  color: #fff;
+  background-color: #ff4d4f;
+  border-radius: 4px;
+  padding: 0.2em 0.7em;
+  cursor: pointer;
+  font-size: 0.95em;
+  margin-bottom: 0.5em;
+  transition: background 0.2s;
+}
+.privacy-issues-toggle:hover {
+  background-color: #d9363e;
+}
+.privacy-issues-list {
+  background: none;
+  color: inherit;
+  border: none;
+  border-radius: 0;
+  padding: 0.7em 0;
+  margin-top: 0.3em;
+  margin-bottom: 0.5em;
+  font-size: 0.97em;
+}
+.privacy-issue-item {
+  position: relative;
+  display: inline-block;
+  margin-right: 1em;
+  cursor: pointer;
+  text-decoration: underline dotted #ff4d4f;
+}
+.privacy-issue-tooltip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 1.5em;
+  z-index: 100;
+  background: #fff;
+  color: #333;
+  border: 1px solid #ff4d4f;
+  border-radius: 4px;
+  padding: 0.7em 1em;
+  min-width: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  font-size: 0.96em;
+  white-space: pre-line;
+}
+.privacy-issue-item:hover .privacy-issue-tooltip,
+.privacy-issue-item:focus .privacy-issue-tooltip {
+  display: block;
 } 

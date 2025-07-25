@@ -52,13 +52,16 @@ class API {
     }
 
     // Chat API
-    static async sendMessage(message, step = 0) {
+    static async sendMessage(message, step = 0, additionalParams = {}) {
+        const requestBody = {
+            message: message,
+            step: step,
+            ...additionalParams
+        };
+        
         return this.request(API_ENDPOINTS.CHAT, {
             method: 'POST',
-            body: JSON.stringify({
-                message: message,
-                step: step
-            })
+            body: JSON.stringify(requestBody)
         });
     }
 
@@ -155,15 +158,44 @@ class API {
 
     // Download File Helper
     static downloadFile(data, filename, mimeType = 'application/json') {
-        const blob = new Blob([data], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        try {
+            console.log('Starting file download:', filename);
+            
+            const blob = new Blob([data], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            
+            // Add to DOM, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            console.log('File download initiated successfully:', filename);
+            return true;
+        } catch (error) {
+            console.error('Download file error:', error);
+            
+            // Fallback: try alternative download method
+            try {
+                const blob = new Blob([data], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                console.log('Fallback download method used');
+                return true;
+            } catch (fallbackError) {
+                console.error('Fallback download also failed:', fallbackError);
+                return false;
+            }
+        }
     }
 
     // Error Handler

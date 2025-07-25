@@ -20,7 +20,42 @@ class PrivacyDemoApp {
             // New properties for featured mode
             realTimeDetection: false,
             privacyDetectionQueue: [],
-            isDetecting: false
+            isDetecting: false,
+            // Question management properties
+            currentQuestionIndex: 0,
+            questionsCompleted: false,
+            questionMode: false,
+            predefinedQuestionsCompleted: 0, // Track completed predefined questions
+            conversationTurnsForCurrentQuestion: 0, // Track turns for current question
+            // Prolific ID for user identification
+            prolificId: null,
+            prolificIdSubmitted: false,
+            // Survey data
+            surveyData: {},
+            surveyCompleted: false,
+            predefinedQuestions: {
+                naive: [
+                    "What is your name?",
+                    "How old are you?",
+                    "Where do you live?",
+                    "What is your occupation?",
+                    "Do you have any hobbies?"
+                ],
+                neutral: [
+                    "What is your name?",
+                    "How old are you?",
+                    "Where do you live?",
+                    "What is your occupation?",
+                    "Do you have any hobbies?"
+                ],
+                featured: [
+                    "What is your name?",
+                    "How old are you?",
+                    "Where do you live?",
+                    "What is your occupation?",
+                    "Do you have any hobbies?"
+                ]
+            }
         };
 
         this.init();
@@ -33,6 +68,11 @@ class PrivacyDemoApp {
         this.updateSidebarToggle();
         this.checkAPIStatus();
         this.loadFromLocalStorage();
+        
+        // Show Prolific ID popup if not submitted yet
+        if (!this.state.prolificIdSubmitted || !this.state.prolificId) {
+            this.showProlificIdPopup();
+        }
     }
 
     // Bind all event listeners
@@ -41,8 +81,6 @@ class PrivacyDemoApp {
         document.getElementById('mode-select').addEventListener('change', (e) => {
             this.setMode(e.target.value);
         });
-
-
 
         // File uploads
         // document.getElementById('questions-file').addEventListener('change', (e) => {
@@ -60,6 +98,39 @@ class PrivacyDemoApp {
 
         document.getElementById('exit-edit-btn').addEventListener('click', () => {
             this.exitEditMode();
+        });
+
+        document.getElementById('show-congratulation-btn').addEventListener('click', () => {
+            this.showCongratulationPopup();
+        });
+
+        // Test export button (for debugging)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 't') {
+                console.log('Test export triggered');
+                this.exportDirect();
+            }
+        });
+
+        // Main export buttons (in chat input area)
+        document.getElementById('edit-export-btn-main').addEventListener('click', () => {
+            if (this.state.editMode) {
+                this.showSurveyPopup('exportDirect');
+            } else {
+                this.enterEditMode();
+            }
+        });
+
+        document.getElementById('export-direct-btn-main').addEventListener('click', () => {
+            this.showSurveyPopup('exportDirect');
+        });
+
+        document.getElementById('analyze-export-btn-main').addEventListener('click', () => {
+            if (this.state.mode === 'featured') {
+                this.showSurveyPopup('exportComprehensive');
+            } else {
+                this.showConsentPopup('analyzeAndExport');
+            }
         });
 
         document.getElementById('edit-export-btn').addEventListener('click', () => {
@@ -112,10 +183,6 @@ class PrivacyDemoApp {
             this.exportComprehensive();
         });
 
-        document.getElementById('close-analysis').addEventListener('click', () => {
-            this.closePrivacyAnalysis();
-        });
-
         // Privacy tooltip events
         document.getElementById('tooltip-apply-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -158,6 +225,98 @@ class PrivacyDemoApp {
                 this.closeConsentPopup();
             }
         });
+
+        // Prolific ID popup events
+        document.getElementById('prolific-id-submit-btn').addEventListener('click', () => {
+            this.handleProlificIdSubmit();
+        });
+
+        // Close prolific ID popup on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'prolific-id-popup') {
+                this.closeProlificIdPopup();
+            }
+        });
+
+        // Prolific ID input enter key
+        document.getElementById('prolific-id-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.handleProlificIdSubmit();
+            }
+        });
+
+        // Congratulation popup events
+        document.getElementById('next-stage-btn').addEventListener('click', () => {
+            this.handleNextStage();
+        });
+
+        // Close congratulation popup on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'congratulation-popup') {
+                this.closeCongratulationPopup();
+            }
+        });
+
+        // Survey popup events
+        document.getElementById('survey-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            console.log('Survey form submitted');
+            this.handleSurveySubmit();
+        });
+
+        // Close survey popup on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'survey-popup') {
+                this.closeSurveyPopup();
+            }
+        });
+
+        // Debug: Manual next question button (for testing)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'n' && this.state.questionMode) {
+                e.preventDefault();
+                console.log('Manual next question triggered');
+                this.state.currentQuestionIndex++;
+                this.state.predefinedQuestionsCompleted++;
+                this.state.conversationTurnsForCurrentQuestion = 0;
+                
+                if (this.state.predefinedQuestionsCompleted >= this.state.predefinedQuestions[this.state.mode].length) {
+                    this.state.questionsCompleted = true;
+                    this.state.questionMode = false;
+                    this.showCongratulationPopup();
+                } else {
+                    this.showNotification('Manual: Moved to next question', 'info');
+                }
+                this.updateUI();
+            }
+        });
+
+        // Debug: Test survey submission (Ctrl+T)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                console.log('Test survey submission triggered');
+                this.state.pendingExportAction = 'exportDirect';
+                this.handleSurveySubmit();
+            }
+        });
+
+        // Debug: Test consent and survey flow (Ctrl+C)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'c') {
+                e.preventDefault();
+                console.log('Test consent and survey flow triggered');
+                this.showSurveyPopup('exportDirect');
+            }
+        });
+
+        // Privacy analysis filter toggle
+        const filterToggle = document.getElementById('privacy-filter-toggle');
+        if (filterToggle) {
+            filterToggle.addEventListener('change', () => {
+                this.updateConversationDisplay(true);
+            });
+        }
     }
 
     // Set application mode
@@ -175,10 +334,54 @@ class PrivacyDemoApp {
         // Clear any existing real-time detection
         this.clearRealTimeDetection();
 
+        // Initialize question mode
+        this.state.currentQuestionIndex = 0;
+        this.state.questionsCompleted = false;
+        this.state.questionMode = true;
+        this.state.predefinedQuestionsCompleted = 0; // Reset predefined questions counter
+        this.state.conversationTurnsForCurrentQuestion = 0; // Reset conversation turns counter
+        this.state.conversationLog = []; // Clear conversation when changing modes
+        
+        // Start the conversation with the first question from LLM
+        await this.startQuestionConversation();
+
         // Skip API call for mode setting - focus on frontend functionality
         this.updateModeInfo();
         this.updateUI();
         this.saveToLocalStorage();
+    }
+
+    // Start question conversation with LLM
+    async startQuestionConversation() {
+        try {
+            this.showLoading(true);
+            
+            const currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
+            const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
+            
+            // Send initial message to start the conversation
+            const response = await API.sendMessage("Hello, I'm ready to answer your questions.", this.state.currentStep, {
+                questionMode: true,
+                currentQuestion: currentQuestion,
+                predefinedQuestions: predefinedQuestions
+            });
+            
+            if (response && response.bot_response) {
+                this.state.conversationLog.push({
+                    user: '',
+                    bot: response.bot_response,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            this.updateUI();
+            this.scrollToBottom();
+            this.showLoading(false);
+            
+        } catch (error) {
+            console.error('Error starting question conversation:', error);
+            this.showLoading(false);
+        }
     }
 
     // Update mode information display
@@ -197,6 +400,62 @@ class PrivacyDemoApp {
         
         modeInfo.innerHTML = `<p><strong>${modeIcons[this.state.mode]} ${modeDescriptions[this.state.mode]}</strong></p>`;
         document.getElementById('stat-mode').textContent = `${modeIcons[this.state.mode]} ${this.state.mode.charAt(0).toUpperCase() + this.state.mode.slice(1)}`;
+    }
+
+    // Show congratulation popup when all questions are completed
+    showCongratulationPopup() {
+        const popup = document.getElementById('congratulation-popup');
+        const popupTitle = document.getElementById('congratulation-title');
+        const popupMessage = document.getElementById('congratulation-message');
+        const nextStageBtn = document.getElementById('next-stage-btn');
+        
+        // Set appropriate message based on mode
+        const modeMessages = {
+            naive: {
+                title: '🎉 Questions Completed!',
+                message: 'Great job! You\'ve completed all the questions. You can now edit your conversation and export it.',
+                buttonText: 'Enter Edit Mode'
+            },
+            neutral: {
+                title: '🎉 Questions Completed!',
+                message: 'Great job! You\'ve completed all the questions. You can now export your conversation for privacy analysis.',
+                buttonText: 'Enter Edit Mode'
+            },
+            featured: {
+                title: '🎉 Questions Completed!',
+                message: 'Great job! You\'ve completed all the questions. You can now analyze and export your conversation with privacy detection.',
+                buttonText: 'Analyze & Export'
+            }
+        };
+        
+        const currentModeMessage = modeMessages[this.state.mode];
+        popupTitle.textContent = currentModeMessage.title;
+        popupMessage.textContent = currentModeMessage.message;
+        nextStageBtn.innerHTML = `<i class="fas fa-arrow-right"></i> ${currentModeMessage.buttonText}`;
+        
+        popup.style.display = 'flex';
+    }
+
+    // Handle next stage button click
+    handleNextStage() {
+        const popup = document.getElementById('congratulation-popup');
+        popup.style.display = 'none';
+        
+        if (this.state.mode === 'featured') {
+            // For featured mode, trigger analyze and export functionality
+            this.showNotification('🔍 Starting privacy analysis...', 'info');
+            this.analyzeAndExport();
+        } else {
+            // For naive and neutral modes, enter edit mode
+            this.enterEditMode();
+            this.showNotification('✏️ Edit mode enabled - You can now edit your conversation!', 'success');
+        }
+    }
+
+    // Close congratulation popup
+    closeCongratulationPopup() {
+        const popup = document.getElementById('congratulation-popup');
+        popup.style.display = 'none';
     }
 
     // Handle real-time privacy detection for featured mode
@@ -260,30 +519,30 @@ class PrivacyDemoApp {
 
     // Show real-time warning indicator
     showRealTimeWarning(privacyResult) {
-        // Create warning indicator
-        const warning = document.createElement('div');
-        warning.id = 'realtime-warning';
-        warning.style.position = 'fixed';
-        warning.style.top = '20px';
-        warning.style.right = '20px';
-        warning.style.backgroundColor = '#dc3545';
-        warning.style.color = 'white';
-        warning.style.padding = '10px 15px';
-        warning.style.borderRadius = '8px';
-        warning.style.zIndex = '1000';
-        warning.style.fontSize = '14px';
-        warning.style.fontWeight = 'bold';
-        warning.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.3)';
-        warning.style.animation = 'slideIn 0.3s ease-out';
-        warning.innerHTML = `
-            <i class="fas fa-exclamation-triangle"></i>
-            Privacy Issue Detected: ${privacyResult.type}
-            <button onclick="window.app.clearRealTimeDetection()" style="background: none; border: none; color: white; margin-left: 10px; cursor: pointer;">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
+        // Create warning indicator (disabled - no notification shown)
+        // const warning = document.createElement('div');
+        // warning.id = 'realtime-warning';
+        // warning.style.position = 'fixed';
+        // warning.style.top = '20px';
+        // warning.style.right = '20px';
+        // warning.style.backgroundColor = '#dc3545';
+        // warning.style.color = 'white';
+        // warning.style.padding = '10px 15px';
+        // warning.style.borderRadius = '8px';
+        // warning.style.zIndex = '1000';
+        // warning.style.fontSize = '14px';
+        // warning.style.fontWeight = 'bold';
+        // warning.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.3)';
+        // warning.style.animation = 'slideIn 0.3s ease-out';
+        // warning.innerHTML = `
+        //     <i class="fas fa-exclamation-triangle"></i>
+        //     Privacy Issue Detected: ${privacyResult.type}
+        //     <button onclick="window.app.clearRealTimeDetection()" style="background: none; border: none; color: white; margin-left: 10px; cursor: pointer;">
+        //         <i class="fas fa-times"></i>
+        //     </button>
+        // `;
 
-        document.body.appendChild(warning);
+        // document.body.appendChild(warning);
     }
 
     // Clear real-time detection
@@ -344,7 +603,7 @@ class PrivacyDemoApp {
 
     //     try {
     //         API.validateFile(file, ['.json']);
-            
+        
     //         // Mock API response for questions upload
     //         setTimeout(() => {
     //             this.state.questions = [
@@ -355,7 +614,7 @@ class PrivacyDemoApp {
     //             this.showNotification(`✅ Loaded ${this.state.questions.length} questions`, 'success');
     //             this.saveToLocalStorage();
     //         }, 500);
-            
+        
     //     } catch (error) {
     //         console.error('Questions upload error:', error);
     //         this.showNotification(`❌ Error loading file: ${error.message}`, 'error');
@@ -368,12 +627,12 @@ class PrivacyDemoApp {
 
     //     try {
     //         API.validateFile(file, ['.json']);
-            
+        
     //         // Mock API response for return upload
     //         setTimeout(() => {
     //             this.showNotification('✅ Thank you! Your file has been received.', 'success');
     //         }, 500);
-            
+        
     //     } catch (error) {
     //         console.error('Return upload error:', error);
     //         this.showNotification(`❌ Error uploading file: ${error.message}`, 'error');
@@ -383,30 +642,62 @@ class PrivacyDemoApp {
     // Reset conversation
     async resetConversation() {
         try {
-            // Mock API call for reset
-            setTimeout(() => {
-                this.state.conversationLog = [];
-                this.state.currentStep = 0;
-                this.state.editMode = false;
-                this.state.editableLog = [];
-                this.state.analyzedLog = [];
-                this.state.showPrivacyAnalysis = false;
-                this.state.privacyChoices = {};
-                this.state.originalLog = [];
-
-                this.updateUI();
-                this.saveToLocalStorage();
-                this.showNotification('🔄 Conversation reset successfully', 'success');
-            }, 300);
+            this.showLoading(true);
             
+            // Reset conversation state
+            this.state.conversationLog = [];
+            this.state.currentStep = 0;
+            this.state.analyzedLog = [];
+            this.state.showPrivacyAnalysis = false;
+            this.state.privacyChoices = {};
+            this.state.editMode = false;
+            this.state.editableLog = [];
+            this.state.originalLog = [];
+            this.state.consentGiven = false;
+            this.state.pendingExportAction = null;
+            
+            // Reset question mode
+            this.state.currentQuestionIndex = 0;
+            this.state.questionsCompleted = false;
+            this.state.questionMode = true;
+            this.state.predefinedQuestionsCompleted = 0; // Reset predefined questions counter
+            this.state.conversationTurnsForCurrentQuestion = 0; // Reset conversation turns counter
+            
+            // Reset Prolific ID state
+            this.state.prolificId = null;
+            this.state.prolificIdSubmitted = false;
+            
+            // Reset survey data
+            this.state.surveyData = {};
+            this.state.surveyCompleted = false;
+            
+            // Clear real-time detection
+            this.clearRealTimeDetection();
+            
+            // Start asking questions again with LLM
+            await this.startQuestionConversation();
+            
+            this.updateUI();
+            this.saveToLocalStorage();
+            this.showLoading(false);
+            
+            this.showNotification('🔄 Conversation reset successfully', 'success');
         } catch (error) {
             console.error('Reset error:', error);
-            this.showNotification('❌ Failed to reset conversation', 'error');
+            this.showNotification('❌ Reset failed', 'error');
+            this.showLoading(false);
         }
     }
 
     // Send message
     async sendMessage() {
+        // Check if Prolific ID has been submitted
+        if (!this.state.prolificIdSubmitted) {
+            this.showNotification('Please enter your Prolific ID first to continue.', 'warning');
+            this.showProlificIdPopup();
+            return;
+        }
+
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
         
@@ -429,6 +720,74 @@ class PrivacyDemoApp {
             input.value = '';
             this.updateUI();
             this.showLoading(true);
+
+            // Handle question mode
+            if (this.state.questionMode) {
+                // In question mode, send to backend with question parameters
+                try {
+                    const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
+                    
+                    // Get the current question - this should be the correct one for this turn
+                    let currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
+                    const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
+                    
+                    // Increment conversation turns for current question
+                    this.state.conversationTurnsForCurrentQuestion++;
+                    
+                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (turn ${this.state.conversationTurnsForCurrentQuestion})`);
+                    
+                    const response = await API.sendMessage(message, this.state.currentStep, {
+                        questionMode: true,
+                        currentQuestion: currentQuestion,
+                        predefinedQuestions: predefinedQuestions,
+                        conversationTurns: this.state.conversationTurnsForCurrentQuestion
+                    });
+                    
+                    if (response && response.bot_response) {
+                        // Remove "NEXT_QUESTION:" prefix if present
+                        let botResponse = response.bot_response;
+                        if (botResponse.startsWith('NEXT_QUESTION:')) {
+                            botResponse = botResponse.replace('NEXT_QUESTION:', '').trim();
+                        }
+                        lastMessage.bot = botResponse;
+                    } else {
+                        lastMessage.bot = '⚠️ No response from server.';
+                    }
+                    
+                    // Optionally handle privacy detection for featured mode
+                    if (this.state.mode === 'featured' && response && response.privacy_detection) {
+                        lastMessage.privacy = response.privacy_detection;
+                    }
+                    
+                    // Check if the backend indicates a predefined question is completed
+                    if (response && response.question_completed) {
+                        this.state.currentQuestionIndex++;
+                        this.state.predefinedQuestionsCompleted++;
+                        this.state.conversationTurnsForCurrentQuestion = 0; // Reset turns counter for next question
+                        console.log(`Question ${this.state.predefinedQuestionsCompleted} completed. Moving to next question.`);
+                    }
+                    
+                    this.updateUI();
+                    this.saveToLocalStorage();
+                    this.scrollToBottom();
+                    this.showLoading(false);
+                    
+                    // Check if all predefined questions are completed
+                    if (this.state.predefinedQuestionsCompleted >= this.state.predefinedQuestions[this.state.mode].length) {
+                        this.state.questionsCompleted = true;
+                        this.state.questionMode = false;
+                        this.showCongratulationPopup();
+                    }
+                    
+                    return;
+                } catch (apiError) {
+                    const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
+                    lastMessage.bot = `❌ Error: ${apiError.message}`;
+                    this.updateUI();
+                    this.showLoading(false);
+                    return;
+                }
+            }
 
             // Send message to backend API and update bot response
             try {
@@ -461,14 +820,12 @@ class PrivacyDemoApp {
         }
     }
 
-    // Enter edit mode (naive mode only)
+    // Enter edit mode (all modes)
     enterEditMode() {
-        if (this.state.mode !== 'naive') return;
-        
         this.state.editMode = true;
         this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
         this.updateUI();
-        this.showNotification('✏️ Edit mode enabled - All messages are now editable!', 'success');
+        this.showNotification('✏️ Edit mode enabled - You can now edit your conversation!', 'success');
     }
 
     // Exit edit mode
@@ -481,6 +838,7 @@ class PrivacyDemoApp {
     // Export direct
     async exportDirect() {
         try {
+            console.log('Starting exportDirect...');
             let exportData;
             
             if (this.state.mode === 'naive') {
@@ -494,9 +852,12 @@ class PrivacyDemoApp {
                         mode: 'featured',
                         export_timestamp: this.state.currentStep,
                         total_messages: this.state.conversationLog.length,
-                        consent_given: this.state.consentGiven
+                        consent_given: this.state.consentGiven,
+                        prolific_id: this.state.prolificId,
+                        survey_completed: this.state.surveyCompleted
                     },
-                    conversation: this.state.conversationLog
+                    conversation: this.state.conversationLog,
+                    survey_data: this.state.surveyData
                 };
 
                 // Include original conversation if consent was given
@@ -505,12 +866,74 @@ class PrivacyDemoApp {
                 }
             }
 
+            console.log('Export data generated:', exportData);
             const filename = `conversation_log_${this.state.currentStep}.json`;
+            console.log('Downloading file:', filename);
             API.downloadFile(JSON.stringify(exportData, null, 2), filename);
             this.showNotification('📥 Export completed', 'success');
         } catch (error) {
             console.error('Export error:', error);
             this.showNotification('❌ Export failed', 'error');
+        }
+    }
+
+    // Export direct and redirect to thanks page
+    async exportDirectAndRedirect() {
+        try {
+            console.log('Starting exportDirectAndRedirect...');
+            let exportData;
+            
+            if (this.state.mode === 'naive') {
+                exportData = this.generateNaiveExportData();
+            } else if (this.state.mode === 'neutral') {
+                exportData = this.generateNeutralExportData();
+            } else {
+                // For featured mode, create a basic export with consent metadata
+                exportData = {
+                    metadata: {
+                        mode: 'featured',
+                        export_timestamp: this.state.currentStep,
+                        total_messages: this.state.conversationLog.length,
+                        consent_given: this.state.consentGiven,
+                        prolific_id: this.state.prolificId,
+                        survey_completed: this.state.surveyCompleted
+                    },
+                    conversation: this.state.conversationLog,
+                    survey_data: this.state.surveyData
+                };
+
+                // Include original conversation if consent was given
+                if (this.state.consentGiven && this.state.originalLog.length > 0) {
+                    exportData.original_conversation = this.state.originalLog;
+                }
+            }
+
+            console.log('Export data generated:', exportData);
+            const filename = `conversation_log_${this.state.currentStep}.json`;
+            console.log('Downloading file:', filename);
+            
+            // Ensure the download happens
+            try {
+                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                console.log('Download initiated successfully');
+                this.showNotification('📁 Data downloaded successfully!', 'success');
+            } catch (downloadError) {
+                console.error('Download error:', downloadError);
+                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+            }
+            
+            // Wait a moment for the download to start, then redirect
+            setTimeout(() => {
+                console.log('Redirecting to thanks page...');
+                this.redirectToThanksPage();
+            }, 1500);
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showNotification('❌ Export failed', 'error');
+            // Still try to redirect even if export fails
+            setTimeout(() => {
+                this.redirectToThanksPage();
+            }, 1000);
         }
     }
 
@@ -589,6 +1012,10 @@ class PrivacyDemoApp {
             this.state.editMode = true; // Enable edit mode for all messages
             // Store original conversation for consent-based export
             this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
+            
+            // Ensure question mode is false to show export buttons
+            this.state.questionMode = false;
+            
             this.updateUI();
             
             // Count privacy issues found
@@ -603,19 +1030,170 @@ class PrivacyDemoApp {
         }
     }
 
+    // Analyze and export with redirect to thanks page
+    async analyzeAndExportAndRedirect() {
+        if (this.state.mode !== 'featured') return;
+
+        try {
+            this.showLoading(true);
+            
+            // Use real backend API for privacy analysis
+            const analyzedLog = [];
+            
+            for (let i = 0; i < this.state.conversationLog.length; i++) {
+                const turn = this.state.conversationLog[i];
+                
+                // Analyze user message for privacy issues
+                let userPrivacyResult = null;
+                if (turn.user && turn.user.trim()) {
+                    try {
+                        const response = await fetch('/api/privacy_detection', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ user_message: turn.user })
+                        });
+                        
+                        if (response.ok) {
+                            userPrivacyResult = await response.json();
+                        } else {
+                            console.error(`Privacy detection failed for user message ${i}:`, response.status);
+                        }
+                    } catch (error) {
+                        console.error(`Privacy detection error for user message ${i}:`, error);
+                    }
+                }
+                
+                // Analyze bot message for privacy issues (if any)
+                let botPrivacyResult = null;
+                if (turn.bot && turn.bot.trim()) {
+                    try {
+                        const response = await fetch('/api/privacy_detection', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ user_message: turn.bot })
+                        });
+                        
+                        if (response.ok) {
+                            botPrivacyResult = await response.json();
+                        } else {
+                            console.error(`Privacy detection failed for bot message ${i}:`, response.status);
+                        }
+                    } catch (error) {
+                        console.error(`Privacy detection error for bot message ${i}:`, error);
+                    }
+                }
+                
+                // Create analysis entry
+                const analysisEntry = {
+                    user: turn.user,
+                    bot: turn.bot,
+                    userPrivacy: userPrivacyResult,
+                    botPrivacy: botPrivacyResult,
+                    hasPrivacyIssues: (userPrivacyResult && userPrivacyResult.privacy_issue) || 
+                                     (botPrivacyResult && botPrivacyResult.privacy_issue)
+                };
+                
+                analyzedLog.push(analysisEntry);
+            }
+            
+            this.state.analyzedLog = analyzedLog;
+            
+            // Generate comprehensive export data with analysis
+            const exportData = this.generateComprehensiveExportData();
+            exportData.privacy_analysis = analyzedLog;
+            
+            // Count privacy issues found
+            const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
+            
+            // Export the data
+            const filename = `conversation_analysis_${this.state.currentStep}.json`;
+            
+            // Ensure the download happens
+            try {
+                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                console.log('Analysis download initiated successfully');
+                this.showNotification(`📁 Analysis data downloaded successfully! Found ${totalIssues} privacy issues.`, 'success');
+            } catch (downloadError) {
+                console.error('Analysis download error:', downloadError);
+                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+            }
+            
+            this.showLoading(false);
+            
+            // Wait a moment for the download to start, then redirect
+            setTimeout(() => {
+                console.log('Redirecting to thanks page...');
+                this.redirectToThanksPage();
+            }, 1500);
+            
+        } catch (error) {
+            console.error('Analysis and export error:', error);
+            this.showNotification(`❌ Analysis error: ${error.message}`, 'error');
+            this.showLoading(false);
+            // Still try to redirect even if analysis fails
+            setTimeout(() => {
+                this.redirectToThanksPage();
+            }, 1000);
+        }
+    }
+
     // Comprehensive export for featured mode
     async exportComprehensive() {
         try {
+            console.log('Starting exportComprehensive...');
             const filename = `conversation_log_comprehensive_${this.state.currentStep}.json`;
             
             // Create comprehensive export data that includes everything
             const exportData = this.generateComprehensiveExportData();
             
+            console.log('Comprehensive export data generated:', exportData);
+            console.log('Downloading file:', filename);
             API.downloadFile(JSON.stringify(exportData, null, 2), filename);
             this.showNotification('📥 Comprehensive export completed', 'success');
         } catch (error) {
             console.error('Comprehensive export error:', error);
             this.showNotification('❌ Export failed', 'error');
+        }
+    }
+
+    // Comprehensive export and redirect to thanks page
+    async exportComprehensiveAndRedirect() {
+        try {
+            console.log('Starting exportComprehensiveAndRedirect...');
+            const filename = `conversation_log_comprehensive_${this.state.currentStep}.json`;
+            
+            // Create comprehensive export data that includes everything
+            const exportData = this.generateComprehensiveExportData();
+            
+            console.log('Comprehensive export data generated:', exportData);
+            console.log('Downloading file:', filename);
+            
+            // Ensure the download happens
+            try {
+                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                console.log('Comprehensive download initiated successfully');
+                this.showNotification('📁 Comprehensive data downloaded successfully!', 'success');
+            } catch (downloadError) {
+                console.error('Comprehensive download error:', downloadError);
+                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+            }
+            
+            // Wait a moment for the download to start, then redirect
+            setTimeout(() => {
+                console.log('Redirecting to thanks page...');
+                this.redirectToThanksPage();
+            }, 1500);
+        } catch (error) {
+            console.error('Comprehensive export error:', error);
+            this.showNotification('❌ Export failed', 'error');
+            // Still try to redirect even if export fails
+            setTimeout(() => {
+                this.redirectToThanksPage();
+            }, 1000);
         }
     }
 
@@ -723,7 +1301,12 @@ class PrivacyDemoApp {
         if (pendingAction) {
             console.log('Executing action:', pendingAction);
             
-            if (pendingAction === 'exportDirect') {
+            if (pendingAction === 'survey') {
+                // Show survey after consent
+                console.log('Showing survey after consent');
+                const popup = document.getElementById('survey-popup');
+                popup.style.display = 'flex';
+            } else if (pendingAction === 'exportDirect') {
                 this.exportDirect();
             } else if (pendingAction === 'analyzeAndExport') {
                 this.analyzeAndExport();
@@ -745,12 +1328,12 @@ class PrivacyDemoApp {
                 }
                 
                 this.closePrivacyPopup();
-                this.showNotification('✅ Privacy correction applied', 'success');
+                // this.showNotification('✅ Privacy correction applied', 'success');
             }, 300);
             
         } catch (error) {
             console.error('Apply correction error:', error);
-            this.showNotification(`❌ Error: ${error.message}`, 'error');
+            // this.showNotification(`❌ Error: ${error.message}`, 'error');
         }
     }
 
@@ -767,9 +1350,17 @@ class PrivacyDemoApp {
                 has_edits: this.state.editMode,
                 edited_messages_count: editedMessages,
                 export_type: 'naive_with_edits',
-                consent_given: this.state.consentGiven
+                consent_given: this.state.consentGiven,
+                consent_details: {
+                    original_data_included: this.state.consentGiven,
+                    survey_data_included: this.state.surveyCompleted,
+                    prolific_id_included: !!this.state.prolificId
+                },
+                prolific_id: this.state.prolificId,
+                survey_completed: this.state.surveyCompleted
             },
-            conversation: this.state.conversationLog
+            conversation: this.state.conversationLog,
+            survey_data: this.state.surveyData
         };
 
         // Include original conversation if consent was given
@@ -787,9 +1378,17 @@ class PrivacyDemoApp {
                 mode: 'neutral',
                 export_timestamp: this.state.currentStep,
                 total_messages: this.state.conversationLog.length,
-                consent_given: this.state.consentGiven
+                consent_given: this.state.consentGiven,
+                consent_details: {
+                    original_data_included: this.state.consentGiven,
+                    survey_data_included: this.state.surveyCompleted,
+                    prolific_id_included: !!this.state.prolificId
+                },
+                prolific_id: this.state.prolificId,
+                survey_completed: this.state.surveyCompleted
             },
-            conversation: this.state.conversationLog
+            conversation: this.state.conversationLog,
+            survey_data: this.state.surveyData
         };
 
         // Include original conversation if consent was given
@@ -810,11 +1409,14 @@ class PrivacyDemoApp {
             
             exportLog.push({
                 user: currentTurn.user, // Use edited user message
-                bot: currentTurn.bot,
+                bot: currentTurn.bot, // Use edited bot message
                 userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null, // Include user privacy analysis
                 botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null, // Include bot privacy analysis
                 original_user: analyzedTurn ? analyzedTurn.user : currentTurn.user, // Keep original for reference
-                has_edits: analyzedTurn && analyzedTurn.user !== currentTurn.user // Flag if message was edited
+                original_bot: analyzedTurn ? analyzedTurn.bot : currentTurn.bot, // Keep original bot for reference
+                user_edited: currentTurn.user_edited || false, // Track if user message was edited
+                bot_edited: currentTurn.bot_edited || false, // Track if bot message was edited
+                has_edits: (currentTurn.user_edited || currentTurn.bot_edited) // Flag if any message was edited
             });
         }
         
@@ -825,11 +1427,16 @@ class PrivacyDemoApp {
                 total_messages: exportLog.length,
                 privacy_issues: this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues).length,
                 has_edits: this.state.editMode,
+                edited_user_messages: exportLog.filter(turn => turn.user_edited).length,
+                edited_bot_messages: exportLog.filter(turn => turn.bot_edited).length,
                 export_type: 'analysis_with_edits',
-                consent_given: this.state.consentGiven
+                consent_given: this.state.consentGiven,
+                prolific_id: this.state.prolificId,
+                survey_completed: this.state.surveyCompleted
             },
             conversation: exportLog,
-            privacy_analysis: this.state.analyzedLog
+            privacy_analysis: this.state.analyzedLog,
+            survey_data: this.state.surveyData
         };
 
         // Include original conversation if consent was given
@@ -840,46 +1447,38 @@ class PrivacyDemoApp {
         return exportData;
     }
 
-    // Generate comprehensive export data for featured mode
+    // Generate comprehensive export data
     generateComprehensiveExportData() {
-        const finalLog = [];
-        
-        for (let i = 0; i < this.state.conversationLog.length; i++) {
-            const currentTurn = this.state.conversationLog[i]; // Use current (potentially edited) messages
-            const analyzedTurn = this.state.analyzedLog[i];
-            const choices = this.state.privacyChoices[i] || {};
-            
-            // Use the current conversation log directly since privacy corrections are applied immediately
-            finalLog.push({
-                user: currentTurn.user,
-                bot: currentTurn.bot,
-                userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null,
-                botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null,
-                choice: choices
-            });
-        }
-        
         const exportData = {
             metadata: {
-                mode: 'featured_comprehensive',
+                mode: 'featured',
                 export_timestamp: this.state.currentStep,
-                total_messages: finalLog.length,
-                privacy_issues: this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues).length,
-                privacy_choices_made: Object.keys(this.state.privacyChoices).length,
-                has_edits: this.state.editMode,
-                edited_messages_count: this.state.conversationLog.filter(turn => turn.edited).length,
+                total_messages: this.state.conversationLog.length,
+                privacy_analysis_performed: this.state.analyzedLog.length > 0,
+                privacy_issues_found: this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length,
                 consent_given: this.state.consentGiven,
-                export_type: 'comprehensive_with_analysis_and_choices'
+                consent_details: {
+                    original_data_included: this.state.consentGiven,
+                    survey_data_included: this.state.surveyCompleted,
+                    prolific_id_included: !!this.state.prolificId,
+                    privacy_choices_included: Object.keys(this.state.privacyChoices).length > 0
+                },
+                prolific_id: this.state.prolificId,
+                survey_completed: this.state.surveyCompleted
             },
-            conversation: finalLog,
-            privacy_analysis: this.state.analyzedLog,
-            privacy_choices: this.state.privacyChoices,
-            privacy_choices_summary: this.generatePrivacyChoicesSummary()
+            conversation: this.state.conversationLog,
+            survey_data: this.state.surveyData,
+            privacy_choices: this.state.privacyChoices
         };
 
         // Include original conversation if consent was given
         if (this.state.consentGiven && this.state.originalLog.length > 0) {
             exportData.original_conversation = this.state.originalLog;
+        }
+
+        // Include privacy analysis if available
+        if (this.state.analyzedLog.length > 0) {
+            exportData.privacy_analysis = this.state.analyzedLog;
         }
 
         return exportData;
@@ -933,78 +1532,113 @@ class PrivacyDemoApp {
 
     // Update UI
     updateUI() {
-        this.updateConversationDisplay();
+        // Show two-column layout only during Privacy Analysis & Export stage
+        const twoCol = document.getElementById('two-column-layout');
+        const chatContainer = document.querySelector('.chat-container');
+        if (this.state.showPrivacyAnalysis) {
+            if (twoCol) twoCol.style.display = 'flex';
+            if (chatContainer) chatContainer.style.display = 'none';
+            this.updateConversationDisplay(true); // pass flag for analysis mode
+            this.updatePrivacyAnalysis();
+        } else {
+            if (twoCol) twoCol.style.display = 'none';
+            if (chatContainer) chatContainer.style.display = '';
+            this.updateConversationDisplay(false);
+        }
         this.updateStatistics();
         this.updateExportButtons();
-        this.updatePrivacyAnalysis();
         this.updateModeInfo();
         this.updateEditModeUI();
     }
 
     // Update conversation display
-    updateConversationDisplay() {
-        const container = document.getElementById('conversation-container');
-        
+    updateConversationDisplay(analysisMode = false) {
+        let container;
+        let filterActive = false;
+        if (analysisMode) {
+            // Two-column layout: left column
+            const twoCol = document.getElementById('two-column-layout');
+            if (twoCol) {
+                container = twoCol.querySelector('.left-column #conversation-container');
+            }
+            // Check filter toggle
+            const filterToggle = document.getElementById('privacy-filter-toggle');
+            if (filterToggle) filterActive = filterToggle.checked;
+        } else {
+            // Chat mode: main chat container
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                container = chatContainer.querySelector('#conversation-container');
+            }
+        }
+        if (!container) return;
         if (this.state.conversationLog.length === 0) {
+            let emptyMessage = 'Start a conversation by typing a message below!';
+            if (this.state.questionMode) {
+                emptyMessage = 'The chatbot will start asking you questions. Please wait...';
+            }
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-comment-dots"></i>
-                    <p>Start a conversation by typing a message below!</p>
+                    <p>${emptyMessage}</p>
                 </div>
             `;
             return;
         }
-
         let html = '';
-        
         for (let i = 0; i < this.state.conversationLog.length; i++) {
-            const turn = this.state.conversationLog[i];
-            
-            // User message - make editable if in edit mode
-            let userContent;
-            if (this.state.editMode && this.state.mode === 'featured') {
-                // Create editable textarea for user message
-                userContent = `<div style="position:relative;display:flex;align-items:center;gap:0.5rem;">
-                    <textarea class="message-edit-input" data-message-index="${i}" 
-                        placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>`;
-                // If privacy detected, show concise icon/marker
-                if (this.state.analyzedLog[i] && this.state.analyzedLog[i].hasPrivacyIssues) {
-                    userContent += `<span title="Privacy issue detected" style="font-size:1.1em;line-height:1;vertical-align:middle;color:#dc3545;">&#9888;</span>`;
-                }
-                userContent += `</div>`;
-            } else if (this.state.editMode) {
-                // Naive/neutral edit mode: just textarea
-                userContent = `<textarea class="message-edit-input" data-message-index="${i}" 
-                    placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>`;
-            } else {
-                // Regular display, no privacy highlight in featured mode
-                userContent = this.escapeHtml(turn.user);
+            // In analysis mode with filter, skip messages without privacy issues
+            if (analysisMode && filterActive) {
+                const analyzed = this.state.analyzedLog[i];
+                if (!analyzed || !analyzed.hasPrivacyIssues) continue;
             }
-            
-            html += `
-                <div class="message">
-                    <div class="message-user">
-                        <div class="message-header">
-                            <i class="fas fa-user"></i> User
-                            ${turn.edited ? '<span class="edit-indicator"><i class="fas fa-edit"></i> Edited</span>' : ''}
-                        </div>
-                        <div class="message-content">${userContent}</div>
+            const turn = this.state.conversationLog[i];
+            let userWarning = '';
+            let botWarning = '';
+            if (analysisMode) {
+                const analyzed = this.state.analyzedLog[i];
+                // User privacy issue warning sign
+                if (analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue) {
+                    userWarning = '<span class="privacy-warning-sign" data-type="user" data-index="' + i + '" style="cursor: pointer;">&#9888;&#65039;</span>';
+                }
+                // Bot privacy issue warning sign
+                if (analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue) {
+                    botWarning = '<span class="privacy-warning-sign" data-type="bot" data-index="' + i + '" style="cursor: pointer;">&#9888;&#65039;</span>';
+                }
+                html += `<div class="message-pair editable" data-index="${i}">
+                    <div class="message message-user" id="log-entry-user-${i}">${userWarning}<textarea class="message-edit-input" data-message-index="${i}" data-message-type="user"
+                        placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>
                     </div>
-                    <div class="message-bot">
-                        <div class="message-header">
-                            <i class="fas fa-robot"></i> Bot
-                        </div>
-                        <div class="message-content">${this.escapeHtml(turn.bot)}</div>
+                    <div class="message message-bot" id="log-entry-bot-${i}">${botWarning}<textarea class="message-edit-input" data-message-index="${i}" data-message-type="bot"
+                        placeholder="Edit bot response here...">${this.escapeHtml(turn.bot)}</textarea>
                     </div>
-                </div>
-            `;
+                </div>`;
+            } else {
+                html += `<div class="message-pair" data-index="${i}">
+                    <div class="message message-user" id="log-entry-user-${i}">${this.escapeHtml(turn.user)}</div>
+                    <div class="message message-bot" id="log-entry-bot-${i}">${this.escapeHtml(turn.bot)}</div>
+                </div>`;
+            }
         }
-        
         container.innerHTML = html;
-        
-        // Add event listeners for editable inputs if in edit mode
-        if (this.state.editMode) {
+        // Bind edit events in analysis mode
+        if (analysisMode) {
             this.bindEditModeEvents();
+            // Bind warning sign clicks for navigation
+            const warningSigns = container.querySelectorAll('.privacy-warning-sign');
+            warningSigns.forEach(sign => {
+                sign.addEventListener('click', () => {
+                    const idx = sign.getAttribute('data-index');
+                    const type = sign.getAttribute('data-type');
+                    // Scroll to and highlight the corresponding analysis result
+                    const analysisEntry = document.querySelector(`#analysis-entry-${type}-${idx}`);
+                    if (analysisEntry) {
+                        analysisEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        analysisEntry.classList.add('nav-highlight');
+                        setTimeout(() => analysisEntry.classList.remove('nav-highlight'), 2000);
+                    }
+                });
+            });
         }
     }
 
@@ -1021,14 +1655,18 @@ class PrivacyDemoApp {
         editInputs.forEach(input => {
             // Save changes on blur (when user clicks away)
             input.addEventListener('blur', (e) => {
-                this.saveMessageEdit(parseInt(e.target.dataset.messageIndex), e.target.value);
+                const messageIndex = parseInt(e.target.dataset.messageIndex);
+                const messageType = e.target.dataset.messageType || 'user';
+                this.saveMessageEdit(messageIndex, e.target.value, messageType);
             });
             
             // Save changes on Enter key
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    this.saveMessageEdit(parseInt(e.target.dataset.messageIndex), e.target.value);
+                    const messageIndex = parseInt(e.target.dataset.messageIndex);
+                    const messageType = e.target.dataset.messageType || 'user';
+                    this.saveMessageEdit(messageIndex, e.target.value, messageType);
                     e.target.blur();
                 }
             });
@@ -1036,30 +1674,126 @@ class PrivacyDemoApp {
     }
 
     // Save message edit
-    saveMessageEdit(messageIndex, newText) {
+    saveMessageEdit(messageIndex, newText, messageType = 'user') {
         if (messageIndex >= 0 && messageIndex < this.state.conversationLog.length) {
-            this.state.conversationLog[messageIndex].user = newText;
-            this.state.conversationLog[messageIndex].edited = true; // Mark as edited
+            if (messageType === 'user') {
+                this.state.conversationLog[messageIndex].user = newText;
+                this.state.conversationLog[messageIndex].user_edited = true; // Mark as edited
+            } else if (messageType === 'bot') {
+                this.state.conversationLog[messageIndex].bot = newText;
+                this.state.conversationLog[messageIndex].bot_edited = true; // Mark as edited
+            }
             this.saveToLocalStorage();
-            this.showNotification('✅ Message updated', 'success');
         }
     }
 
     // Update edit mode UI elements
     updateEditModeUI() {
         const exitEditBtn = document.getElementById('exit-edit-btn');
+        const chatHeader = document.querySelector('.chat-header');
+        const chatHeaderTitle = document.getElementById('chat-header-title');
+        const mainHeaderTitle = document.getElementById('main-header-title');
+        const chatInputGroup = document.getElementById('chat-input-group');
+        const editExportContainer = document.getElementById('edit-export-container');
         
         if (this.state.editMode) {
+            // Show exit edit button
             exitEditBtn.style.display = 'block';
+            
+            // Update header for edit mode
+            chatHeader.classList.add('edit-mode');
+            
+            // Set appropriate header text based on mode
+            const modeTitles = {
+                naive: '✏️ Review & Export Stage',
+                neutral: '✏️ Review & Export Stage', 
+                featured: '🔍 Privacy Analysis & Export Stage'
+            };
+            chatHeaderTitle.innerHTML = `<i class="fas fa-edit"></i> ${modeTitles[this.state.mode]}`;
+            
+            // Update main header title for edit stage
+            const mainHeaderTitles = {
+                naive: '✏️ Review & Export Stage',
+                neutral: '✏️ Review & Export Stage',
+                featured: '🔍 Privacy Analysis & Export Stage'
+            };
+            mainHeaderTitle.innerHTML = `<i class="fas fa-edit"></i> ${mainHeaderTitles[this.state.mode]}`;
+            
+            // Hide chat input, show export buttons
+            chatInputGroup.style.display = 'none';
+            editExportContainer.style.display = 'block';
+            
+            // Update export buttons in the main container
+            this.updateMainExportButtons();
+            
         } else {
+            // Hide exit edit button
             exitEditBtn.style.display = 'none';
+            
+            // Reset header for normal mode
+            chatHeader.classList.remove('edit-mode');
+            chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
+            
+            // Reset main header title for normal mode
+            mainHeaderTitle.innerHTML = '<i class="fas fa-lock"></i> Chatbot';
+            
+            // Show chat input, hide export buttons
+            chatInputGroup.style.display = 'flex';
+            editExportContainer.style.display = 'none';
+        }
+    }
+
+    // Update main export buttons (in the chat input area)
+    updateMainExportButtons() {
+        const editExportBtnMain = document.getElementById('edit-export-btn-main');
+        const exportDirectBtnMain = document.getElementById('export-direct-btn-main');
+        const analyzeExportBtnMain = document.getElementById('analyze-export-btn-main');
+        
+        if (this.state.mode === 'naive') {
+            if (this.state.editMode) {
+                // In edit mode, change button text and functionality
+                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Save & Export';
+                editExportBtnMain.className = 'btn btn-success';
+            } else {
+                // Normal edit mode button
+                editExportBtnMain.innerHTML = '<i class="fas fa-edit"></i> Edit & Export';
+                editExportBtnMain.className = 'btn btn-primary';
+            }
+            editExportBtnMain.style.display = 'block';
+            exportDirectBtnMain.style.display = 'none';
+            analyzeExportBtnMain.style.display = 'none';
+        } else if (this.state.mode === 'featured') {
+            editExportBtnMain.style.display = 'none';
+            exportDirectBtnMain.style.display = 'none';
+            analyzeExportBtnMain.innerHTML = '<i class="fas fa-download"></i> Export Comprehensive Data';
+            analyzeExportBtnMain.style.display = 'block';
+        } else {
+            // Neutral mode
+            if (this.state.editMode) {
+                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Save & Export';
+                editExportBtnMain.className = 'btn btn-success';
+            } else {
+                editExportBtnMain.innerHTML = '<i class="fas fa-edit"></i> Edit & Export';
+                editExportBtnMain.className = 'btn btn-primary';
+            }
+            editExportBtnMain.style.display = 'block';
+            exportDirectBtnMain.style.display = 'none';
+            analyzeExportBtnMain.style.display = 'none';
         }
     }
 
     // Update statistics
     updateStatistics() {
         document.getElementById('stat-messages').textContent = this.state.conversationLog.length;
-        document.getElementById('stat-step').textContent = this.state.currentStep;
+        
+        // Show predefined question progress in question mode
+        if (this.state.questionMode) {
+            const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
+            const turnsInfo = this.state.conversationTurnsForCurrentQuestion > 0 ? ` (${this.state.conversationTurnsForCurrentQuestion} turns)` : '';
+            document.getElementById('stat-step').textContent = `${this.state.predefinedQuestionsCompleted}/${totalQuestions}${turnsInfo}`;
+        } else {
+            document.getElementById('stat-step').textContent = this.state.currentStep;
+        }
         
         let privacyCount = 0;
         if (this.state.analyzedLog.length > 0) {
@@ -1078,7 +1812,8 @@ class PrivacyDemoApp {
         const exportDirectBtn = document.getElementById('export-direct-btn');
         const analyzeExportBtn = document.getElementById('analyze-export-btn');
         
-        if (this.state.conversationLog.length > 0) {
+        // Only show export buttons if questions are completed and conversation has content
+        if (this.state.conversationLog.length > 0 && !this.state.questionMode) {
             exportButtons.style.display = 'block';
             
             if (this.state.mode === 'naive') {
@@ -1095,13 +1830,22 @@ class PrivacyDemoApp {
                 exportDirectBtn.style.display = 'none'; // Hide Export Direct in naive mode
                 analyzeExportBtn.style.display = 'none';
             } else if (this.state.mode === 'featured') {
-                editExportBtn.style.display = 'none';
+                editExportBtn.style.display = 'none'; // Hide Edit & Export in featured mode
                 exportDirectBtn.style.display = 'none'; // Hide Export Direct in featured mode
                 analyzeExportBtn.style.display = 'block';
             } else {
-                // Neutral mode - show Export Direct
-                editExportBtn.style.display = 'none';
-                exportDirectBtn.style.display = 'block';
+                // Neutral mode - show Edit & Export button
+                if (this.state.editMode) {
+                    // In edit mode, change button text and functionality
+                    editExportBtn.innerHTML = '<i class="fas fa-save"></i> Save & Export';
+                    editExportBtn.className = 'btn btn-success';
+                } else {
+                    // Normal edit mode button
+                    editExportBtn.innerHTML = '<i class="fas fa-edit"></i> Edit & Export';
+                    editExportBtn.className = 'btn btn-primary';
+                }
+                editExportBtn.style.display = 'block';
+                exportDirectBtn.style.display = 'none'; // Hide Export Direct in neutral mode
                 analyzeExportBtn.style.display = 'none';
             }
         } else {
@@ -1112,45 +1856,41 @@ class PrivacyDemoApp {
     // Update privacy analysis section
     updatePrivacyAnalysis() {
         const analysisSection = document.getElementById('privacy-analysis');
-        
+        if (!analysisSection) return;
+        // Filter toggle logic
+        const filterToggle = document.getElementById('privacy-filter-toggle');
+        let filterActive = false;
+        if (filterToggle) {
+            filterActive = filterToggle.checked;
+            filterToggle.onchange = () => this.updatePrivacyAnalysis();
+        }
         if (this.state.showPrivacyAnalysis && this.state.analyzedLog.length > 0) {
             analysisSection.style.display = 'block';
-            
             const privacyIssues = this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues);
             document.getElementById('total-messages').textContent = this.state.analyzedLog.length;
             document.getElementById('privacy-issues').textContent = privacyIssues.length;
-            
-            this.updatePrivacyChoices();
+            this.updatePrivacyChoices(filterActive);
         } else {
             analysisSection.style.display = 'none';
         }
     }
 
     // Update privacy choices
-    updatePrivacyChoices() {
+    updatePrivacyChoices(filterActive = false) {
         const choicesContainer = document.getElementById('privacy-choices');
-        const privacyIssues = this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues);
-        
-        if (privacyIssues.length === 0) {
-            choicesContainer.innerHTML = '<p class="text-center">✅ No privacy issues detected</p>';
-            return;
-        }
-        
+        if (!choicesContainer) return;
         let html = '';
-        
         for (let i = 0; i < this.state.analyzedLog.length; i++) {
             const turn = this.state.analyzedLog[i];
+            if (filterActive && !turn.hasPrivacyIssues) continue;
             if (!turn.hasPrivacyIssues) continue;
-            
-            // Ensure privacyChoices[i] is an object
             if (!this.state.privacyChoices[i]) this.state.privacyChoices[i] = {};
             const currentChoices = this.state.privacyChoices[i];
-            
-            // Handle user message privacy issues
+            // User message privacy issues
             if (turn.userPrivacy && turn.userPrivacy.privacy_issue) {
                 const userChoice = currentChoices.user || 'none';
                 html += `
-                    <div class="choice-item">
+                    <div class="choice-item" data-index="${i}" id="analysis-entry-user-${i}">
                         <h4>Message ${i + 1}: User Message Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.userPrivacy.type}</p>
                         <p><strong>Severity:</strong> ${turn.userPrivacy.severity}</p>
@@ -1165,9 +1905,7 @@ class PrivacyDemoApp {
                             <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'user', 'keep')">
                                 ⚠️ Keep Original
                             </button>
-                            <button class="btn btn-secondary" onclick="app.makePrivacyChoice(${i}, 'user', 'none')">
-                                ❓ Undecided
-                            </button>
+                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="user" type="button">Go to Log</button>
                         </div>
                         <div class="choice-status ${userChoice}">
                             ${this.getChoiceStatusText(userChoice)}
@@ -1175,12 +1913,11 @@ class PrivacyDemoApp {
                     </div>
                 `;
             }
-            
-            // Handle bot message privacy issues
+            // Bot message privacy issues
             if (turn.botPrivacy && turn.botPrivacy.privacy_issue) {
                 const botChoice = currentChoices.bot || 'none';
                 html += `
-                    <div class="choice-item">
+                    <div class="choice-item" data-index="${i}" id="analysis-entry-bot-${i}">
                         <h4>Message ${i + 1}: Bot Response Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.botPrivacy.type}</p>
                         <p><strong>Severity:</strong> ${turn.botPrivacy.severity}</p>
@@ -1195,9 +1932,7 @@ class PrivacyDemoApp {
                             <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'bot', 'keep')">
                                 ⚠️ Keep Original
                             </button>
-                            <button class="btn btn-secondary" onclick="app.makePrivacyChoice(${i}, 'bot', 'none')">
-                                ❓ Undecided
-                            </button>
+                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="bot" type="button">Go to Log</button>
                         </div>
                         <div class="choice-status ${botChoice}">
                             ${this.getChoiceStatusText(botChoice)}
@@ -1206,8 +1941,24 @@ class PrivacyDemoApp {
                 `;
             }
         }
-        
+        if (!html) {
+            html = '<p class="text-center">No privacy issues found</p>';
+        }
         choicesContainer.innerHTML = html;
+        // Bind Go to Log buttons
+        const goToLogBtns = choicesContainer.querySelectorAll('.go-to-log-btn');
+        goToLogBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const idx = btn.getAttribute('data-log-index');
+                const type = btn.getAttribute('data-log-type');
+                const logEntry = document.querySelector(`#log-entry-${type}-${idx}`);
+                if (logEntry) {
+                    logEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    logEntry.classList.add('nav-highlight');
+                    setTimeout(() => logEntry.classList.remove('nav-highlight'), 2000);
+                }
+            });
+        });
     }
 
     // Make privacy choice (now per message and per issue type)
@@ -1246,7 +1997,7 @@ class PrivacyDemoApp {
             case 'keep':
                 return '⚠️ Choice: Keep Original - Will use original text in export';
             default:
-                return '❓ Choice: Undecided - Please make a choice before exporting';
+                return '';
         }
     }
 
@@ -1406,71 +2157,221 @@ class PrivacyDemoApp {
 
     // Apply tooltip suggestion
     async applyTooltipSuggestion() {
-        const applyBtn = document.getElementById('tooltip-apply-btn');
-        const isRealTime = applyBtn.dataset.realtime === 'true';
+        const tooltip = document.getElementById('privacy-tooltip-container');
+        const suggestionText = document.getElementById('tooltip-suggestion-text').textContent;
+        const targetElement = tooltip.dataset.targetElement;
         
-        if (isRealTime) {
-            // Apply suggestion to input field for real-time detection
-            const chatInput = document.getElementById('chat-input');
-            const originalText = applyBtn.dataset.originalText;
-            const suggestionText = applyBtn.dataset.suggestionText;
-            
-            // Replace the original text with suggestion in the input field
-            const currentValue = chatInput.value;
-            const newValue = currentValue.replace(originalText, suggestionText);
-            chatInput.value = newValue;
-            
-            // Clear real-time detection and trigger new detection
-            this.clearRealTimeDetection();
-            if (newValue.trim()) {
-                this.handleRealTimePrivacyDetection(newValue);
+        if (targetElement) {
+            const element = document.querySelector(targetElement);
+            if (element) {
+                element.textContent = suggestionText;
+                element.classList.remove('privacy-error');
+                this.hidePrivacyTooltip();
+                this.showNotification('✅ Privacy fix applied', 'success');
             }
-            
-            this.showNotification('Privacy fix applied to input field!', 'success');
-            this.hidePrivacyTooltip();
-        } else {
-            // Apply to existing message in conversation
-            const messageIndex = parseInt(applyBtn.dataset.messageIndex);
-            const originalText = applyBtn.dataset.originalText;
-            const suggestionText = applyBtn.dataset.suggestionText;
+        }
+    }
 
-            try {
-                // Apply the correction
-                const success = await this.applyPrivacyCorrection(messageIndex, originalText, suggestionText);
-                
-                if (success) {
-                    this.showNotification('Privacy fix applied successfully!', 'success');
-                    this.hidePrivacyTooltip();
-                    this.updateConversationDisplay();
-                } else {
-                    this.showNotification('Failed to apply privacy fix', 'error');
+    // Show Prolific ID popup
+    showProlificIdPopup() {
+        const popup = document.getElementById('prolific-id-popup');
+        const input = document.getElementById('prolific-id-input');
+        
+        // Clear any previous input
+        input.value = '';
+        
+        // Show popup
+        popup.style.display = 'flex';
+        
+        // Focus on input
+        setTimeout(() => {
+            input.focus();
+        }, 100);
+    }
+
+    // Close Prolific ID popup
+    closeProlificIdPopup() {
+        const popup = document.getElementById('prolific-id-popup');
+        popup.style.display = 'none';
+    }
+
+    // Handle Prolific ID submission
+    handleProlificIdSubmit() {
+        const input = document.getElementById('prolific-id-input');
+        const prolificId = input.value.trim();
+        
+        if (!prolificId) {
+            this.showNotification('Please enter your Prolific ID to continue.', 'warning');
+            return;
+        }
+        
+        // Save Prolific ID to state
+        this.state.prolificId = prolificId;
+        this.state.prolificIdSubmitted = true;
+        
+        // Save to localStorage
+        this.saveToLocalStorage();
+        
+        // Close popup
+        this.closeProlificIdPopup();
+        
+        // Show success notification
+        this.showNotification(`Welcome! Prolific ID: ${prolificId}`, 'success');
+        
+        // Start the question conversation if in question mode
+        if (this.state.questionMode) {
+            this.startQuestionConversation();
+        }
+    }
+
+    // Show survey popup
+    showSurveyPopup(exportAction) {
+        console.log('Showing survey popup for export action:', exportAction);
+        this.state.pendingExportAction = exportAction;
+        
+        // First show consent popup, then survey will be shown after consent
+        this.showConsentPopup('survey');
+    }
+
+    // Close survey popup
+    closeSurveyPopup() {
+        const popup = document.getElementById('survey-popup');
+        popup.style.display = 'none';
+        this.state.pendingExportAction = null;
+    }
+
+    // Handle survey submission
+    handleSurveySubmit() {
+        const form = document.getElementById('survey-form');
+        const formData = new FormData(form);
+        
+        // Collect survey data
+        const surveyData = {};
+        for (let i = 1; i <= 8; i++) {
+            const value = formData.get(`q${i}`);
+            surveyData[`q${i}`] = value || '';
+        }
+        
+        console.log('Collected survey data:', surveyData);
+        
+        // Save survey data to state
+        this.state.surveyData = surveyData;
+        this.state.surveyCompleted = true;
+        
+        console.log('Survey state after saving:', {
+            surveyData: this.state.surveyData,
+            surveyCompleted: this.state.surveyCompleted,
+            pendingExportAction: this.state.pendingExportAction
+        });
+        
+        // Save to localStorage
+        this.saveToLocalStorage();
+        
+        // Close survey popup
+        this.closeSurveyPopup();
+        
+        // Show success notification
+        this.showNotification('✅ Survey completed! Exporting data...', 'success');
+        
+        // Debug: Log the pending export action
+        console.log('Pending export action:', this.state.pendingExportAction);
+        
+        // Execute the pending export action and redirect to thanks page
+        if (this.state.pendingExportAction) {
+            console.log('Executing export action:', this.state.pendingExportAction);
+            
+            // Use setTimeout to ensure the notification is shown before export
+            setTimeout(() => {
+                switch (this.state.pendingExportAction) {
+                    case 'exportDirect':
+                        console.log('Executing exportDirect...');
+                        this.exportDirectAndRedirect();
+                        break;
+                    case 'exportComprehensive':
+                        console.log('Executing exportComprehensive...');
+                        this.exportComprehensiveAndRedirect();
+                        break;
+                    case 'analyzeAndExport':
+                        console.log('Executing analyzeAndExport...');
+                        this.analyzeAndExportAndRedirect();
+                        break;
+                    default:
+                        console.error('Unknown export action:', this.state.pendingExportAction);
+                        // Fallback to direct export
+                        this.exportDirectAndRedirect();
                 }
-            } catch (error) {
-                console.error('Error applying privacy fix:', error);
-                this.showNotification('Error applying privacy fix', 'error');
-            }
+            }, 500);
+        } else {
+            console.error('No pending export action found, using fallback');
+            // Fallback to direct export
+            setTimeout(() => {
+                this.exportDirectAndRedirect();
+            }, 500);
+        }
+    }
+
+    // Redirect to thanks page
+    redirectToThanksPage() {
+        try {
+            const prolificId = this.state.prolificId || '';
+            const thanksUrl = `/thanks?prolific_id=${encodeURIComponent(prolificId)}`;
+            console.log('Redirecting to thanks page:', thanksUrl);
+            
+            // Show a notification before redirecting
+            this.showNotification('🔄 Redirecting to completion page...', 'info');
+            
+            // Use a small delay to ensure the notification is shown
+            setTimeout(() => {
+                try {
+                    window.location.href = thanksUrl;
+                } catch (redirectError) {
+                    console.error('Redirect error:', redirectError);
+                    // Fallback: try to navigate using window.location.replace
+                    try {
+                        window.location.replace(thanksUrl);
+                    } catch (fallbackError) {
+                        console.error('Fallback redirect also failed:', fallbackError);
+                        // Last resort: show a message to the user
+                        alert('Please navigate to the thanks page manually. Your data has been downloaded.');
+                    }
+                }
+            }, 500);
+        } catch (error) {
+            console.error('Error in redirectToThanksPage:', error);
+            // Fallback: show a message to the user
+            alert('Please navigate to the thanks page manually. Your data has been downloaded.');
         }
     }
 }
 
-// Global function for privacy popup
-window.closePrivacyPopup = function() {
-    if (window.app) {
-        window.app.closePrivacyPopup();
-    }
-};
+// Global functions for popup interactions
+function closePrivacyPopup() {
+    const popup = document.getElementById('privacy-popup');
+    popup.style.display = 'none';
+}
 
-// Global function for consent popup
-window.closeConsentPopup = function() {
-    if (window.app) {
-        window.app.closeConsentPopup();
-    }
-};
+function closeConsentPopup() {
+    const popup = document.getElementById('consent-popup');
+    popup.style.display = 'none';
+}
 
-// Initialize app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = new PrivacyDemoApp();
-});
+function closeSurveyPopup() {
+    const popup = document.getElementById('survey-popup');
+    popup.style.display = 'none';
+}
+
+function closeProlificIdPopup() {
+    const popup = document.getElementById('prolific-id-popup');
+    popup.style.display = 'none';
+}
+
+function closeCongratulationPopup() {
+    const popup = document.getElementById('congratulation-popup');
+    popup.style.display = 'none';
+}
+
+// Initialize the application
+const app = new PrivacyDemoApp();
 
 // Add CSS for notifications
 const notificationStyles = document.createElement('style');
