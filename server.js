@@ -90,7 +90,7 @@ app.get('/api/debug_context', (req, res) => {
 // Chat API
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], conversationTurns = 0 } = req.body;
+        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], conversationTurns = 0, isFinalQuestion = false } = req.body;
         
         if (!message || message.trim() === '') {
             return res.status(400).json({ error: 'Message is required and cannot be empty' });
@@ -120,6 +120,10 @@ app.post('/api/chat', async (req, res) => {
                 
                 // If in question mode, enhance the system prompt with predefined questions
                 if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
+                    const finalQuestionNote = isFinalQuestion ? 
+                        "\n\nIMPORTANT: This is the FINAL question in the conversation. After 2-3 follow-up questions about this topic, you should provide a smooth ending to the conversation. Thank the user for their participation, summarize what you've learned about them, and indicate that the conversation is complete. Do NOT use 'NEXT_QUESTION:' for the final question. Instead, provide a natural conclusion that wraps up the entire conversation." : 
+                        "";
+                    
                     systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
 
 Your role is to ask the predefined questions naturally and engage in follow-up conversation based on the user's responses. You should:
@@ -128,17 +132,27 @@ Your role is to ask the predefined questions naturally and engage in follow-up c
 2. Based on the user's response, ask relevant follow-up questions to gather more information
 3. Show genuine interest in their answers
 4. Keep responses concise but engaging
-5. Move to the next predefined question after two follow-up questions
+5. Move to the next predefined question after sufficient follow-up discussion
 
 Current question context: ${currentQuestion || 'Starting conversation'}
 
 Predefined questions to cover: ${predefinedQuestions.join(', ')}
 
-IMPORTANT: After asking 2 follow-up questions for the current predefined question, you should indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response. This helps the system track progress.
+CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
 
-You will receive context about which question you're currently asking and how many turns have been made. Pay attention to this context and move to the next question when appropriate.
+When you feel you have gathered sufficient information about the current question (typically after 2-3 follow-up questions, but you can decide based on the conversation flow), you MUST indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response.
 
-Remember to be conversational and ask follow-up questions based on what the user shares.`;
+Guidelines for when to move to the next question:
+- After asking 2-3 follow-up questions about the current topic
+- When the user has provided substantial information about the current question
+- When the conversation about the current question feels complete
+- When you have a good understanding of the user's response to the current question
+
+When transitioning to the next question, provide a smooth conversational bridge like "Thanks for sharing that! Now, let me ask you..." or "That's interesting! Let me ask you something else..."
+
+TURN COUNTING: You will receive context about which question you're currently asking and how many turns have been made. Use this context to guide your decision on when to move to the next question. When you use "NEXT_QUESTION:", this will be counted as turn 1 of the new question, so make sure you've had enough discussion about the current question before moving on.
+
+Remember to be conversational and ask follow-up questions based on what the user shares.${finalQuestionNote}`;
                 }
 
                 // Build messages array for OpenAI
@@ -157,7 +171,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                 // If in question mode, add context to help the AI understand the current state
                 let userMessage = message;
                 if (questionMode && currentQuestion) {
-                    userMessage = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. After 2 follow-up questions, you should move to the next question.]\n\nUser: ${message}`;
+                    userMessage = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. When you decide to move to the next question using "NEXT_QUESTION:", that response will be counted as turn 1 of the new question.]\n\nUser: ${message}`;
                     console.log(`Question Mode Context: Current question="${currentQuestion}", Turn=${conversationTurns}, Message="${userMessage}"`);
                 }
 
@@ -177,24 +191,26 @@ Remember to be conversational and ask follow-up questions based on what the user
                 if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
                     questionCompleted = true;
                     aiResponse = aiResponse.replace('NEXT_QUESTION:', '').trim();
+                    console.log('Question completed via NEXT_QUESTION signal');
+                    console.log(`Turn count when LLM decided to move on: ${conversationTurns}`);
                 }
                 
-                // Fallback: If we've had too many exchanges without completion, force move to next question
-                if (questionMode && !questionCompleted && conversationTurns >= 6) { // 1 initial + 2 follow-ups = 3 exchanges per question, allow 2 extra
+                // Emergency fallback: Only force completion if we've had way too many exchanges (8+)
+                // This prevents infinite loops while letting the LLM manage the conversation naturally
+                // For final questions, let the LLM handle the ending naturally
+                if (questionMode && !questionCompleted && conversationTurns >= 8 && !isFinalQuestion) {
                     questionCompleted = true;
-                    console.log('Forcing question completion due to too many exchanges');
-                }
-                
-                // Additional fallback: If this is the first turn and no question was asked, force completion
-                if (questionMode && !questionCompleted && conversationTurns === 1 && !aiResponse.toLowerCase().includes('?')) {
-                    questionCompleted = true;
-                    console.log('Forcing question completion - no question asked on first turn');
-                }
-                
-                // Smart completion detection: If AI response doesn't contain a question and we've had at least 2 turns, complete
-                if (questionMode && !questionCompleted && conversationTurns >= 3 && !aiResponse.toLowerCase().includes('?')) {
-                    questionCompleted = true;
-                    console.log('Forcing question completion - no question in response after multiple turns');
+                    console.log('Emergency: Forcing question completion due to too many exchanges (8+)');
+                    
+                    // Add a smooth transition when forcing completion
+                    const transitionMessages = [
+                        "Thanks for sharing that! Let me ask you something else.",
+                        "That's interesting! Now, let me ask you another question.",
+                        "Great! Moving on to the next question.",
+                        "Thanks! Let me ask you something different."
+                    ];
+                    const randomTransition = transitionMessages[Math.floor(Math.random() * transitionMessages.length)];
+                    aiResponse = `${randomTransition} ${aiResponse}`;
                 }
                 
             } catch (aiError) {
@@ -232,6 +248,12 @@ Remember to be conversational and ask follow-up questions based on what the user
             }
         }
 
+        // Log question completion status for debugging
+        if (questionMode) {
+            console.log(`Question completion status: ${questionCompleted} (turn ${conversationTurns})`);
+            console.log(`Final AI response being sent: "${aiResponse}"`);
+        }
+        
         res.json({
             success: true,
             bot_response: aiResponse,
@@ -291,18 +313,25 @@ async function detectPrivacyWithAI(userMessage) {
 
 User message: "${userMessage}"
 
-IMPORTANT: Respond with ONLY raw JSON (no markdown formatting, no code blocks, no explanations). Return a SINGLE object, not an array. Use this exact format:
-{"privacy_issue": true/false, "type": "issue_category", "suggestion": "safer_alternative_text", "explanation": "why_this_is_a_privacy_issue", "severity": "high/medium/low", "affected_text": "specific_text_that_poses_risk"}
+IMPORTANT:
+- Respond with ONLY raw JSON (no markdown formatting, no code blocks, no explanations)
+- Return a SINGLE object, not an array
+- For the "suggestion" field: Provide the safer version in the following format:
+  Before: "<original_message>"
+  After: "<safer_version>"
+- Make the smallest possible modification to remove sensitive information while keeping the message's meaning intact
+- Replace specific sensitive details with generic placeholders or safer alternatives
 
-Examples of privacy issues:
-- Credit card numbers (16 digits, often with dashes/spaces)
-- SSNs (XXX-XX-XXXX format)
-- Full names with other personal info
-- Complete addresses
-- Phone numbers
-- Email addresses with passwords
-- Medical diagnoses or conditions
-- Bank account numbers
+Use this exact format:
+{"privacy_issue": true/false, "type": "issue_category", "suggestion": "Before: \"<original>\"\nAfter: \"<safer>\"", "explanation": "brief_reason", "severity": "high/medium/low", "affected_text": "specific_text_that_poses_risk"}
+
+Examples of safer versions:
+- Before: "My name is John Smith and I live at 123 Main St"
+  After: "My name is [Name] and I live at [Address]"
+- Before: "My phone is 555-123-4567"
+  After: "My phone is [Phone Number]"
+- Before: "My credit card is 1234-5678-9012-3456"
+  After: "My credit card is ---"
 
 If no privacy issues found, respond with: {"privacy_issue": false, "type": null, "suggestion": null, "explanation": null, "severity": null, "affected_text": null}`;
 
@@ -389,57 +418,50 @@ function detectPrivacyWithPatterns(userMessage) {
             pattern: /\b\d{3}-\d{2}-\d{4}\b/, 
             type: 'Social Security Number',
             severity: 'high',
-            suggestion: 'Use "XXX-XX-XXXX" instead',
-            explanation: 'Social Security Numbers are highly sensitive personal identifiers that should be redacted'
+            replacement: 'XXX-XX-XXXX',
+            explanation: 'SSN detected'
         },
         { 
             pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, 
             type: 'Credit Card Number',
             severity: 'high',
-            suggestion: 'Use "****-****-****-****" instead',
-            explanation: 'Credit card numbers are sensitive financial information that should be masked'
+            replacement: '****-****-****-****',
+            explanation: 'Credit card number detected'
         },
         { 
             pattern: /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, 
             type: 'Phone Number',
             severity: 'medium',
-            suggestion: 'Use "(555) 123-4567" format or remove',
-            explanation: 'Phone numbers can be used to identify individuals'
+            replacement: '[Phone Number]',
+            explanation: 'Phone number detected'
         },
         { 
             pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, 
             type: 'Email Address',
             severity: 'medium',
-            suggestion: 'Use "user@example.com" instead',
-            explanation: 'Email addresses can be used to identify and contact individuals'
+            replacement: '[Email]',
+            explanation: 'Email address detected'
         },
         { 
             pattern: /\b\d+\s+[A-Za-z\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr)\b/i, 
             type: 'Full Address',
             severity: 'high',
-            suggestion: 'Use "City, State" format instead',
-            explanation: 'Complete addresses can reveal personal location information'
+            replacement: '[Address]',
+            explanation: 'Full address detected'
         },
         {
             pattern: /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
             type: 'Full Name',
             severity: 'medium',
-            suggestion: 'Use "First Name" or "Last Name" instead',
-            explanation: 'Full names can be used to identify individuals'
+            replacement: '[Name]',
+            explanation: 'Full name detected'
         },
         {
             pattern: /\b\d{1,2}\/\d{1,2}\/\d{4}\b/,
             type: 'Date of Birth',
             severity: 'high',
-            suggestion: 'Use "MM/DD/YYYY" format or remove',
-            explanation: 'Birth dates are sensitive personal information'
-        },
-        {
-            pattern: /\b\d{3}-\d{2}-\d{4}\b/,
-            type: 'SSN Pattern',
-            severity: 'high',
-            suggestion: 'Use "XXX-XX-XXXX" format',
-            explanation: 'This appears to be a Social Security Number pattern'
+            replacement: '[Date]',
+            explanation: 'Date of birth detected'
         }
     ];
 
@@ -450,21 +472,46 @@ function detectPrivacyWithPatterns(userMessage) {
     let severity = 'medium';
     let affectedText = userMessage;
 
-    sensitivePatterns.forEach(({ pattern, type, severity: patternSeverity, suggestion: patternSuggestion, explanation: patternExplanation }) => {
+    // Find the first matching pattern and create a complete modified message
+    for (const { pattern, type, severity: patternSeverity, replacement, explanation: patternExplanation } of sensitivePatterns) {
         if (pattern.test(userMessage)) {
             hasIssues = true;
             detectedType = type;
-            suggestion = patternSuggestion;
-            explanation = patternExplanation;
             severity = patternSeverity;
+            explanation = patternExplanation;
+            
+            // Create complete modified message by replacing the sensitive text
+            // For better privacy, try to create more natural replacements
+            let modifiedMessage = userMessage;
+            
+            // Handle specific patterns with more natural replacements
+            if (type === 'Full Address') {
+                // Replace full address with a more natural description
+                modifiedMessage = userMessage.replace(pattern, 'a location in the area');
+            } else if (type === 'Full Name') {
+                // Replace full name with a more natural description
+                modifiedMessage = userMessage.replace(pattern, 'someone');
+            } else if (type === 'Phone Number') {
+                // Replace phone number with a generic placeholder
+                modifiedMessage = userMessage.replace(pattern, '[Phone Number]');
+            } else if (type === 'Email Address') {
+                // Replace email with a generic placeholder
+                modifiedMessage = userMessage.replace(pattern, '[Email]');
+            } else {
+                // Use the default replacement for other patterns
+                modifiedMessage = userMessage.replace(pattern, replacement);
+            }
+            
+            suggestion = `Before: "${userMessage}"\nAfter: "${modifiedMessage}"`;
             
             // Extract the matched text
             const match = userMessage.match(pattern);
             if (match) {
                 affectedText = match[0];
             }
+            break; // Only handle the first match to avoid multiple replacements
         }
-    });
+    }
 
     return {
         privacy_issue: hasIssues,

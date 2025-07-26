@@ -1699,6 +1699,45 @@ body {
     100% { background-color: transparent; }
 }
 
+/* Highlight effect for privacy corrections */
+.privacy-correction-highlight {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+    animation: privacyCorrectionHighlight 3s forwards;
+}
+
+@keyframes privacyCorrectionHighlight {
+    0% { 
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+    }
+    70% { 
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+    }
+    100% { 
+        background-color: transparent !important;
+        border-color: #ced4da !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Privacy modified indicator */
+.privacy-modified-indicator {
+    color: #28a745;
+    font-size: 0.9em;
+    margin-left: 0.5rem;
+    cursor: help;
+    opacity: 0.8;
+}
+
+.privacy-modified-indicator:hover {
+    opacity: 1;
+}
+
 .privacy-issues-collapsible {
   margin-top: 0.5em;
   margin-bottom: 1em;
