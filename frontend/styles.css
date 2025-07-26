@@ -392,6 +392,11 @@ body {
 .message {
     margin-bottom: 1.5rem;
     animation: fadeIn 0.3s ease-in;
+    position: relative;
+}
+
+.message-pair {
+    margin-bottom: 2rem;
 }
 
 .message-user {
@@ -416,6 +421,31 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.message-header i {
+    font-size: 1rem;
+    opacity: 0.9;
+    background-color: rgba(255, 255, 255, 0.3);
+    padding: 0.3rem;
+    border-radius: 50%;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message-user .message-header {
+    color: var(--primary-button);
+}
+
+.message-bot .message-header {
+    color: var(--secondary-button);
 }
 
 .edit-indicator {
@@ -430,6 +460,14 @@ body {
 
 .message-content {
     line-height: 1.6;
+    margin-top: 0.5rem;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.message-content .fa-spinner {
+    color: var(--secondary-button);
+    margin-right: 0.5rem;
 }
 
 /* Editable message input styles */
@@ -736,13 +774,89 @@ body {
     background-color: var(--container-bg);
     border-radius: 15px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    overflow: hidden;
+    height: 100%;
+    min-height: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid var(--border-color);
+    position: relative;
+}
+
+.privacy-analysis::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(135deg, var(--warning-color), #ff8c00);
+    border-radius: 15px 15px 0 0;
+}
+
+.privacy-analysis-header {
+    background: linear-gradient(135deg, var(--warning-color), #ff8c00);
+    color: white;
+    padding: 1.5rem;
+    text-align: center;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.privacy-analysis-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.privacy-analysis-content {
+    flex: 1;
     padding: 2rem;
-    margin-top: 2rem;
+    overflow-y: auto;
+    min-height: 0;
+    max-height: calc(100% - 80px); /* Account for header height */
+}
+
+.privacy-analysis-content::-webkit-scrollbar {
+    width: 10px;
+}
+
+.privacy-analysis-content::-webkit-scrollbar-track {
+    background: var(--sidebar-bg);
+    border-radius: 5px;
+}
+
+.privacy-analysis-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 5px;
+}
+
+.privacy-analysis-content::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-button);
+}
+
+/* Ensure scrollbar is visible when content overflows */
+.privacy-analysis-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) var(--sidebar-bg);
 }
 
 .analysis-header {
     text-align: center;
     margin-bottom: 2rem;
+    padding: 1rem;
+    background-color: rgba(255, 193, 7, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.analysis-header p {
+    color: var(--text-color);
+    margin-bottom: 1rem;
+    line-height: 1.6;
 }
 
 .analysis-header h3 {
@@ -790,8 +904,15 @@ body {
     background-color: rgba(175, 18, 90, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.choice-item:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
 }
 
 .choice-buttons {
@@ -824,9 +945,12 @@ body {
 
 /* Export Options */
 .export-options {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    margin-top: 2rem;
+    text-align: center;
+    padding: 1.5rem;
+    background-color: rgba(40, 167, 69, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(40, 167, 69, 0.3);
 }
 
 /* Action Buttons Panel - Fixed Position */
@@ -1509,6 +1633,9 @@ body {
 .right-column {
   padding-left: 1rem;
   overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 @media (max-width: 900px) {
   .two-column-layout {
@@ -1521,6 +1648,32 @@ body {
     padding: 0;
     min-width: 0;
     height: auto;
+  }
+  
+  .privacy-analysis {
+    margin-top: 1rem;
+    height: auto;
+    min-height: 400px;
+    max-height: 60vh;
+  }
+  
+  .privacy-analysis-content {
+    padding: 1rem;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  
+  .analysis-header {
+    padding: 0.75rem;
+  }
+  
+  .choice-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .export-options {
+    padding: 1rem;
   }
 } 
 

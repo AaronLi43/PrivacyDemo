@@ -4,7 +4,7 @@ A Streamlit-based chatbot application with privacy detection capabilities for da
 
 ## Features
 
-- 🤖 **AI Chatbot**: Powered by Google Gemini API
+- 🤖 **AI Chatbot**: Powered by OpenAI GPT-4
 - 🔒 **Privacy Detection**: Real-time privacy leakage detection in user messages
 - 📊 **Data Collection**: Built-in conversation logging and export functionality
 - 🎯 **Dual Modes**: 
@@ -17,8 +17,8 @@ A Streamlit-based chatbot application with privacy detection capabilities for da
 
 ### Prerequisites
 
-- Python 3.7+
-- Google Gemini API key
+- Node.js 16+
+- OpenAI API key
 
 ### Installation
 
@@ -33,7 +33,7 @@ cd PrivacyDemo
 pip install -r requirements.txt
 ```
 
-3. Configure your Gemini API key using **one of these methods**:
+3. Configure your OpenAI API key using **one of these methods**:
 
 #### Method 1: .env File (Recommended for Development)
 Create a `.env` file in the project root:
@@ -46,14 +46,14 @@ python setup_env.py
 **Option B: Manual creation**
 ```bash
 # Create .env file
-echo "GEMINI_API_KEY=your_api_key_here" > .env
+echo "OPENAI_API_KEY=your_api_key_here" > .env
 ```
 
 Or manually create `.env` file with this content:
 ```env
-# Gemini API Configuration
-# Get your API key from: https://makersuite.google.com/app/apikey
-GEMINI_API_KEY=your_api_key_here
+# OpenAI API Configuration
+# Get your API key from: https://platform.openai.com/api-keys
+OPENAI_API_KEY=your_api_key_here
 ```
 
 **Security Note**: The `.env` file is automatically ignored by git, and no part of your API key will be displayed on screen.
@@ -61,23 +61,23 @@ GEMINI_API_KEY=your_api_key_here
 #### Method 2: Environment Variable
 ```bash
 # Windows
-set GEMINI_API_KEY=your_api_key_here
+set OPENAI_API_KEY=your_api_key_here
 
 # Linux/Mac
-export GEMINI_API_KEY=your_api_key_here
+export OPENAI_API_KEY=your_api_key_here
 ```
 
 #### Method 3: Local Secrets File
 Edit `.streamlit/secrets.toml`:
 ```toml
-GEMINI_API_KEY = "your_api_key_here"
+OPENAI_API_KEY = "your_api_key_here"
 ```
 
 #### Method 4: Streamlit Cloud (For Deployment)
 Add the secret in your Streamlit Cloud deployment settings.
 
 #### Get Your API Key
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
 2. Create a new API key
 3. Copy and paste it using one of the methods above
 
@@ -96,7 +96,7 @@ The application will be available at `http://localhost:8501`
 1. Push your code to GitHub
 2. Go to [share.streamlit.io](https://share.streamlit.io)
 3. Connect your GitHub repository
-4. Set the `GEMINI_API_KEY` secret in the deployment settings
+4. Set the `OPENAI_API_KEY` secret in the deployment settings
 5. Deploy!
 
 ### Other Platforms

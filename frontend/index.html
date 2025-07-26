@@ -110,7 +110,7 @@
       <!-- Two Column Layout for Privacy Analysis & Export Stage -->
       <div id="two-column-layout" class="two-column-layout" style="display:none;">
         <div class="left-column">
-          <div id="conversation-container" class="conversation-container">
+          <div id="analysis-conversation-container" class="conversation-container">
             <div class="empty-state">
               <i class="fas fa-comment-dots"></i>
               <p>Start a conversation by typing a message below!</p>
@@ -119,30 +119,34 @@
         </div>
         <div class="right-column">
           <div id="privacy-analysis" class="privacy-analysis" style="display: none;">
-            <div class="analysis-header">
+            <div class="privacy-analysis-header">
               <h3><i class="fas fa-search"></i> Privacy Analysis Results</h3>
-              <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
-              <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
-                <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
-              </label>
             </div>
-            <div class="analysis-stats">
-              <div class="stat-card">
-                <span class="stat-number" id="total-messages">0</span>
-                <span class="stat-label">Total Messages</span>
+            <div class="privacy-analysis-content">
+              <div class="analysis-header">
+                <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
+                <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
+                  <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
+                </label>
               </div>
-              <div class="stat-card">
-                <span class="stat-number" id="privacy-issues">0</span>
-                <span class="stat-label">Privacy Issues</span>
+              <div class="analysis-stats">
+                <div class="stat-card">
+                  <span class="stat-number" id="total-messages">0</span>
+                  <span class="stat-label">Total Messages</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-number" id="privacy-issues">0</span>
+                  <span class="stat-label">Privacy Issues</span>
+                </div>
               </div>
-            </div>
-            <div id="privacy-choices" class="privacy-choices">
-              <!-- Privacy choice buttons will be generated here -->
-            </div>
-            <div class="export-options">
-              <button id="export-comprehensive" class="btn btn-success">
-                <i class="fas fa-download"></i> Export Comprehensive Data
-              </button>
+              <div id="privacy-choices" class="privacy-choices">
+                <!-- Privacy choice buttons will be generated here -->
+              </div>
+              <div class="export-options">
+                <button id="export-comprehensive" class="btn btn-success">
+                  <i class="fas fa-download"></i> Export Comprehensive Data
+                </button>
+              </div>
             </div>
           </div>
         </div>

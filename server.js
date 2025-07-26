@@ -6,21 +6,22 @@ const fs = require('fs-extra');
 const path = require('path');
 require('dotenv').config();
 
-// Google Gemini AI
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// OpenAI API
+const OpenAI = require('openai');
 
-// Initialize Gemini AI
-let genAI, model;
+// Initialize OpenAI
+let openaiClient;
 try {
-    if (process.env.GEMINI_API_KEY) {
-        genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        console.log('✅ Gemini AI initialized successfully');
+    if (process.env.OPENAI_API_KEY) {
+        openaiClient = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+        console.log('✅ OpenAI initialized successfully');
     } else {
-        console.log('⚠️  GEMINI_API_KEY not found, using fallback responses');
+        console.log('⚠️  OPENAI_API_KEY not found, using fallback responses');
     }
 } catch (error) {
-    console.log('⚠️  Failed to initialize Gemini AI, using fallback responses:', error.message);
+    console.log('⚠️  Failed to initialize OpenAI, using fallback responses:', error.message);
 }
 
 const app = express();
@@ -108,11 +109,11 @@ app.post('/api/chat', async (req, res) => {
         // Manage conversation context (reset if too long)
         manageConversationContext();
 
-        // Generate AI response using Gemini or fallback
+        // Generate AI response using OpenAI or fallback
         let aiResponse;
         let questionCompleted = false;
         
-        if (model) {
+        if (openaiClient) {
             try {
                 // Enhanced system prompt for the chatbot with question guidance
                 let systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Keep your responses short and concise.`;
@@ -140,49 +141,37 @@ You will receive context about which question you're currently asking and how ma
 Remember to be conversational and ask follow-up questions based on what the user shares.`;
                 }
 
-                // Initialize or maintain chat session for conversation context
-                if (!activeChatSession) {
-                    // Create new chat session with system prompt
-                    activeChatSession = model.startChat({
-                        generationConfig: {
-                            temperature: 0.7,
-                            topK: 40,
-                            topP: 0.95,
-                            maxOutputTokens: 1024,
-                        },
+                // Build messages array for OpenAI
+                const messages = [
+                    { role: 'system', content: systemPrompt }
+                ];
+
+                // Add conversation history
+                conversationHistory.forEach(msg => {
+                    messages.push({
+                        role: msg.role,
+                        content: msg.content
                     });
-                    
-                    // Send system prompt to initialize the session
-                    await activeChatSession.sendMessage(systemPrompt);
-                } else if (questionMode && !activeChatSession) {
-                    // Only create new session if one doesn't exist, maintain context otherwise
-                    activeChatSession = model.startChat({
-                        generationConfig: {
-                            temperature: 0.7,
-                            topK: 40,
-                            topP: 0.95,
-                            maxOutputTokens: 1024,
-                        },
-                    });
-                    await activeChatSession.sendMessage(systemPrompt);
+                });
+
+                // If in question mode, add context to help the AI understand the current state
+                let userMessage = message;
+                if (questionMode && currentQuestion) {
+                    userMessage = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. After 2 follow-up questions, you should move to the next question.]\n\nUser: ${message}`;
+                    console.log(`Question Mode Context: Current question="${currentQuestion}", Turn=${conversationTurns}, Message="${userMessage}"`);
                 }
 
-                // Send user message to existing chat session (maintains context)
-                let messageToSend = message;
-                
-                // Ensure we have a valid message to send
-                if (!messageToSend || messageToSend.trim() === '') {
-                    messageToSend = "Hello"; // Fallback message
-                }
-                
-                // If in question mode, add context to help the AI understand the current state
-                if (questionMode && currentQuestion) {
-                    messageToSend = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. After 2 follow-up questions, you should move to the next question.]\n\nUser: ${messageToSend}`;
-                    console.log(`Question Mode Context: Current question="${currentQuestion}", Turn=${conversationTurns}, Message="${messageToSend}"`);
-                }
-                
-                const result = await activeChatSession.sendMessage(messageToSend);
-                aiResponse = result.response.text();
+                // Add the current user message
+                messages.push({ role: 'user', content: userMessage });
+
+                const completion = await openaiClient.chat.completions.create({
+                    model: "gpt-4o",
+                    messages: messages,
+                    max_tokens: 1000,
+                    temperature: 0.7
+                });
+
+                aiResponse = completion.choices[0].message.content;
                 
                 // Check if LLM signaled question completion
                 if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
@@ -211,13 +200,6 @@ Remember to be conversational and ask follow-up questions based on what the user
             } catch (aiError) {
                 console.error('AI API error:', aiError);
                 aiResponse = `I apologize, but I'm having trouble processing your request right now. Please try again later. (Error: ${aiError.message})`;
-                
-                // Only reset chat session on critical errors, not on temporary issues
-                if (aiError.message.includes('400 Bad Request') || aiError.message.includes('contents.parts must not be empty')) {
-                    console.log('Resetting chat session due to malformed request');
-                    activeChatSession = null;
-                }
-                // For other errors, keep the session to maintain context
             }
         } else {
             // Fallback response when AI is not available
@@ -225,7 +207,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                 aiResponse = `Thank you for sharing that information about "${message}". Let me ask you the next question: ${currentQuestion}`;
                 questionCompleted = true; // Force completion in fallback mode
             } else {
-                aiResponse = `This is a simulated response to: "${message}". In a real implementation, this would be processed by an AI model. To enable real AI responses, please configure a valid GEMINI_API_KEY environment variable.`;
+                aiResponse = `This is a simulated response to: "${message}". In a real implementation, this would be processed by an AI model. To enable real AI responses, please configure a valid OPENAI_API_KEY environment variable.`;
             }
         }
         
@@ -293,7 +275,7 @@ app.post('/api/privacy_detection', async (req, res) => {
 
 // AI-based privacy detection function
 async function detectPrivacyWithAI(userMessage) {
-    if (!model) {
+    if (!openaiClient) {
         return { error: 'AI model not available' };
     }
 
@@ -324,8 +306,16 @@ Examples of privacy issues:
 
 If no privacy issues found, respond with: {"privacy_issue": false, "type": null, "suggestion": null, "explanation": null, "severity": null, "affected_text": null}`;
 
-        const result = await model.generateContent(privacyPrompt);
-        const responseText = result.response.text();
+        const completion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues and respond with ONLY valid JSON." },
+                { role: "user", content: privacyPrompt }
+            ],
+            max_tokens: 500,
+            temperature: 0.1
+        });
+        const responseText = completion.choices[0].message.content;
         
         // Clean the response text to extract JSON (remove markdown formatting)
         let cleanedResponse = responseText.trim();

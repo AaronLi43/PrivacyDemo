@@ -115,26 +115,26 @@ class PrivacyDemoApp {
         // Main export buttons (in chat input area)
         document.getElementById('edit-export-btn-main').addEventListener('click', () => {
             if (this.state.editMode) {
-                this.showSurveyPopup('exportDirect');
+                // For naive mode: Export button → Data Collection consent → Post task survey
+                this.showConsentPopup('exportDirect');
             } else {
                 this.enterEditMode();
             }
         });
 
         document.getElementById('export-direct-btn-main').addEventListener('click', () => {
-            this.showSurveyPopup('exportDirect');
+            // For neutral mode: Export button → Data Collection consent → Post task survey
+            this.showConsentPopup('exportDirect');
         });
 
         document.getElementById('analyze-export-btn-main').addEventListener('click', () => {
-            if (this.state.mode === 'featured') {
-                this.showSurveyPopup('exportComprehensive');
-            } else {
-                this.showConsentPopup('analyzeAndExport');
-            }
+            // For featured mode: Export button → Data Collection consent → Post task survey
+            this.showConsentPopup('exportComprehensive');
         });
 
         document.getElementById('edit-export-btn').addEventListener('click', () => {
             if (this.state.editMode) {
+                // For naive mode: Export button → Data Collection consent → Post task survey
                 this.showConsentPopup('exportDirect');
             } else {
                 this.enterEditMode();
@@ -142,11 +142,13 @@ class PrivacyDemoApp {
         });
 
         document.getElementById('export-direct-btn').addEventListener('click', () => {
-            this.exportDirect();
+            // For neutral mode: Export button → Data Collection consent → Post task survey
+            this.showConsentPopup('exportDirect');
         });
 
         document.getElementById('analyze-export-btn').addEventListener('click', () => {
-            this.showConsentPopup('analyzeAndExport');
+            // For featured mode: Export button → Data Collection consent → Post task survey
+            this.showConsentPopup('exportComprehensive');
         });
 
         // Chat input with real-time privacy detection
@@ -180,7 +182,8 @@ class PrivacyDemoApp {
 
         // Privacy analysis buttons
         document.getElementById('export-comprehensive').addEventListener('click', () => {
-            this.exportComprehensive();
+            // For featured mode: Export button → Data Collection consent → Post task survey
+            this.showConsentPopup('exportComprehensive');
         });
 
         // Privacy tooltip events
@@ -413,18 +416,18 @@ class PrivacyDemoApp {
         const modeMessages = {
             naive: {
                 title: '🎉 Questions Completed!',
-                message: 'Great job! You\'ve completed all the questions. You can now edit your conversation and export it.',
+                message: 'Great job! You\'ve completed all the questions. You can now edit your conversation before exporting.',
                 buttonText: 'Enter Edit Mode'
             },
             neutral: {
                 title: '🎉 Questions Completed!',
-                message: 'Great job! You\'ve completed all the questions. You can now export your conversation for privacy analysis.',
-                buttonText: 'Enter Edit Mode'
+                message: 'Great job! You\'ve completed all the questions. You can now proceed to data collection consent.',
+                buttonText: 'Continue'
             },
             featured: {
                 title: '🎉 Questions Completed!',
-                message: 'Great job! You\'ve completed all the questions. You can now analyze and export your conversation with privacy detection.',
-                buttonText: 'Analyze & Export'
+                message: 'Great job! You\'ve completed all the questions. You can now analyze your conversation with privacy detection.',
+                buttonText: 'Start Privacy Analysis'
             }
         };
         
@@ -441,14 +444,18 @@ class PrivacyDemoApp {
         const popup = document.getElementById('congratulation-popup');
         popup.style.display = 'none';
         
-        if (this.state.mode === 'featured') {
-            // For featured mode, trigger analyze and export functionality
-            this.showNotification('🔍 Starting privacy analysis...', 'info');
-            this.analyzeAndExport();
-        } else {
-            // For naive and neutral modes, enter edit mode
+        if (this.state.mode === 'neutral') {
+            // For neutral mode: Congratulations → Data Collection consent → Post task survey
+            this.showNotification('📋 Starting data collection consent...', 'info');
+            this.showConsentPopup('survey');
+        } else if (this.state.mode === 'naive') {
+            // For naive mode: Congratulations → Free editing stage
             this.enterEditMode();
             this.showNotification('✏️ Edit mode enabled - You can now edit your conversation!', 'success');
+        } else if (this.state.mode === 'featured') {
+            // For featured mode: Congratulations → Privacy analysis stage
+            this.showNotification('🔍 Starting privacy analysis...', 'info');
+            this.analyzeAndExport();
         }
     }
 
@@ -1307,7 +1314,15 @@ class PrivacyDemoApp {
                 const popup = document.getElementById('survey-popup');
                 popup.style.display = 'flex';
             } else if (pendingAction === 'exportDirect') {
-                this.exportDirect();
+                // Show survey after consent, then export
+                console.log('Showing survey after consent for exportDirect');
+                const popup = document.getElementById('survey-popup');
+                popup.style.display = 'flex';
+            } else if (pendingAction === 'exportComprehensive') {
+                // Show survey after consent, then export
+                console.log('Showing survey after consent for exportComprehensive');
+                const popup = document.getElementById('survey-popup');
+                popup.style.display = 'flex';
             } else if (pendingAction === 'analyzeAndExport') {
                 this.analyzeAndExport();
             }
@@ -1559,7 +1574,7 @@ class PrivacyDemoApp {
             // Two-column layout: left column
             const twoCol = document.getElementById('two-column-layout');
             if (twoCol) {
-                container = twoCol.querySelector('.left-column #conversation-container');
+                container = twoCol.querySelector('.left-column #analysis-conversation-container');
             }
             // Check filter toggle
             const filterToggle = document.getElementById('privacy-filter-toggle');
@@ -1571,7 +1586,11 @@ class PrivacyDemoApp {
                 container = chatContainer.querySelector('#conversation-container');
             }
         }
-        if (!container) return;
+        if (!container) {
+            console.warn('Conversation container not found');
+            return;
+        }
+        
         if (this.state.conversationLog.length === 0) {
             let emptyMessage = 'Start a conversation by typing a message below!';
             if (this.state.questionMode) {
@@ -1586,6 +1605,7 @@ class PrivacyDemoApp {
             return;
         }
         let html = '';
+        
         for (let i = 0; i < this.state.conversationLog.length; i++) {
             // In analysis mode with filter, skip messages without privacy issues
             if (analysisMode && filterActive) {
@@ -1605,22 +1625,76 @@ class PrivacyDemoApp {
                 if (analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue) {
                     botWarning = '<span class="privacy-warning-sign" data-type="bot" data-index="' + i + '" style="cursor: pointer;">&#9888;&#65039;</span>';
                 }
-                html += `<div class="message-pair editable" data-index="${i}">
-                    <div class="message message-user" id="log-entry-user-${i}">${userWarning}<textarea class="message-edit-input" data-message-index="${i}" data-message-type="user"
-                        placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>
-                    </div>
-                    <div class="message message-bot" id="log-entry-bot-${i}">${botWarning}<textarea class="message-edit-input" data-message-index="${i}" data-message-type="bot"
-                        placeholder="Edit bot response here...">${this.escapeHtml(turn.bot)}</textarea>
-                    </div>
-                </div>`;
+                html += `<div class="message-pair editable" data-index="${i}">`;
+                
+                // Only show user message if it exists
+                if (turn.user && turn.user.trim()) {
+                    html += `<div class="message message-user" id="log-entry-user-${i}">
+                        <div class="message-header">
+                            <i class="fas fa-user"></i>
+                            <span>You</span>
+                            ${userWarning}
+                        </div>
+                        <textarea class="message-edit-input" data-message-index="${i}" data-message-type="user"
+                            placeholder="Edit your message here...">${this.escapeHtml(turn.user)}</textarea>
+                    </div>`;
+                }
+                
+                // Only show bot message if it exists
+                if (turn.bot && turn.bot.trim()) {
+                    html += `<div class="message message-bot" id="log-entry-bot-${i}">
+                        <div class="message-header">
+                            <i class="fas fa-robot"></i>
+                            <span>Chatbot</span>
+                            ${botWarning}
+                        </div>
+                        <textarea class="message-edit-input" data-message-index="${i}" data-message-type="bot"
+                            placeholder="Edit bot response here...">${this.escapeHtml(turn.bot)}</textarea>
+                    </div>`;
+                }
+                
+                html += `</div>`;
             } else {
-                html += `<div class="message-pair" data-index="${i}">
-                    <div class="message message-user" id="log-entry-user-${i}">${this.escapeHtml(turn.user)}</div>
-                    <div class="message message-bot" id="log-entry-bot-${i}">${this.escapeHtml(turn.bot)}</div>
-                </div>`;
+                html += `<div class="message-pair" data-index="${i}">`;
+                
+                // Only show user message if it exists
+                if (turn.user && turn.user.trim()) {
+                    html += `<div class="message message-user" id="log-entry-user-${i}">
+                        <div class="message-header">
+                            <i class="fas fa-user"></i>
+                            <span>You</span>
+                        </div>
+                        <div class="message-content">${this.escapeHtml(turn.user)}</div>
+                    </div>`;
+                }
+                
+                // Show bot message if it exists, or show loading state
+                if (turn.bot && turn.bot.trim()) {
+                    html += `<div class="message message-bot" id="log-entry-bot-${i}">
+                        <div class="message-header">
+                            <i class="fas fa-robot"></i>
+                            <span>Chatbot</span>
+                        </div>
+                        <div class="message-content">${this.escapeHtml(turn.bot)}</div>
+                    </div>`;
+                } else if (turn.user && turn.user.trim()) {
+                    // Show loading state for bot response
+                    html += `<div class="message message-bot" id="log-entry-bot-${i}">
+                        <div class="message-header">
+                            <i class="fas fa-robot"></i>
+                            <span>Chatbot</span>
+                        </div>
+                        <div class="message-content">
+                            <i class="fas fa-spinner fa-spin"></i> Thinking...
+                        </div>
+                    </div>`;
+                }
+                
+                html += `</div>`;
             }
         }
         container.innerHTML = html;
+        
         // Bind edit events in analysis mode
         if (analysisMode) {
             this.bindEditModeEvents();
@@ -2229,8 +2303,9 @@ class PrivacyDemoApp {
         console.log('Showing survey popup for export action:', exportAction);
         this.state.pendingExportAction = exportAction;
         
-        // First show consent popup, then survey will be shown after consent
-        this.showConsentPopup('survey');
+        // Show survey directly (consent is handled before this)
+        const popup = document.getElementById('survey-popup');
+        popup.style.display = 'flex';
     }
 
     // Close survey popup
