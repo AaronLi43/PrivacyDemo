@@ -26,7 +26,7 @@ class PrivacyDemoApp {
             questionsCompleted: false,
             questionMode: false,
             predefinedQuestionsCompleted: 0, // Track completed predefined questions
-            conversationTurnsForCurrentQuestion: 0, // Track turns for current question
+            // Removed turn counting - letting LLM decide when to move to next question
             completedQuestionIndices: [], // Track which specific questions have been completed
             justCompletedQuestion: false, // Track if we just completed a question to avoid duplicate asks
             // Prolific ID for user identification
@@ -60,8 +60,7 @@ class PrivacyDemoApp {
             }
         };
 
-        this.MAX_TURNS_PER_QUESTION = 8; // Maximum turns per question before forced transition
-        this.MAX_TURNS_FINAL_QUESTION = 3; // Maximum turns for final question before forcing completion
+        // Removed turn counting constants - letting LLM decide when to move to next question
 
         this.init();
     }
@@ -293,7 +292,7 @@ class PrivacyDemoApp {
                 console.log('Manual next question triggered');
                 this.state.currentQuestionIndex++;
                 this.state.predefinedQuestionsCompleted++;
-                this.state.conversationTurnsForCurrentQuestion = 0;
+                // Removed turn counting - letting LLM decide when to move to next question
                 
                 if (this.state.predefinedQuestionsCompleted >= this.state.predefinedQuestions[this.state.mode].length) {
                     this.state.questionsCompleted = true;
@@ -354,7 +353,7 @@ class PrivacyDemoApp {
         this.state.questionsCompleted = false;
         this.state.questionMode = true;
         this.state.predefinedQuestionsCompleted = 0; // Reset predefined questions counter
-        this.state.conversationTurnsForCurrentQuestion = 0; // Reset conversation turns counter
+        // Removed turn counting reset - letting LLM decide when to move to next question
         this.state.completedQuestionIndices = []; // Reset completed questions tracking
         this.state.justCompletedQuestion = false; // Reset completion flag
         this.state.conversationLog = []; // Clear conversation when changing modes
@@ -385,6 +384,49 @@ class PrivacyDemoApp {
         // If all questions are completed, return -1
         console.log('All questions completed');
         return -1;
+    }
+
+    // Clean up question transition responses to prevent double questions
+    cleanupQuestionTransition(response) {
+        // Split the response into sentences
+        const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        
+        if (sentences.length <= 2) {
+            // If there are 2 or fewer sentences, it's likely a clean transition
+            return response;
+        }
+        
+        // Look for patterns that indicate the main question has been asked
+        const questionPatterns = [
+            /\bwhat\s+is\s+your\b/i,
+            /\bhow\s+old\s+are\s+you\b/i,
+            /\bwhere\s+do\s+you\s+live\b/i,
+            /\bwhat\s+is\s+your\s+occupation\b/i,
+            /\bdo\s+you\s+have\s+any\s+hobbies\b/i,
+            /\bwhat\s+are\s+your\s+hobbies\b/i
+        ];
+        
+        // Find the sentence that contains the main question
+        let mainQuestionIndex = -1;
+        for (let i = 0; i < sentences.length; i++) {
+            for (const pattern of questionPatterns) {
+                if (pattern.test(sentences[i])) {
+                    mainQuestionIndex = i;
+                    break;
+                }
+            }
+            if (mainQuestionIndex !== -1) break;
+        }
+        
+        if (mainQuestionIndex !== -1) {
+            // Take only the sentences up to and including the main question
+            const cleanSentences = sentences.slice(0, mainQuestionIndex + 1);
+            return cleanSentences.join('. ').trim() + '.';
+        }
+        
+        // If no clear question pattern is found, take the first two sentences
+        // (transition + main question)
+        return sentences.slice(0, 2).join('. ').trim() + '.';
     }
 
     // Start question conversation with LLM
@@ -705,7 +747,7 @@ class PrivacyDemoApp {
             this.state.questionsCompleted = false;
             this.state.questionMode = true;
             this.state.predefinedQuestionsCompleted = 0; // Reset predefined questions counter
-            this.state.conversationTurnsForCurrentQuestion = 0; // Reset conversation turns counter
+            // Removed turn counting reset - letting LLM decide when to move to next question
             this.state.completedQuestionIndices = []; // Reset completed questions tracking
             this.state.justCompletedQuestion = false; // Reset completion flag
             
@@ -806,80 +848,17 @@ class PrivacyDemoApp {
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
                     
-                    // Handle turn counting for question transitions
+                    // Let LLM decide when to move to next question - no turn counting
                     if (this.state.justCompletedQuestion) {
                         this.state.justCompletedQuestion = false;
-                        this.state.conversationTurnsForCurrentQuestion = 1;
-                    } else {
-                        this.state.conversationTurnsForCurrentQuestion++;
-                    }
-                    if (this.state.conversationTurnsForCurrentQuestion < 1) {
-                        this.state.conversationTurnsForCurrentQuestion = 1;
-                    }
-
-                    // Forced transition if max turns reached (for any question)
-                    const maxTurnsForCurrentQuestion = isFinalQuestion ? this.MAX_TURNS_FINAL_QUESTION : this.MAX_TURNS_PER_QUESTION;
-                    if (this.state.conversationTurnsForCurrentQuestion > maxTurnsForCurrentQuestion) {
-                        // Mark current question as completed
-                        if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
-                            this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
-                        }
-                        this.state.predefinedQuestionsCompleted++;
-                        this.state.justCompletedQuestion = true;
-                        
-                        if (isFinalQuestion) {
-                            // For final question, end the conversation smoothly
-                            this.showNotification(`Maximum follow-ups reached for the final question. Ending conversation.`, 'info');
-                            this.state.questionsCompleted = true;
-                            this.state.questionMode = false;
-                            this.showCongratulationPopup();
-                            return;
-                        } else {
-                            // For regular questions, move to next question
-                            this.showNotification(`Maximum number of follow-ups reached for this question. Moving to the next question.`, 'info');
-                            // Move to next question
-                            const nextQuestionIndex = this.getNextUncompletedQuestionIndex();
-                            if (nextQuestionIndex === -1) {
-                                this.state.questionsCompleted = true;
-                                this.state.questionMode = false;
-                                this.showCongratulationPopup();
-                                return;
-                            }
-                            this.state.currentQuestionIndex = nextQuestionIndex;
-                            this.state.conversationTurnsForCurrentQuestion = 1;
-                            // Send a transition message to the backend to start the next question
-                            const nextQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
-                            const response = await API.sendMessage("[Transition] Please start the next question.", this.state.currentStep, {
-                                questionMode: true,
-                                currentQuestion: nextQuestion,
-                                predefinedQuestions: predefinedQuestions,
-                                conversationTurns: 1,
-                                isFinalQuestion: (this.state.currentQuestionIndex === this.state.predefinedQuestions[this.state.mode].length - 1)
-                            });
-                            // Add bot response for the new question
-                            if (response && response.bot_response) {
-                                let botResponse = response.bot_response.replace(/\bNEXT_QUESTION\b/gi, '').trim();
-                                this.state.conversationLog.push({
-                                    user: '',
-                                    bot: botResponse,
-                                    timestamp: new Date().toISOString()
-                                });
-                            }
-                            this.updateUI();
-                            this.scrollToBottom();
-                            this.saveToLocalStorage();
-                            this.showLoading(false);
-                            return;
-                        }
                     }
                     
-                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (turn ${this.state.conversationTurnsForCurrentQuestion}, justCompleted: ${this.state.justCompletedQuestion})`);
+                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
                     
                     const response = await API.sendMessage(message, this.state.currentStep, {
                         questionMode: true,
                         currentQuestion: currentQuestion,
                         predefinedQuestions: predefinedQuestions,
-                        conversationTurns: this.state.conversationTurnsForCurrentQuestion,
                         isFinalQuestion: isFinalQuestion
                     });
                     
@@ -909,16 +888,11 @@ class PrivacyDemoApp {
                         // Final cleanup: remove any remaining NEXT_QUESTION text that might have been missed
                         botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
                         
-                        // If this is a question transition, add a smooth transition message
+                        // If this is a question transition, clean up the response to prevent double questions
                         if (isQuestionTransition) {
-                            const transitionMessages = [
-                                "Thanks for sharing that! Let me ask you something else.",
-                                "That's interesting! Now, let me ask you another question.",
-                                "Great! Moving on to the next question.",
-                                "Thanks! Let me ask you something different."
-                            ];
-                            const randomTransition = transitionMessages[Math.floor(Math.random() * transitionMessages.length)];
-                            lastMessage.bot = `${randomTransition} ${botResponse}`;
+                            // Extract only the transition and the main question, removing any additional follow-up content
+                            botResponse = this.cleanupQuestionTransition(botResponse);
+                            lastMessage.bot = botResponse;
                         } else {
                             lastMessage.bot = botResponse;
                         }
@@ -934,10 +908,23 @@ class PrivacyDemoApp {
                     }
                     
                     // Check if the backend indicates a predefined question is completed
-                    // Also check if the AI response contains NEXT_QUESTION signal
+                    // Also check if the AI response contains NEXT_QUESTION signal or conversation ending
                     const hasNextQuestionSignal = response && response.bot_response && /NEXT_QUESTION/i.test(response.bot_response);
-                    console.log(`Question completion check - Backend: ${response.question_completed}, NEXT_QUESTION signal: ${hasNextQuestionSignal}`);
-                    if (response && (response.question_completed || hasNextQuestionSignal)) {
+                    
+                    // Check for conversation ending patterns (for final question)
+                    const endingPatterns = [
+                        /thank you.*sharing.*with me/i,
+                        /thank you.*participation/i,
+                        /concludes our conversation/i,
+                        /conversation.*complete/i,
+                        /enjoyed learning about you/i,
+                        /thank you.*time/i
+                    ];
+                    const hasEndingPattern = isFinalQuestion && response && response.bot_response && 
+                        endingPatterns.some(pattern => pattern.test(response.bot_response));
+                    
+                    console.log(`Question completion check - Backend: ${response.question_completed}, NEXT_QUESTION signal: ${hasNextQuestionSignal}, Ending pattern: ${hasEndingPattern}`);
+                    if (response && (response.question_completed || hasNextQuestionSignal || hasEndingPattern)) {
                         // Mark the current question as completed
                         if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
                             this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
@@ -977,28 +964,40 @@ class PrivacyDemoApp {
                         
                         console.log(`After completion - Current index: ${this.state.currentQuestionIndex}, Completed: [${this.state.completedQuestionIndices.join(', ')}]`);
                     } else {
-                        console.log(`Question not completed yet. Turn ${this.state.conversationTurnsForCurrentQuestion} for question ${this.state.currentQuestionIndex + 1}`);
+                        console.log(`Question not completed yet - letting LLM decide when to move to next question`);
                         
-                        // Fallback: If this is the final question and we've had enough turns, auto-complete
-                        if (isFinalQuestion && this.state.conversationTurnsForCurrentQuestion >= 3) {
-                            console.log('Final question has enough turns, auto-completing...');
+                        // Fallback: If this is the final question and we've had enough exchanges, auto-complete
+                        if (isFinalQuestion) {
+                            // Count exchanges since the last question completion
+                            const lastCompletionIndex = this.state.completedQuestionIndices.length > 0 ? 
+                                Math.max(...this.state.completedQuestionIndices) : -1;
                             
-                            // Mark the final question as completed
-                            if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
-                                this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
+                            // Count bot responses since the last completion (for current question)
+                            const currentQuestionExchanges = this.state.conversationLog.slice(lastCompletionIndex + 1)
+                                .filter(log => log.bot && log.bot.trim()).length;
+                            
+                            console.log(`Final question exchanges: ${currentQuestionExchanges}`);
+                            
+                            if (currentQuestionExchanges >= 2) { // Allow 2 exchanges before auto-completing
+                                console.log('Final question has had enough exchanges, auto-completing conversation...');
+                                
+                                // Mark the final question as completed
+                                if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
+                                    this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
+                                }
+                                
+                                this.state.questionsCompleted = true;
+                                this.state.questionMode = false;
+                                
+                                // Show final completion notification
+                                const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
+                                this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
+                                
+                                // Show congratulation popup after a short delay
+                                setTimeout(() => {
+                                    this.showCongratulationPopup();
+                                }, 1000);
                             }
-                            
-                            this.state.questionsCompleted = true;
-                            this.state.questionMode = false;
-                            
-                            // Show final completion notification
-                            const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
-                            this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
-                            
-                            // Show congratulation popup after a short delay
-                            setTimeout(() => {
-                                this.showCongratulationPopup();
-                            }, 1000);
                         }
                     }
                     
@@ -1087,17 +1086,23 @@ class PrivacyDemoApp {
                 exportData = this.generateNeutralExportData();
             } else {
                 // For featured mode, create a basic export with consent metadata
+                // Use current conversation data (including edits) for export
+                const conversationToExport = this.state.conversationLog;
+                
                 exportData = {
                     metadata: {
                         mode: 'featured',
                         export_timestamp: this.state.currentStep,
-                        total_messages: this.state.conversationLog.length,
+                        total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         prolific_id: this.state.prolificId,
                         survey_completed: this.state.surveyCompleted
                     },
-                    conversation: this.state.conversationLog,
-                    survey_data: this.state.surveyData
+                    conversation: conversationToExport,
+                    survey_data: {
+                        ...this.state.surveyData,
+                        questions: this.state.predefinedQuestions[this.state.mode]
+                    }
                 };
 
                 // Include original conversation if consent was given
@@ -1129,17 +1134,23 @@ class PrivacyDemoApp {
                 exportData = this.generateNeutralExportData();
             } else {
                 // For featured mode, create a basic export with consent metadata
+                // Use current conversation data (including edits) for export
+                const conversationToExport = this.state.conversationLog;
+                
                 exportData = {
                     metadata: {
                         mode: 'featured',
                         export_timestamp: this.state.currentStep,
-                        total_messages: this.state.conversationLog.length,
+                        total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         prolific_id: this.state.prolificId,
                         survey_completed: this.state.surveyCompleted
                     },
-                    conversation: this.state.conversationLog,
-                    survey_data: this.state.surveyData
+                    conversation: conversationToExport,
+                    survey_data: {
+                        ...this.state.surveyData,
+                        questions: this.state.predefinedQuestions[this.state.mode]
+                    }
                 };
 
                 // Include original conversation if consent was given
@@ -1587,6 +1598,9 @@ class PrivacyDemoApp {
 
     // Generate naive export data
     generateNaiveExportData() {
+        // Use current conversation data (including edits) for export
+        const conversationToExport = this.state.conversationLog;
+        
         // Count edited messages
         const editedMessages = this.state.conversationLog.filter(turn => turn.edited).length;
         
@@ -1594,7 +1608,7 @@ class PrivacyDemoApp {
             metadata: {
                 mode: 'naive',
                 export_timestamp: this.state.currentStep,
-                total_messages: this.state.conversationLog.length,
+                total_messages: conversationToExport.length,
                 has_edits: this.state.editMode,
                 edited_messages_count: editedMessages,
                 export_type: 'naive_with_edits',
@@ -1607,8 +1621,11 @@ class PrivacyDemoApp {
                 prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
-            conversation: this.state.conversationLog,
-            survey_data: this.state.surveyData
+            conversation: conversationToExport,
+            survey_data: {
+                ...this.state.surveyData,
+                questions: this.state.predefinedQuestions[this.state.mode]
+            }
         };
 
         // Include original conversation if consent was given
@@ -1621,11 +1638,14 @@ class PrivacyDemoApp {
 
     // Generate neutral export data
     generateNeutralExportData() {
+        // Use current conversation data (including edits) for export
+        const conversationToExport = this.state.conversationLog;
+        
         const exportData = {
             metadata: {
                 mode: 'neutral',
                 export_timestamp: this.state.currentStep,
-                total_messages: this.state.conversationLog.length,
+                total_messages: conversationToExport.length,
                 consent_given: this.state.consentGiven,
                 consent_details: {
                     original_data_included: this.state.consentGiven,
@@ -1635,8 +1655,11 @@ class PrivacyDemoApp {
                 prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
-            conversation: this.state.conversationLog,
-            survey_data: this.state.surveyData
+            conversation: conversationToExport,
+            survey_data: {
+                ...this.state.surveyData,
+                questions: this.state.predefinedQuestions[this.state.mode]
+            }
         };
 
         // Include original conversation if consent was given
@@ -1651,20 +1674,24 @@ class PrivacyDemoApp {
     generateAnalysisExportData() {
         const exportLog = [];
         
-        for (let i = 0; i < this.state.conversationLog.length; i++) {
-            const currentTurn = this.state.conversationLog[i]; // Use current (potentially edited) messages
+        // Use current conversation data (including edits) for export
+        const conversationToExport = this.state.conversationLog;
+        
+        for (let i = 0; i < conversationToExport.length; i++) {
+            const currentTurn = conversationToExport[i]; // Current (potentially edited) messages
+            const originalTurn = this.state.originalLog[i] || currentTurn; // Original messages for reference
             const analyzedTurn = this.state.analyzedLog[i]; // Get privacy analysis data
             
             exportLog.push({
-                user: currentTurn.user, // Use edited user message
-                bot: currentTurn.bot, // Use edited bot message
+                user: currentTurn.user, // Use current (potentially edited) user message
+                bot: currentTurn.bot, // Use current (potentially edited) bot message
                 userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null, // Include user privacy analysis
                 botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null, // Include bot privacy analysis
-                original_user: analyzedTurn ? analyzedTurn.user : currentTurn.user, // Keep original for reference
-                original_bot: analyzedTurn ? analyzedTurn.bot : currentTurn.bot, // Keep original bot for reference
+                original_user: originalTurn.user, // Keep original for reference
+                original_bot: originalTurn.bot, // Keep original bot for reference
                 user_edited: currentTurn.user_edited || false, // Track if user message was edited
                 bot_edited: currentTurn.bot_edited || false, // Track if bot message was edited
-                has_edits: (currentTurn.user_edited || currentTurn.bot_edited) // Flag if any message was edited
+                has_edits: (currentTurn.user_edited || currentTurn.bot_edited) || false // Flag if any message was edited
             });
         }
         
@@ -1684,7 +1711,10 @@ class PrivacyDemoApp {
             },
             conversation: exportLog,
             privacy_analysis: this.state.analyzedLog,
-            survey_data: this.state.surveyData
+            survey_data: {
+                ...this.state.surveyData,
+                questions: this.state.predefinedQuestions[this.state.mode]
+            }
         };
 
         // Include original conversation if consent was given
@@ -1697,11 +1727,14 @@ class PrivacyDemoApp {
 
     // Generate comprehensive export data
     generateComprehensiveExportData() {
+        // Use current conversation data (including edits) for export
+        const conversationToExport = this.state.conversationLog;
+        
         const exportData = {
             metadata: {
                 mode: 'featured',
                 export_timestamp: this.state.currentStep,
-                total_messages: this.state.conversationLog.length,
+                total_messages: conversationToExport.length,
                 privacy_analysis_performed: this.state.analyzedLog.length > 0,
                 privacy_issues_found: this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length,
                 consent_given: this.state.consentGiven,
@@ -1714,8 +1747,11 @@ class PrivacyDemoApp {
                 prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
-            conversation: this.state.conversationLog,
-            survey_data: this.state.surveyData,
+            conversation: conversationToExport,
+            survey_data: {
+                ...this.state.surveyData,
+                questions: this.state.predefinedQuestions[this.state.mode]
+            },
             privacy_choices: this.state.privacyChoices
         };
 
@@ -1871,11 +1907,29 @@ class PrivacyDemoApp {
                         if (userChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.userPrivacy.suggestion;
-                            if (/^Before: ".*"\s*After: ".*"$/s.test(analyzed.userPrivacy.suggestion)) {
-                                const match = analyzed.userPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
+                            // More robust regex to handle different quote types and spacing
+                            const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                            const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                            const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                            
+                            if (beforeAfterPattern.test(analyzed.userPrivacy.suggestion)) {
+                                const match = analyzed.userPrivacy.suggestion.match(beforeAfterPattern);
                                 if (match) {
                                     after = match[2];
                                 }
+                            } else if (beforeAfterPatternAlt.test(analyzed.userPrivacy.suggestion)) {
+                                const match = analyzed.userPrivacy.suggestion.match(beforeAfterPatternAlt);
+                                if (match) {
+                                    after = match[2];
+                                }
+                            } else if (beforeAfterPatternFlexible.test(analyzed.userPrivacy.suggestion)) {
+                                const match = analyzed.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                                if (match) {
+                                    after = match[2];
+                                }
+                            } else {
+                                // Debug: Log when parsing fails
+                                console.warn('Failed to parse user privacy suggestion in conversation display:', analyzed.userPrivacy.suggestion);
                             }
                             displayText = after;
                             privacyIndicator = '<span class="privacy-modified-indicator" title="Privacy-modified version">🔒</span>';
@@ -1911,11 +1965,29 @@ class PrivacyDemoApp {
                         if (botChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.botPrivacy.suggestion;
-                            if (/^Before: ".*"\s*After: ".*"$/s.test(analyzed.botPrivacy.suggestion)) {
-                                const match = analyzed.botPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
+                            // More robust regex to handle different quote types and spacing
+                            const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                            const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                            const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                            
+                            if (beforeAfterPattern.test(analyzed.botPrivacy.suggestion)) {
+                                const match = analyzed.botPrivacy.suggestion.match(beforeAfterPattern);
                                 if (match) {
                                     after = match[2];
                                 }
+                            } else if (beforeAfterPatternAlt.test(analyzed.botPrivacy.suggestion)) {
+                                const match = analyzed.botPrivacy.suggestion.match(beforeAfterPatternAlt);
+                                if (match) {
+                                    after = match[2];
+                                }
+                            } else if (beforeAfterPatternFlexible.test(analyzed.botPrivacy.suggestion)) {
+                                const match = analyzed.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                                if (match) {
+                                    after = match[2];
+                                }
+                            } else {
+                                // Debug: Log when parsing fails
+                                console.warn('Failed to parse bot privacy suggestion in conversation display:', analyzed.botPrivacy.suggestion);
                             }
                             displayText = after;
                             privacyIndicator = '<span class="privacy-modified-indicator" title="Privacy-modified version">🔒</span>';
@@ -2150,7 +2222,8 @@ class PrivacyDemoApp {
         // Show predefined question progress in question mode
         if (this.state.questionMode) {
             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
-            const turnsInfo = this.state.conversationTurnsForCurrentQuestion > 0 ? ` (${this.state.conversationTurnsForCurrentQuestion} turns)` : '';
+            // Removed turn counting display - letting LLM decide when to move to next question
+            const turnsInfo = '';
             // Show current question number (1-based) instead of completed count (0-based)
             const currentQuestionNumber = this.state.currentQuestionIndex + 1;
             document.getElementById('stat-step').textContent = `${currentQuestionNumber}/${totalQuestions}${turnsInfo}`;
@@ -2254,11 +2327,33 @@ class PrivacyDemoApp {
                 const userChoice = currentChoices.user || 'none';
                 let before = turn.user;
                 let after = '';
-                if (turn.userPrivacy.suggestion && /^Before: ".*"\s*After: ".*"$/s.test(turn.userPrivacy.suggestion)) {
-                    const match = turn.userPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
-                    if (match) {
-                        before = match[1];
-                        after = match[2];
+                // More robust regex to handle different quote types and spacing
+                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                
+                if (turn.userPrivacy.suggestion) {
+                    if (beforeAfterPattern.test(turn.userPrivacy.suggestion)) {
+                        const match = turn.userPrivacy.suggestion.match(beforeAfterPattern);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternAlt.test(turn.userPrivacy.suggestion)) {
+                        const match = turn.userPrivacy.suggestion.match(beforeAfterPatternAlt);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternFlexible.test(turn.userPrivacy.suggestion)) {
+                        const match = turn.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else {
+                        // Debug: Log when parsing fails
+                        console.warn('Failed to parse user privacy suggestion:', turn.userPrivacy.suggestion);
                     }
                 }
                 html += `
@@ -2289,11 +2384,33 @@ class PrivacyDemoApp {
                 const botChoice = currentChoices.bot || 'none';
                 let before = turn.bot;
                 let after = '';
-                if (turn.botPrivacy.suggestion && /^Before: ".*"\s*After: ".*"$/s.test(turn.botPrivacy.suggestion)) {
-                    const match = turn.botPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
-                    if (match) {
-                        before = match[1];
-                        after = match[2];
+                // More robust regex to handle different quote types and spacing
+                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                
+                if (turn.botPrivacy.suggestion) {
+                    if (beforeAfterPattern.test(turn.botPrivacy.suggestion)) {
+                        const match = turn.botPrivacy.suggestion.match(beforeAfterPattern);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternAlt.test(turn.botPrivacy.suggestion)) {
+                        const match = turn.botPrivacy.suggestion.match(beforeAfterPatternAlt);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternFlexible.test(turn.botPrivacy.suggestion)) {
+                        const match = turn.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    } else {
+                        // Debug: Log when parsing fails
+                        console.warn('Failed to parse bot privacy suggestion:', turn.botPrivacy.suggestion);
                     }
                 }
                 html += `
@@ -2355,27 +2472,60 @@ class PrivacyDemoApp {
         
         // Apply privacy correction immediately if choice is 'accept'
         if (choice === 'accept' && this.state.analyzedLog[index]) {
+            console.log(`Applying privacy correction for index ${index}, issueType: ${issueType}, choice: ${choice}`);
             const analyzedTurn = this.state.analyzedLog[index];
             let correctionApplied = false;
             
             if (issueType === 'user' && analyzedTurn.userPrivacy && analyzedTurn.userPrivacy.privacy_issue && analyzedTurn.userPrivacy.suggestion) {
                 let after = analyzedTurn.user;
-                if (/^Before: ".*"\s*After: ".*"$/s.test(analyzedTurn.userPrivacy.suggestion)) {
-                    const match = analyzedTurn.userPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
+                // More robust regex to handle different quote types and spacing
+                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                
+                if (beforeAfterPattern.test(analyzedTurn.userPrivacy.suggestion)) {
+                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPattern);
+                    if (match) {
+                        after = match[2];
+                    }
+                } else if (beforeAfterPatternAlt.test(analyzedTurn.userPrivacy.suggestion)) {
+                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternAlt);
+                    if (match) {
+                        after = match[2];
+                    }
+                } else if (beforeAfterPatternFlexible.test(analyzedTurn.userPrivacy.suggestion)) {
+                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
                     if (match) {
                         after = match[2];
                     }
                 }
+                console.log(`Setting user message to: "${after}"`);
                 this.state.conversationLog[index].user = after;
                 correctionApplied = true;
             } else if (issueType === 'bot' && analyzedTurn.botPrivacy && analyzedTurn.botPrivacy.privacy_issue && analyzedTurn.botPrivacy.suggestion) {
                 let after = analyzedTurn.bot;
-                if (/^Before: ".*"\s*After: ".*"$/s.test(analyzedTurn.botPrivacy.suggestion)) {
-                    const match = analyzedTurn.botPrivacy.suggestion.match(/^Before: "([\s\S]*)"\s*After: "([\s\S]*)"$/);
+                // More robust regex to handle different quote types and spacing
+                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                
+                if (beforeAfterPattern.test(analyzedTurn.botPrivacy.suggestion)) {
+                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPattern);
+                    if (match) {
+                        after = match[2];
+                    }
+                } else if (beforeAfterPatternAlt.test(analyzedTurn.botPrivacy.suggestion)) {
+                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternAlt);
+                    if (match) {
+                        after = match[2];
+                    }
+                } else if (beforeAfterPatternFlexible.test(analyzedTurn.botPrivacy.suggestion)) {
+                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
                     if (match) {
                         after = match[2];
                     }
                 }
+                console.log(`Setting bot message to: "${after}"`);
                 this.state.conversationLog[index].bot = after;
                 correctionApplied = true;
             }
@@ -2386,7 +2536,7 @@ class PrivacyDemoApp {
                 
                 // Update UI first to ensure the textarea exists
                 this.updatePrivacyChoices();
-                this.updateConversationDisplay();
+                this.updateConversationDisplay(true);
                 
                 // Add highlight effect to the updated textarea
                 setTimeout(() => {
@@ -2406,15 +2556,18 @@ class PrivacyDemoApp {
         
         // Revert to original text if choice is 'keep'
         if (choice === 'keep' && this.state.analyzedLog[index]) {
+            console.log(`Reverting to original text for index ${index}, issueType: ${issueType}, choice: ${choice}`);
             const analyzedTurn = this.state.analyzedLog[index];
             let reversionApplied = false;
             
             if (issueType === 'user' && analyzedTurn.userPrivacy && analyzedTurn.userPrivacy.privacy_issue) {
                 // Revert to original user message
+                console.log(`Reverting user message to: "${analyzedTurn.user}"`);
                 this.state.conversationLog[index].user = analyzedTurn.user;
                 reversionApplied = true;
             } else if (issueType === 'bot' && analyzedTurn.botPrivacy && analyzedTurn.botPrivacy.privacy_issue) {
                 // Revert to original bot message
+                console.log(`Reverting bot message to: "${analyzedTurn.bot}"`);
                 this.state.conversationLog[index].bot = analyzedTurn.bot;
                 reversionApplied = true;
             }
@@ -2422,11 +2575,29 @@ class PrivacyDemoApp {
             // Show notification for reversion
             if (reversionApplied) {
                 this.showNotification('⚠️ Reverted to original text', 'warning');
+                
+                // Update UI first to ensure the textarea exists
+                this.updatePrivacyChoices();
+                this.updateConversationDisplay(true);
+                
+                // Add highlight effect to the updated textarea
+                setTimeout(() => {
+                    const textareaSelector = `textarea[data-message-index="${index}"][data-message-type="${issueType}"]`;
+                    const textarea = document.querySelector(textareaSelector);
+                    if (textarea) {
+                        textarea.classList.add('privacy-revert-highlight');
+                        
+                        // Remove highlight after animation completes
+                        setTimeout(() => {
+                            textarea.classList.remove('privacy-revert-highlight');
+                        }, 3000);
+                    }
+                }, 100);
             }
         }
         
         this.updatePrivacyChoices();
-        this.updateConversationDisplay(); // Update the UI to show the change
+        this.updateConversationDisplay(true); // Update the UI to show the change in analysis mode
         this.saveToLocalStorage();
     }
 
@@ -2652,7 +2823,7 @@ class PrivacyDemoApp {
             this.state.currentQuestionIndex = 0;
             this.state.questionsCompleted = false;
             this.state.predefinedQuestionsCompleted = 0;
-            this.state.conversationTurnsForCurrentQuestion = 0;
+            // Removed turn counting - letting LLM decide when to move to next question
             this.state.completedQuestionIndices = [];
             this.state.justCompletedQuestion = false;
             console.log('Initialized question mode after Prolific ID submission');

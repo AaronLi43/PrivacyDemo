@@ -1734,6 +1734,32 @@ body {
     opacity: 0.8;
 }
 
+/* Highlight effect for privacy reverts */
+.privacy-revert-highlight {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
+    animation: privacyRevertHighlight 3s forwards;
+}
+
+@keyframes privacyRevertHighlight {
+    0% { 
+        background-color: #fff3cd !important;
+        border-color: #ffc107 !important;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
+    }
+    70% { 
+        background-color: #fff3cd !important;
+        border-color: #ffc107 !important;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
+    }
+    100% { 
+        background-color: transparent !important;
+        border-color: #ced4da !important;
+        box-shadow: none !important;
+    }
+}
+
 .privacy-modified-indicator:hover {
     opacity: 1;
 }

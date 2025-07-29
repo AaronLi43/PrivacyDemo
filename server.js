@@ -90,7 +90,7 @@ app.get('/api/debug_context', (req, res) => {
 // Chat API
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], conversationTurns = 0, isFinalQuestion = false } = req.body;
+        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false } = req.body;
         
         if (!message || message.trim() === '') {
             return res.status(400).json({ error: 'Message is required and cannot be empty' });
@@ -104,7 +104,7 @@ app.post('/api/chat', async (req, res) => {
             step: step
         });
         
-        console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}", turns=${conversationTurns}`);
+        console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}"`);
 
         // Manage conversation context (reset if too long)
         manageConversationContext();
@@ -121,7 +121,7 @@ app.post('/api/chat', async (req, res) => {
                 // If in question mode, enhance the system prompt with predefined questions
                 if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
                     const finalQuestionNote = isFinalQuestion ? 
-                        "\n\nIMPORTANT: This is the FINAL question in the conversation. After 2-3 follow-up questions about this topic, you should provide a smooth ending to the conversation. Thank the user for their participation, summarize what you've learned about them, and indicate that the conversation is complete. Do NOT use 'NEXT_QUESTION:' for the final question. Instead, provide a natural conclusion that wraps up the entire conversation." : 
+                        "\n\nFINAL QUESTION INSTRUCTIONS: This is the LAST question in the conversation. After asking 1-2 follow-up questions about this topic, you MUST end the conversation. Do NOT use 'NEXT_QUESTION:' for the final question. Instead, provide a natural conclusion that:\n1. Thanks the user for their participation\n2. Briefly summarizes what you've learned about them\n3. Clearly indicates the conversation is complete\n\nCRITICAL: After the user responds to your final follow-up question, you MUST end the conversation with a thank you and summary. Do not ask any more questions.\n\nExample ending: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your background, your work at MIT, and your love for hiking. You seem like a fascinating person. This concludes our conversation - thank you for your time!'" : 
                         "";
                     
                     systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
@@ -132,7 +132,7 @@ Your role is to ask the predefined questions naturally and engage in follow-up c
 2. Based on the user's response, ask relevant follow-up questions to gather more information
 3. Show genuine interest in their answers
 4. Keep responses concise but engaging
-5. Move to the next predefined question after sufficient follow-up discussion
+5. Move to the next predefined question when you feel the current topic has been sufficiently explored
 
 Current question context: ${currentQuestion || 'Starting conversation'}
 
@@ -140,19 +140,33 @@ Predefined questions to cover: ${predefinedQuestions.join(', ')}
 
 CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
 
-When you feel you have gathered sufficient information about the current question (typically after 2-3 follow-up questions, but you can decide based on the conversation flow), you MUST indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response.
+When you feel you have gathered sufficient information about the current question and the conversation about this topic feels complete, you MUST indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response.
+
+IMPORTANT: When using "NEXT_QUESTION:", your response should ONLY contain:
+- A brief acknowledgment of what the user shared
+- A smooth transition to the next question
+- The actual next question
+
+DO NOT include any additional follow-up questions or commentary after asking the next question. The "NEXT_QUESTION:" response should be a clean transition to the new topic.
+
+CRITICAL: Your "NEXT_QUESTION:" response must end with the main question. Do not add any additional questions, clarifications, or follow-ups after the main question.
 
 Guidelines for when to move to the next question:
-- After asking 2-3 follow-up questions about the current topic
 - When the user has provided substantial information about the current question
-- When the conversation about the current question feels complete
+- When the conversation about the current question feels complete and natural
 - When you have a good understanding of the user's response to the current question
+- When you've had enough meaningful discussion about the current topic
+- Trust your judgment - you can move on after just one exchange if the user has given a comprehensive answer, or continue longer if they seem to want to elaborate
 
-When transitioning to the next question, provide a smooth conversational bridge like "Thanks for sharing that! Now, let me ask you..." or "That's interesting! Let me ask you something else..."
+Example of a proper "NEXT_QUESTION:" response:
+"Thanks for sharing that! Now, let me ask you, what is your occupation?"
 
-TURN COUNTING: You will receive context about which question you're currently asking and how many turns have been made. Use this context to guide your decision on when to move to the next question. When you use "NEXT_QUESTION:", this will be counted as turn 1 of the new question, so make sure you've had enough discussion about the current question before moving on.
+NOT like this (which would cause double questions):
+"Thanks for sharing that! Now, let me ask you, what is your occupation? Do you enjoy your work?"
 
-Remember to be conversational and ask follow-up questions based on what the user shares.${finalQuestionNote}`;
+The response should be exactly ONE transition sentence followed by ONE main question, nothing more.
+
+Remember to be conversational and ask follow-up questions based on what the user shares. Don't rush through questions, but also don't artificially extend conversations that feel complete.${finalQuestionNote}`;
                 }
 
                 // Build messages array for OpenAI
@@ -171,8 +185,11 @@ Remember to be conversational and ask follow-up questions based on what the user
                 // If in question mode, add context to help the AI understand the current state
                 let userMessage = message;
                 if (questionMode && currentQuestion) {
-                    userMessage = `[CONTEXT: Current question is "${currentQuestion}". This is turn ${conversationTurns} for this question. When you decide to move to the next question using "NEXT_QUESTION:", that response will be counted as turn 1 of the new question.]\n\nUser: ${message}`;
-                    console.log(`Question Mode Context: Current question="${currentQuestion}", Turn=${conversationTurns}, Message="${userMessage}"`);
+                    const finalQuestionContext = isFinalQuestion ? 
+                        " This is the FINAL question - after sufficient follow-up discussion, you must end the conversation with a thank you and summary." : 
+                        "";
+                    userMessage = `[CONTEXT: Current question is "${currentQuestion}". You are in a conversation flow with predefined questions. Trust your judgment on when to move to the next question based on the natural flow of conversation.${finalQuestionContext}]\n\nUser: ${message}`;
+                    console.log(`Question Mode Context: Current question="${currentQuestion}", Message="${userMessage}"`);
                 }
 
                 // Add the current user message
@@ -187,30 +204,27 @@ Remember to be conversational and ask follow-up questions based on what the user
 
                 aiResponse = completion.choices[0].message.content;
                 
-                // Check if LLM signaled question completion
+                // Check if LLM signaled question completion or conversation ending
                 if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
                     questionCompleted = true;
                     aiResponse = aiResponse.replace('NEXT_QUESTION:', '').trim();
                     console.log('Question completed via NEXT_QUESTION signal');
-                    console.log(`Turn count when LLM decided to move on: ${conversationTurns}`);
-                }
-                
-                // Emergency fallback: Only force completion if we've had way too many exchanges (8+)
-                // This prevents infinite loops while letting the LLM manage the conversation naturally
-                // For final questions, let the LLM handle the ending naturally
-                if (questionMode && !questionCompleted && conversationTurns >= 8 && !isFinalQuestion) {
-                    questionCompleted = true;
-                    console.log('Emergency: Forcing question completion due to too many exchanges (8+)');
-                    
-                    // Add a smooth transition when forcing completion
-                    const transitionMessages = [
-                        "Thanks for sharing that! Let me ask you something else.",
-                        "That's interesting! Now, let me ask you another question.",
-                        "Great! Moving on to the next question.",
-                        "Thanks! Let me ask you something different."
+                } else if (questionMode && isFinalQuestion) {
+                    // Check if the final question response indicates conversation completion
+                    const endingPatterns = [
+                        /thank you.*sharing.*with me/i,
+                        /thank you.*participation/i,
+                        /concludes our conversation/i,
+                        /conversation.*complete/i,
+                        /enjoyed learning about you/i,
+                        /thank you.*time/i
                     ];
-                    const randomTransition = transitionMessages[Math.floor(Math.random() * transitionMessages.length)];
-                    aiResponse = `${randomTransition} ${aiResponse}`;
+                    
+                    const hasEndingPattern = endingPatterns.some(pattern => pattern.test(aiResponse));
+                    if (hasEndingPattern) {
+                        questionCompleted = true;
+                        console.log('Final question completed via conversation ending signal');
+                    }
                 }
                 
             } catch (aiError) {
@@ -250,7 +264,7 @@ Remember to be conversational and ask follow-up questions based on what the user
 
         // Log question completion status for debugging
         if (questionMode) {
-            console.log(`Question completion status: ${questionCompleted} (turn ${conversationTurns})`);
+            console.log(`Question completion status: ${questionCompleted}`);
             console.log(`Final AI response being sent: "${aiResponse}"`);
         }
         
