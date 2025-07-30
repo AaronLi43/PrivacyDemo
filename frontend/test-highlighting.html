@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensitive Text Highlighting Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .test-textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        .test-button {
+            background: #AF125A;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        .test-button:hover {
+            background: #8a0e47;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔍 Sensitive Text Highlighting Test</h1>
+        <p>This page tests the red underline highlighting for sensitive text in the privacy analysis stage.</p>
+        
+        <h3>Test Textarea with Sensitive Information:</h3>
+        <textarea class="test-textarea" id="test-textarea">
+My name is John Smith and I live at 123 Main Street, New York, NY 10001. My phone number is 555-123-4567 and my email is john.smith@email.com. I work as a software engineer at Tech Corp.
+        </textarea>
+        
+        <div>
+            <button class="test-button" onclick="testHighlighting()">Test Highlighting</button>
+            <button class="test-button" onclick="clearHighlighting()">Clear Highlighting</button>
+        </div>
+        
+        <div id="test-results" style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+            <h4>Test Results:</h4>
+            <div id="results-content">Click "Test Highlighting" to see results...</div>
+        </div>
+    </div>
+
+    <script>
+        // Simplified version of the highlighting functions for testing
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function highlightSensitiveText(text, privacyResult) {
+            if (!privacyResult || !privacyResult.privacy_issue) {
+                return text;
+            }
+
+            // Use the sensitive_text field from the backend if available
+            let sensitiveText = privacyResult.sensitive_text;
+            
+            // Fallback to extracting from suggestion if sensitive_text is not available
+            if (!sensitiveText && privacyResult.suggestion) {
+                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                
+                if (beforeAfterPattern.test(privacyResult.suggestion)) {
+                    const match = privacyResult.suggestion.match(beforeAfterPattern);
+                    if (match) {
+                        sensitiveText = match[1];
+                    }
+                } else if (beforeAfterPatternAlt.test(privacyResult.suggestion)) {
+                    const match = privacyResult.suggestion.match(beforeAfterPatternAlt);
+                    if (match) {
+                        sensitiveText = match[1];
+                    }
+                } else if (beforeAfterPatternFlexible.test(privacyResult.suggestion)) {
+                    const match = privacyResult.suggestion.match(beforeAfterPatternFlexible);
+                    if (match) {
+                        sensitiveText = match[1];
+                    }
+                }
+            }
+
+            if (!sensitiveText) {
+                return text;
+            }
+
+            // Escape special regex characters in the sensitive text
+            const escapedSensitiveText = escapeRegex(sensitiveText);
+            
+            // Create a regex that matches the sensitive text (case-insensitive)
+            const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
+            
+            // Replace the sensitive text with highlighted version
+            return text.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+        }
+
+        function testHighlighting() {
+            const textarea = document.getElementById('test-textarea');
+            const originalText = textarea.value;
+            
+            // Create test privacy results using the sensitive_text field from backend
+            const privacyResults = [
+                {
+                    privacy_issue: true,
+                    type: 'NAME',
+                    sensitive_text: 'John Smith',
+                    suggestion: 'Before: "My name is John Smith" After: "My name is [REDACTED]"'
+                },
+                {
+                    privacy_issue: true,
+                    type: 'ADDRESS',
+                    sensitive_text: '123 Main Street, New York, NY 10001',
+                    suggestion: 'Before: "I live at 123 Main Street, New York, NY 10001" After: "I live at [REDACTED]"'
+                },
+                {
+                    privacy_issue: true,
+                    type: 'PHONE_NUMBER',
+                    sensitive_text: '555-123-4567',
+                    suggestion: 'Before: "My phone number is 555-123-4567" After: "My phone number is [REDACTED]"'
+                },
+                {
+                    privacy_issue: true,
+                    type: 'EMAIL',
+                    sensitive_text: 'john.smith@email.com',
+                    suggestion: 'Before: "my email is john.smith@email.com" After: "my email is [REDACTED]"'
+                }
+            ];
+
+            let highlightedText = originalText;
+            let results = [];
+
+            // Apply highlighting for each privacy issue
+            privacyResults.forEach((result, index) => {
+                const beforeHighlighting = highlightedText;
+                highlightedText = highlightSensitiveText(highlightedText, result);
+                
+                if (highlightedText !== beforeHighlighting) {
+                    results.push(`✅ ${result.type}: Found and highlighted`);
+                } else {
+                    results.push(`❌ ${result.type}: Not found or not highlighted`);
+                }
+            });
+
+            // Create inline highlighted div to replace the textarea
+            const container = textarea.parentElement;
+            
+            // Remove any existing highlighted div
+            const existingHighlighted = container.querySelector('.message-edit-input-highlighted');
+            if (existingHighlighted) {
+                existingHighlighted.remove();
+            }
+
+            // Create new contenteditable div for inline highlighting
+            const highlightedDiv = document.createElement('div');
+            highlightedDiv.className = 'message-edit-input-highlighted';
+            highlightedDiv.contentEditable = true;
+            highlightedDiv.innerHTML = highlightedText;
+            
+            // Copy the textarea's computed styles to match exactly
+            const textareaStyles = window.getComputedStyle(textarea);
+            highlightedDiv.style.cssText = `
+                width: 100%;
+                min-height: 100px;
+                background: ${textareaStyles.backgroundColor};
+                border: ${textareaStyles.border};
+                border-radius: ${textareaStyles.borderRadius};
+                padding: ${textareaStyles.padding};
+                font-size: ${textareaStyles.fontSize};
+                font-family: ${textareaStyles.fontFamily};
+                line-height: ${textareaStyles.lineHeight};
+                overflow-y: auto;
+                color: ${textareaStyles.color};
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                resize: none;
+                outline: none;
+                box-sizing: border-box;
+                margin: 0;
+            `;
+            
+            // Hide the original textarea and show the highlighted version
+            textarea.style.display = 'none';
+            container.appendChild(highlightedDiv);
+
+            // Update results
+            const resultsContent = document.getElementById('results-content');
+            resultsContent.innerHTML = results.join('<br>');
+        }
+
+        function clearHighlighting() {
+            const textarea = document.getElementById('test-textarea');
+            const container = textarea.parentElement;
+            
+            // Remove highlighted div
+            const highlightedDiv = container.querySelector('.message-edit-input-highlighted');
+            if (highlightedDiv) {
+                highlightedDiv.remove();
+            }
+            
+            // Make textarea visible again
+            textarea.style.display = '';
+            
+            // Clear results
+            document.getElementById('results-content').innerHTML = 'Highlighting cleared...';
+        }
+    </script>
+</body>
+</html> 

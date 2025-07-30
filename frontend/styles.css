@@ -589,28 +589,7 @@ body {
     font-size: 0.9rem;
 }
 
-.tooltip-severity {
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
 
-.tooltip-severity.high {
-    background-color: rgba(220, 53, 69, 0.2);
-    color: var(--error-color);
-}
-
-.tooltip-severity.medium {
-    background-color: rgba(255, 193, 7, 0.2);
-    color: var(--warning-color);
-}
-
-.tooltip-severity.low {
-    background-color: rgba(23, 162, 184, 0.2);
-    color: var(--info-color);
-}
 
 .tooltip-content {
     margin-bottom: 0.5rem;
@@ -1400,6 +1379,44 @@ body {
     color: var(--text-color);
     font-size: 1.1rem;
     font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.loading-notifications {
+    max-width: 400px;
+    margin-top: 1rem;
+}
+
+.loading-notification {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-left: 3px solid var(--primary-button);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    animation: fadeIn 0.3s ease-in;
+}
+
+.loading-notification.info {
+    border-left-color: #17a2b8;
+}
+
+.loading-notification.success {
+    border-left-color: #28a745;
+}
+
+.loading-notification.warning {
+    border-left-color: #ffc107;
+}
+
+.loading-notification.error {
+    border-left-color: #dc3545;
+}
+
+.loading-notification i {
+    margin-right: 0.5rem;
+    font-size: 0.8rem;
 }
 
 /* Animations */
@@ -1549,21 +1566,23 @@ body {
 /* Notification System */
 .notification {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
     background-color: var(--container-bg);
     border-radius: 8px;
     padding: 1rem 1.5rem;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     z-index: 2000;
     max-width: 400px;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
+    transition: all 0.3s ease;
     border-left: 4px solid var(--info-color);
+    opacity: 0;
 }
 
 .notification.show {
-    transform: translateX(0);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
 }
 
 .notification-success {
@@ -1819,4 +1838,568 @@ body {
 .privacy-issue-item:hover .privacy-issue-tooltip,
 .privacy-issue-item:focus .privacy-issue-tooltip {
   display: block;
+}
+
+/* Contextual Risk Warning Styles */
+.contextual-risk-warning {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 12px 0;
+    border-left: 4px solid #c92a2a;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    animation: contextualRiskPulse 2s ease-in-out infinite;
+}
+
+.contextual-risk-warning i {
+    margin-right: 8px;
+    color: #ffd93d;
+}
+
+.contextual-risk-warning strong {
+    color: #ffd93d;
+    font-weight: 600;
+}
+
+@keyframes contextualRiskPulse {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 16px rgba(255, 107, 107, 0.5);
+    }
+}
+
+/* Enhanced privacy analysis display */
+.choice-item {
+    position: relative;
+}
+
+.choice-item.has-contextual-risk {
+    border-left: 4px solid #ff6b6b;
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.05), rgba(238, 90, 82, 0.05));
+}
+
+ 
+
+/* Multi-Step Interface Styles */
+.step-page {
+    display: none;
+    min-height: 100vh;
+    background-color: var(--bg-color);
+    padding: 2rem;
+}
+
+.step-page.active {
+    display: block;
+}
+
+.step-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: var(--container-bg);
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.step-header {
+    background: linear-gradient(135deg, var(--primary-button), var(--secondary-button));
+    color: white;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+}
+
+.step-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+}
+
+.step-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+}
+
+.step-number {
+    background-color: white;
+    color: var(--primary-button);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.step-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.step-content {
+    padding: 2rem;
+}
+
+.step-actions {
+    padding: 2rem;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Introduction Page Styles */
+.introduction-content {
+    line-height: 1.8;
+}
+
+.welcome-section {
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.welcome-section h2 {
+    color: var(--primary-button);
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.welcome-section p {
+    font-size: 1.1rem;
+    color: #666;
+}
+
+.study-details,
+.time-commitment,
+.compensation,
+.privacy-notice {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid var(--primary-button);
+}
+
+.study-details h3,
+.time-commitment h3,
+.compensation h3,
+.privacy-notice h3 {
+    color: var(--primary-button);
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.study-details ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.study-details li {
+    padding: 0.5rem 0;
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.study-details li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--success-color);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+/* Consent Page Styles */
+.consent-content {
+    line-height: 1.8;
+}
+
+.consent-intro {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background-color: #e3f2fd;
+    border-radius: 10px;
+    border: 1px solid #bbdefb;
+}
+
+.consent-intro p {
+    font-size: 1.1rem;
+    color: #1976d2;
+    margin: 0;
+}
+
+.consent-sections {
+    margin-bottom: 2rem;
+}
+
+.consent-section {
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid var(--info-color);
+}
+
+.consent-section h3 {
+    color: var(--info-color);
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.consent-section p {
+    margin-bottom: 1rem;
+    color: #555;
+}
+
+.consent-section ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.consent-section li {
+    padding: 0.3rem 0;
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.consent-section li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--info-color);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.consent-checkbox {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 10px;
+}
+
+.consent-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #856404;
+    line-height: 1.6;
+}
+
+.consent-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 0.2rem;
+    cursor: pointer;
+}
+
+/* Qualification Page Styles */
+.qualification-content {
+    line-height: 1.8;
+}
+
+.qualification-intro {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background-color: #fff3cd;
+    border-radius: 10px;
+    border: 1px solid #ffeaa7;
+}
+
+.qualification-intro p {
+    font-size: 1.1rem;
+    color: #856404;
+    margin: 0;
+    font-weight: 600;
+}
+
+.qualification-questions {
+    margin-bottom: 2rem;
+}
+
+.qualification-question {
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid var(--warning-color);
+}
+
+.qualification-question label {
+    display: block;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+}
+
+.qualification-select {
+    width: 100%;
+    padding: 0.8rem;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+    background-color: white;
+    transition: border-color 0.3s ease;
+}
+
+.qualification-select:focus {
+    outline: none;
+    border-color: var(--primary-button);
+    box-shadow: 0 0 0 3px rgba(175, 18, 90, 0.1);
+}
+
+.qualification-select.valid {
+    border-color: var(--success-color);
+}
+
+.qualification-select.invalid {
+    border-color: var(--error-color);
+}
+
+.qualification-status {
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.qualification-status.valid {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.qualification-status.invalid {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-message {
+    margin: 0;
+}
+
+/* Responsive Design for Multi-Step Interface */
+@media (max-width: 768px) {
+    .step-page {
+        padding: 1rem;
+    }
+    
+    .step-container {
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .step-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .step-header h1 {
+        font-size: 2rem;
+    }
+    
+    .step-content {
+        padding: 1.5rem 1rem;
+    }
+    
+    .step-actions {
+        padding: 1.5rem 1rem;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .step-actions .btn {
+        width: 100%;
+    }
+    
+    .study-details,
+    .time-commitment,
+    .compensation,
+    .privacy-notice,
+    .consent-section,
+    .qualification-question {
+        padding: 1rem;
+    }
+    
+    .consent-checkbox-label {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
+
+/* Animation for step transitions */
+.step-page {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+} 
+
+/* Privacy sensitive text highlighting with red underlines */
+.sensitive-text-highlight {
+    text-decoration: underline;
+    text-decoration-color: #dc3545;
+    text-decoration-thickness: 2px;
+    text-decoration-style: wavy;
+    background-color: rgba(220, 53, 69, 0.1);
+    border-radius: 2px;
+    padding: 1px 2px;
+    position: relative;
+}
+
+.sensitive-text-highlight::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #dc3545;
+    border-radius: 1px;
+}
+
+/* For textarea elements, we need a different approach since text-decoration doesn't work well */
+.sensitive-text-container {
+    position: relative;
+    display: inline-block;
+}
+
+.sensitive-text-underline {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #dc3545;
+    border-radius: 1px;
+    pointer-events: none;
+}
+
+/* Enhanced textarea highlighting overlay */
+.sensitive-text-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-y: auto;
+    pointer-events: none;
+    z-index: 10;
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Inline highlighting for contenteditable divs */
+.message-edit-input-highlighted {
+    width: 100%;
+    min-height: 60px;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-y: auto;
+    color: #2C1810;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    resize: none;
+    outline: none;
+    box-sizing: border-box;
+    margin: 0;
+    font-family: inherit;
+}
+
+.message-edit-input-highlighted:focus {
+    border-color: #87F1FF;
+    box-shadow: 0 0 0 3px rgba(135, 241, 255, 0.25);
+}
+
+.message-edit-input-highlighted:hover {
+    border-color: #BD8B9C;
+}
+
+/* Animation for sensitive text highlighting */
+@keyframes sensitiveTextPulse {
+    0% { 
+        text-decoration-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    50% { 
+        text-decoration-color: #ff6b6b;
+        background-color: rgba(220, 53, 69, 0.2);
+    }
+    100% { 
+        text-decoration-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+}
+
+.sensitive-text-highlight {
+    animation: sensitiveTextPulse 2s ease-in-out infinite;
+}
+
+/* Message container positioning for highlighting */
+.message {
+    position: relative;
+}
+
+.message textarea {
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure the overlay matches the textarea exactly */
+.sensitive-text-overlay {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    padding: inherit;
+    border: inherit;
+    border-radius: inherit;
+    background: inherit;
+    color: inherit;
+    resize: none;
+    outline: none;
+    box-sizing: border-box;
 } 

@@ -3,210 +3,440 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chatbot</title>
+  <title>Privacy Demo Study</title>
   <link rel="stylesheet" href="styles.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-content">
-        <div class="header-left">
-          <h1 id="main-header-title"><i class="fas fa-lock"></i>Chatbot</h1>
-          
+  <!-- Step 1: Introduction Page -->
+  <div id="introduction-page" class="step-page active">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-graduation-cap"></i> Welcome to the Privacy Demo Study</h1>
+        <div class="step-indicator">
+          <span class="step-number">1</span>
+          <span class="step-label">Introduction</span>
         </div>
       </div>
-    </header>
-
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-section">
-        <h3><i class="fas fa-cog"></i> Configuration</h3>
-        
-        <!-- Mode Selection -->
-        <div class="form-group">
-          <label for="mode-select">Select Mode:</label>
-          <select id="mode-select" class="form-control">
-            <option value="naive">😊 Naive Mode</option>
-            <option value="neutral">⚖️ Neutral Mode</option>
-            <option value="featured">🔒 Featured Mode</option>
-          </select>
-        </div>
-
-        <!-- Mode Info -->
-        <div id="mode-info" class="info-box">
-          <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
-        </div>
-
-
-
-        <!-- File Upload for Questions -->
-        <!-- <div class="form-group">
-          <label for="questions-file">Upload Questions (JSON):</label>
-          <input type="file" id="questions-file" accept=".json" class="form-control">
-        </div> -->
-
-        <!-- File Upload for Return Logs -->
-        <!-- <div class="form-group">
-          <label for="return-file">Return Your Conversation Log:</label>
-          <input type="file" id="return-file" accept=".json" class="form-control">
-        </div> -->
-
-        <!-- Action Buttons -->
-        <div class="button-group">
-          <button id="reset-btn" class="btn btn-secondary">
-            <i class="fas fa-redo"></i> Reset Conversation
-          </button>
-          <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
-            <i class="fas fa-times"></i> Exit Edit Mode
-          </button>
-          <button id="show-congratulation-btn" class="btn btn-success">
-            <i class="fas fa-trophy"></i> Show Congratulations
-          </button>
-        </div>
-
-
-      </div>
-
-      <!-- Statistics -->
-      <div class="sidebar-section">
-        <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-label">Mode:</span>
-            <span id="stat-mode" class="stat-value">😊 Naive</span>
+      
+      <div class="step-content">
+        <div class="introduction-content">
+          <div class="welcome-section">
+            <h2>Study Overview</h2>
+            <p>Welcome to our research study on privacy and AI interactions. This study aims to understand how people interact with AI chatbots and make decisions about sharing personal information.</p>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Messages:</span>
-            <span id="stat-messages" class="stat-value">0</span>
+
+          <div class="study-details">
+            <h3><i class="fas fa-info-circle"></i> What You'll Do</h3>
+            <ul>
+              <li>Have a conversation with an AI chatbot</li>
+              <li>Answer questions about yourself and your experiences</li>
+              <li>Make decisions about what information to share</li>
+              <li>Complete a brief survey about your experience</li>
+            </ul>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Step:</span>
-            <span id="stat-step" class="stat-value">0</span>
+
+          <div class="time-commitment">
+            <h3><i class="fas fa-clock"></i> Time Commitment</h3>
+            <p>This study will take approximately <strong>15-20 minutes</strong> to complete.</p>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Privacy Issues:</span>
-            <span id="stat-privacy" class="stat-value">0</span>
+
+          <div class="compensation">
+            <h3><i class="fas fa-gift"></i> Compensation</h3>
+            <p>You will receive compensation through Prolific upon completion of this study.</p>
+          </div>
+
+          <div class="privacy-notice">
+            <h3><i class="fas fa-shield-alt"></i> Privacy Notice</h3>
+            <p>Your privacy is important to us. All data collected will be anonymized and used only for research purposes. You can withdraw from the study at any time.</p>
           </div>
         </div>
       </div>
 
-      <!-- API Status -->
-      <div class="sidebar-section">
-        <h3><i class="fas fa-key"></i> API Status</h3>
-        <div id="api-status" class="status-indicator">
-          <span class="status-dot"></span>
-          <span class="status-text">Checking...</span>
-        </div>
-        <button id="test-api-btn" class="btn btn-sm btn-secondary">
-          <i class="fas fa-vial"></i> Test Connection
+      <div class="step-actions">
+        <button id="start-study-btn" class="btn btn-primary">
+          <i class="fas fa-arrow-right"></i> Begin Study
         </button>
       </div>
-    </aside>
+    </div>
+  </div>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Two Column Layout for Privacy Analysis & Export Stage -->
-      <div id="two-column-layout" class="two-column-layout" style="display:none;">
-        <div class="left-column">
-          <div id="analysis-conversation-container" class="conversation-container">
+  <!-- Step 2: Consent Page -->
+  <div id="consent-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-user-shield"></i> Informed Consent</h1>
+        <div class="step-indicator">
+          <span class="step-number">2</span>
+          <span class="step-label">Consent</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="consent-content">
+          <div class="consent-intro">
+            <p>Before participating in this study, please read the following information carefully and indicate your consent.</p>
+          </div>
+
+          <div class="consent-sections">
+            <div class="consent-section">
+              <h3><i class="fas fa-bullseye"></i> Purpose of the Study</h3>
+              <p>This research study aims to understand how people interact with AI chatbots and make decisions about sharing personal information. The findings will help improve privacy protection in AI systems.</p>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-tasks"></i> What You Will Do</h3>
+              <ul>
+                <li>Have a conversation with an AI chatbot</li>
+                <li>Answer questions about yourself and your experiences</li>
+                <li>Make decisions about what information to share</li>
+                <li>Complete a brief survey about your experience</li>
+                <li>Optionally edit your conversation before export</li>
+              </ul>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-database"></i> Data Collection</h3>
+              <p>We will collect:</p>
+              <ul>
+                <li>Your conversation with the AI chatbot</li>
+                <li>Any modifications you make to the conversation</li>
+                <li>Your survey responses</li>
+                <li>Your Prolific ID for study coordination</li>
+                <li>Demographic information (age, gender, education, etc.)</li>
+              </ul>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-chart-line"></i> How Your Data Will Be Used</h3>
+              <ul>
+                <li>To improve privacy detection algorithms</li>
+                <li>To understand user privacy preferences and behaviors</li>
+                <li>For academic research purposes only</li>
+                <li>To develop better AI privacy protection systems</li>
+              </ul>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-lock"></i> Privacy Protection</h3>
+              <ul>
+                <li>All data will be anonymized and de-identified</li>
+                <li>No personal information will be shared with third parties</li>
+                <li>Data will be stored securely and used only for research</li>
+                <li>You can withdraw consent at any time</li>
+              </ul>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-exclamation-triangle"></i> Risks and Benefits</h3>
+              <p><strong>Risks:</strong> There are minimal risks associated with this study. You may experience some discomfort when sharing personal information.</p>
+              <p><strong>Benefits:</strong> Your participation will help advance research on AI privacy protection and improve user experiences with AI systems.</p>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-hand-paper"></i> Voluntary Participation</h3>
+              <p>Your participation in this study is completely voluntary. You may withdraw at any time without penalty. You may also choose not to answer any questions you find uncomfortable.</p>
+            </div>
+
+            <div class="consent-section">
+              <h3><i class="fas fa-question-circle"></i> Questions</h3>
+              <p>If you have any questions about this study, please contact the research team through Prolific.</p>
+            </div>
+          </div>
+
+          <div class="consent-checkbox">
+            <label class="consent-checkbox-label">
+              <input type="checkbox" id="consent-checkbox" required>
+              <span class="checkmark"></span>
+              I have read and understood the information above. I voluntarily agree to participate in this study.
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="back-to-intro-btn" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button id="proceed-to-qualification-btn" class="btn btn-primary" disabled>
+          <i class="fas fa-arrow-right"></i> I Consent - Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Qualification Page -->
+  <div id="qualification-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-clipboard-check"></i> Qualification Questions</h1>
+        <div class="step-indicator">
+          <span class="step-number">3</span>
+          <span class="step-label">Qualification</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="qualification-content">
+          <div class="qualification-intro">
+            <p>Please answer the following questions to ensure you qualify for this study. You must answer "Yes" to all questions to proceed.</p>
+          </div>
+
+          <div class="qualification-questions">
+            <div class="qualification-question">
+              <label for="qual-1">Are you 18 years of age or older?</label>
+              <select id="qual-1" class="form-control qualification-select" required>
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="qualification-question">
+              <label for="qual-2">Do you speak and understand English fluently?</label>
+              <select id="qual-2" class="form-control qualification-select" required>
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="qualification-question">
+              <label for="qual-3">Do you have experience using computers and the internet?</label>
+              <select id="qual-3" class="form-control qualification-select" required>
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="qualification-question">
+              <label for="qual-4">Are you comfortable sharing some personal information for research purposes?</label>
+              <select id="qual-4" class="form-control qualification-select" required>
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="qualification-question">
+              <label for="qual-5">Do you agree to complete the entire study (approximately 15-20 minutes)?</label>
+              <select id="qual-5" class="form-control qualification-select" required>
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="qualification-status" id="qualification-status">
+            <p class="status-message">Please answer all questions with "Yes" to proceed.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="back-to-consent-btn" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button id="proceed-to-chat-btn" class="btn btn-primary" disabled>
+          <i class="fas fa-arrow-right"></i> I Qualify - Start Chat
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Main Chat Interface (Current Interface) -->
+  <div id="chat-page" class="step-page">
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 id="main-header-title"><i class="fas fa-lock"></i>Privacy Demo Study</h1>
+          </div>
+          <div class="header-right">
+            <div class="step-indicator">
+              <span class="step-number">4</span>
+              <span class="step-label">Chat Interface</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h3><i class="fas fa-cog"></i> Configuration</h3>
+          
+          <!-- Mode Selection -->
+          <div class="form-group">
+            <label for="mode-select">Select Mode:</label>
+            <select id="mode-select" class="form-control">
+              <option value="naive">😊 Naive Mode</option>
+              <option value="neutral">⚖️ Neutral Mode</option>
+              <option value="featured">🔒 Featured Mode</option>
+            </select>
+          </div>
+
+          <!-- Mode Info -->
+          <div id="mode-info" class="info-box">
+            <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="button-group">
+            <button id="reset-btn" class="btn btn-secondary">
+              <i class="fas fa-redo"></i> Reset Conversation
+            </button>
+            <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
+              <i class="fas fa-times"></i> Exit Edit Mode
+            </button>
+            <button id="show-congratulation-btn" class="btn btn-success">
+              <i class="fas fa-trophy"></i> Show Congratulations
+            </button>
+          </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="sidebar-section">
+          <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">Mode:</span>
+              <span id="stat-mode" class="stat-value">😊 Naive</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Messages:</span>
+              <span id="stat-messages" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Step:</span>
+              <span id="stat-step" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Privacy Issues:</span>
+              <span id="stat-privacy" class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Status -->
+        <div class="sidebar-section">
+          <h3><i class="fas fa-key"></i> API Status</h3>
+          <div id="api-status" class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">Checking...</span>
+          </div>
+          <button id="test-api-btn" class="btn btn-sm btn-secondary">
+            <i class="fas fa-vial"></i> Test Connection
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Two Column Layout for Privacy Analysis & Export Stage -->
+        <div id="two-column-layout" class="two-column-layout" style="display:none;">
+          <div class="left-column">
+            <div id="analysis-conversation-container" class="conversation-container">
+              <div class="empty-state">
+                <i class="fas fa-comment-dots"></i>
+                <p>Start a conversation by typing a message below!</p>
+              </div>
+            </div>
+          </div>
+          <div class="right-column">
+            <div id="privacy-analysis" class="privacy-analysis" style="display: none;">
+              <div class="privacy-analysis-header">
+                <h3><i class="fas fa-search"></i> Privacy Analysis Results</h3>
+              </div>
+              <div class="privacy-analysis-content">
+                <div class="analysis-header">
+                  <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
+                  <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
+                    <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
+                  </label>
+                </div>
+                <div class="analysis-stats">
+                  <div class="stat-card">
+                    <span class="stat-number" id="total-messages">0</span>
+                    <span class="stat-label">Total Messages</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-number" id="privacy-issues">0</span>
+                    <span class="stat-label">Privacy Issues</span>
+                  </div>
+                </div>
+                <div id="privacy-choices" class="privacy-choices">
+                  <!-- Privacy choice buttons will be generated here -->
+                </div>
+                <div class="export-options">
+                  <button id="export-comprehensive" class="btn btn-success">
+                    <i class="fas fa-download"></i> Export Comprehensive Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Chat Interface (shown when not in analysis stage) -->
+        <div class="chat-container">
+          <div class="chat-header">
+            <h2 id="chat-header-title"><i class="fas fa-comments"></i> Chat Interface</h2>
+          </div>
+          <div id="conversation-container" class="conversation-container">
             <div class="empty-state">
               <i class="fas fa-comment-dots"></i>
               <p>Start a conversation by typing a message below!</p>
             </div>
           </div>
-        </div>
-        <div class="right-column">
-          <div id="privacy-analysis" class="privacy-analysis" style="display: none;">
-            <div class="privacy-analysis-header">
-              <h3><i class="fas fa-search"></i> Privacy Analysis Results</h3>
+          <div class="chat-input-container">
+            <div class="input-group" id="chat-input-group">
+              <input type="text" id="chat-input" placeholder="Type your message here..." class="form-control">
+              <button id="send-btn" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i> Send
+              </button>
             </div>
-            <div class="privacy-analysis-content">
-              <div class="analysis-header">
-                <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
-                <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
-                  <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
-                </label>
-              </div>
-              <div class="analysis-stats">
-                <div class="stat-card">
-                  <span class="stat-number" id="total-messages">0</span>
-                  <span class="stat-label">Total Messages</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-number" id="privacy-issues">0</span>
-                  <span class="stat-label">Privacy Issues</span>
-                </div>
-              </div>
-              <div id="privacy-choices" class="privacy-choices">
-                <!-- Privacy choice buttons will be generated here -->
-              </div>
-              <div class="export-options">
-                <button id="export-comprehensive" class="btn btn-success">
-                  <i class="fas fa-download"></i> Export Comprehensive Data
+            <div id="edit-export-container" class="edit-export-container" style="display: none;">
+              <div class="edit-export-buttons">
+                <button id="edit-export-btn-main" class="btn btn-primary">
+                  <i class="fas fa-edit"></i> Edit & Export
+                </button>
+                <button id="export-direct-btn-main" class="btn btn-success">
+                  <i class="fas fa-download"></i> Export Direct
+                </button>
+                <button id="analyze-export-btn-main" class="btn btn-warning">
+                  <i class="fas fa-search"></i> Analyze & Export
                 </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
-      <!-- Chat Interface (shown when not in analysis stage) -->
-      <div class="chat-container">
-        <div class="chat-header">
-          <h2 id="chat-header-title"><i class="fas fa-comments"></i> Chat Interface</h2>
-        </div>
-        <div id="conversation-container" class="conversation-container">
-          <div class="empty-state">
-            <i class="fas fa-comment-dots"></i>
-            <p>Start a conversation by typing a message below!</p>
-          </div>
-        </div>
-        <div class="chat-input-container">
-          <div class="input-group" id="chat-input-group">
-            <input type="text" id="chat-input" placeholder="Type your message here..." class="form-control">
-            <button id="send-btn" class="btn btn-primary">
-              <i class="fas fa-paper-plane"></i> Send
-            </button>
-          </div>
-          <div id="edit-export-container" class="edit-export-container" style="display: none;">
-            <div class="edit-export-buttons">
-              <button id="edit-export-btn-main" class="btn btn-primary">
-                <i class="fas fa-edit"></i> Edit & Export
-              </button>
-              <button id="export-direct-btn-main" class="btn btn-success">
-                <i class="fas fa-download"></i> Export Direct
-              </button>
-              <button id="analyze-export-btn-main" class="btn btn-warning">
-                <i class="fas fa-search"></i> Analyze & Export
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- Action Buttons Panel - Fixed Position -->
-  <div class="action-buttons-panel">
-    <!-- Config Button -->
-    <div class="config-button-container">
-      <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
-        <i class="fas fa-bars"></i> Hide Config
-      </button>
+      </main>
     </div>
 
-    <!-- Export Buttons -->
-    <div id="export-buttons" class="export-buttons-container" style="display: none;">
-      <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
-        <i class="fas fa-edit"></i> Edit & Export
-      </button>
-      <button id="export-direct-btn" class="btn btn-success">
-        <i class="fas fa-download"></i> Export Direct
-      </button>
-      <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
-        <i class="fas fa-search"></i> Analyze & Export
-      </button>
+    <!-- Action Buttons Panel - Fixed Position -->
+    <div class="action-buttons-panel">
+      <!-- Config Button -->
+      <div class="config-button-container">
+        <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
+          <i class="fas fa-bars"></i> Hide Config
+        </button>
+      </div>
+
+      <!-- Export Buttons -->
+      <div id="export-buttons" class="export-buttons-container" style="display: none;">
+        <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
+          <i class="fas fa-edit"></i> Edit & Export
+        </button>
+        <button id="export-direct-btn" class="btn btn-success">
+          <i class="fas fa-download"></i> Export Direct
+        </button>
+        <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
+          <i class="fas fa-search"></i> Analyze & Export
+        </button>
+      </div>
     </div>
   </div>
 
@@ -231,47 +461,25 @@
       <button class="popup-close" onclick="closeConsentPopup()">
         <i class="fas fa-times"></i>
       </button>
-      <h4><i class="fas fa-user-shield"></i> Data Collection Consent</h4>
+      <h4><i class="fas fa-user-shield"></i> Research Data Sharing</h4>
       <div class="consent-explanation">
-        <p>Before proceeding to the survey, we would like to collect your conversation data to improve our privacy detection system.</p>
+        <p>Would you like to share your original conversation for research purposes?</p>
         
         <div class="consent-section">
-          <h5><i class="fas fa-database"></i> What we collect:</h5>
+          <h5><i class="fas fa-info-circle"></i> What this means:</h5>
           <ul>
-            <li>Your original conversation messages with the chatbot</li>
-            <li>Any modifications you made to the conversation (if applicable)</li>
-            <li>Your privacy choices and preferences</li>
-            <li>Your survey responses and demographic information</li>
-            <li>Your Prolific ID for study coordination</li>
-          </ul>
-        </div>
-        
-        <div class="consent-section">
-          <h5><i class="fas fa-chart-line"></i> How it's used:</h5>
-          <ul>
-            <li>To improve privacy detection algorithms</li>
-            <li>To understand user privacy preferences and behaviors</li>
-            <li>For academic research purposes only</li>
-            <li>To develop better AI privacy protection systems</li>
-          </ul>
-        </div>
-        
-        <div class="consent-section">
-          <h5><i class="fas fa-lock"></i> Privacy protection:</h5>
-          <ul>
-            <li>All data is anonymized and de-identified</li>
-            <li>No personal information is shared with third parties</li>
-            <li>Data is stored securely and used only for research</li>
-            <li>You can withdraw consent at any time</li>
+            <li>Your conversation with the chatbot will be used for academic research</li>
+            <li>All data will be anonymized and kept confidential</li>
+            <li>Your participation helps improve AI privacy protection systems</li>
           </ul>
         </div>
       </div>
       <div class="consent-actions">
         <button id="consent-agree-btn" class="btn btn-success">
-          <i class="fas fa-check"></i> I Agree - Include All Data
+          <i class="fas fa-check"></i> Yes, I agree to share
         </button>
         <button id="consent-decline-btn" class="btn btn-secondary">
-          <i class="fas fa-times"></i> I Decline - Export Modified Only
+          <i class="fas fa-times"></i> No, I decline
         </button>
       </div>
     </div>
@@ -419,7 +627,6 @@
   <div id="privacy-tooltip-container" class="privacy-tooltip">
     <div class="tooltip-header">
       <span class="tooltip-title" id="tooltip-title">Privacy Issue</span>
-      <span class="tooltip-severity" id="tooltip-severity">Medium</span>
     </div>
     <div class="tooltip-content">
       <div class="tooltip-explanation" id="tooltip-explanation">
@@ -444,7 +651,10 @@
   <div id="loading-overlay" class="loading-overlay">
     <div class="loading-spinner">
       <i class="fas fa-spinner fa-spin"></i>
-      <p>Processing...</p>
+      <p id="loading-message">Processing...</p>
+      <div id="loading-notifications" class="loading-notifications">
+        <!-- Progress notifications will be added here dynamically -->
+      </div>
     </div>
   </div>
 

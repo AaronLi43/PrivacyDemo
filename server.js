@@ -46,6 +46,31 @@ let uploadedQuestions = [];
 let uploadedReturnLog = [];
 let activeChatSession = null; // Store the active chat session for context
 
+// Predefined questions stored on server
+const predefinedQuestions = {
+    naive: [
+        "How to use GenAI to prepare for a job interview",
+        "What are your thoughts on AI in education?",
+        "How do you feel about social media privacy?",
+        "What's your experience with online shopping?",
+        "How do you manage your digital footprint?"
+    ],
+    neutral: [
+        "How to use GenAI to prepare for a job interview",
+        "What are your thoughts on AI in education?",
+        "How do you feel about social media privacy?",
+        "What's your experience with online shopping?",
+        "How do you manage your digital footprint?"
+    ],
+    featured: [
+        "How to use GenAI to prepare for a job interview",
+        "What are your thoughts on AI in education?",
+        "How do you feel about social media privacy?",
+        "What's your experience with online shopping?",
+        "How do you manage your digital footprint?"
+    ]
+};
+
 // Helper function to manage conversation context
 function manageConversationContext() {
     // Keep track of conversation context without resetting
@@ -74,6 +99,26 @@ app.get('/api/test_connection', (req, res) => {
             current_mode: currentMode
         }
     });
+});
+
+// Get predefined questions API
+app.get('/api/predefined_questions/:mode', (req, res) => {
+    try {
+        const { mode } = req.params;
+        
+        if (!predefinedQuestions[mode]) {
+            return res.status(400).json({ error: 'Invalid mode' });
+        }
+        
+        res.json({
+            success: true,
+            questions: predefinedQuestions[mode],
+            mode: mode
+        });
+    } catch (error) {
+        console.error('Get predefined questions error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Debug API to show conversation context
@@ -128,8 +173,8 @@ app.post('/api/chat', async (req, res) => {
 
 Your role is to ask the predefined questions naturally and engage in follow-up conversation based on the user's responses. You should:
 
-1. Ask the current question naturally and conversationally
-2. Based on the user's response, ask relevant follow-up questions to gather more information
+1. Start with the general topic from the predefined question
+2. Gradually ask more specific and personal follow-up questions to gather concrete, real stories
 3. Show genuine interest in their answers
 4. Keep responses concise but engaging
 5. Move to the next predefined question when you feel the current topic has been sufficiently explored
@@ -137,6 +182,13 @@ Your role is to ask the predefined questions naturally and engage in follow-up c
 Current question context: ${currentQuestion || 'Starting conversation'}
 
 Predefined questions to cover: ${predefinedQuestions.join(', ')}
+
+CONVERSATION FLOW INSTRUCTIONS:
+- Always start with the general topic from the predefined question
+- Gradually ask more specific and personal follow-up questions to gather concrete, real stories
+- The follow-up questions should be more generic and focused on concrete, real experiences
+- Example flow: General topic → Specific experience → Personal story → Real example
+- Generate your own follow-up questions based on the user's responses to gather more specific and personal information
 
 CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
 
@@ -164,6 +216,12 @@ Example of a proper "NEXT_QUESTION:" response:
 NOT like this (which would cause double questions):
 "Thanks for sharing that! Now, let me ask you, what is your occupation? Do you enjoy your work?"
 
+CONVERSATION FLOW EXAMPLES:
+- Start: "How to use GenAI to prepare for a job interview" (general topic)
+- Follow-up: Ask about their specific experiences, such as "What was the first time that you used AI to prepare for a job interview?" or "Can you tell me about a specific tool you've used for interview preparation?"
+- Continue with more specific questions about their experience, tools used, outcomes, etc.
+- Generate follow-up questions that ask for concrete, personal stories and real examples
+
 The response should be exactly ONE transition sentence followed by ONE main question, nothing more.
 
 Remember to be conversational and ask follow-up questions based on what the user shares. Don't rush through questions, but also don't artificially extend conversations that feel complete.${finalQuestionNote}`;
@@ -188,6 +246,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                     const finalQuestionContext = isFinalQuestion ? 
                         " This is the FINAL question - after sufficient follow-up discussion, you must end the conversation with a thank you and summary." : 
                         "";
+                    
                     userMessage = `[CONTEXT: Current question is "${currentQuestion}". You are in a conversation flow with predefined questions. Trust your judgment on when to move to the next question based on the natural flow of conversation.${finalQuestionContext}]\n\nUser: ${message}`;
                     console.log(`Question Mode Context: Current question="${currentQuestion}", Message="${userMessage}"`);
                 }
@@ -252,13 +311,14 @@ Remember to be conversational and ask follow-up questions based on what the user
         let privacyDetection = null;
         if (currentMode === 'featured') {
             try {
-                privacyDetection = await detectPrivacyWithAI(message);
+                // Use conversation context for enhanced privacy detection
+                privacyDetection = await detectPrivacyWithAI(message, conversationHistory);
                 if (!privacyDetection || privacyDetection.error) {
-                    privacyDetection = detectPrivacyWithPatterns(message);
+                    privacyDetection = detectPrivacyWithPatterns(message, conversationHistory);
                 }
             } catch (error) {
                 console.error('Privacy detection error in chat:', error);
-                privacyDetection = detectPrivacyWithPatterns(message);
+                privacyDetection = detectPrivacyWithPatterns(message, conversationHistory);
             }
         }
 
@@ -291,71 +351,118 @@ app.post('/api/privacy_detection', async (req, res) => {
             return res.status(400).json({ error: 'User message is required' });
         }
 
-        // Enhanced AI-based privacy detection with fallback to pattern matching
-        let privacyResult = await detectPrivacyWithAI(user_message);
+        // Enhanced AI-based privacy detection with conversation context and fallback to pattern matching
+        let privacyResult = await detectPrivacyWithAI(user_message, conversationHistory);
         
         // If AI detection fails, fall back to pattern matching
         if (!privacyResult || privacyResult.error) {
             console.log('AI privacy detection failed, using pattern matching fallback');
-            privacyResult = detectPrivacyWithPatterns(user_message);
+            privacyResult = detectPrivacyWithPatterns(user_message, conversationHistory);
         }
 
         res.json(privacyResult);
     } catch (error) {
         console.error('Privacy detection error:', error);
         // Final fallback to pattern matching
-        const fallbackResult = detectPrivacyWithPatterns(req.body.user_message);
+        const fallbackResult = detectPrivacyWithPatterns(req.body.user_message, conversationHistory);
         res.json(fallbackResult);
     }
 });
 
-// AI-based privacy detection function
-async function detectPrivacyWithAI(userMessage) {
+// AI-based privacy detection function with conversation context
+async function detectPrivacyWithAI(userMessage, conversationContext = null) {
     if (!openaiClient) {
         return { error: 'AI model not available' };
     }
 
     try {
-        const privacyPrompt = `You are a privacy detection expert. Analyze this message for privacy and security issues. Look for:
+        // Build context-aware prompt - only consider conversation before and after current message
+        let contextInfo = '';
+        
+        if (conversationContext && conversationContext.length > 0) {
+            // Find the current message index in the conversation
+            const currentMessageIndex = conversationContext.findIndex(msg => msg.content === userMessage);
+            
+            if (currentMessageIndex !== -1) {
+                // Get messages before and after the current message
+                const beforeMessages = conversationContext.slice(0, currentMessageIndex);
+                const afterMessages = conversationContext.slice(currentMessageIndex + 1);
+                
+                // Extract user messages from before and after
+                const beforeUserMessages = beforeMessages
+                    .filter(msg => msg.role === 'user')
+                    .map(msg => msg.content)
+                    .slice(-3); // Last 3 messages before
+                
+                const afterUserMessages = afterMessages
+                    .filter(msg => msg.role === 'user')
+                    .map(msg => msg.content)
+                    .slice(0, 3); // First 3 messages after
+                
+                if (beforeUserMessages.length > 0 || afterUserMessages.length > 0) {
+                    contextInfo = `\n\nCONVERSATION CONTEXT:\n`;
+                    if (beforeUserMessages.length > 0) {
+                        contextInfo += `Messages before: ${beforeUserMessages.join(' | ')}\n`;
+                    }
+                    if (afterUserMessages.length > 0) {
+                        contextInfo += `Messages after: ${afterUserMessages.join(' | ')}`;
+                    }
+                }
+            }
+        }
 
-1. Personal Identifiable Information (PII): names, addresses, phone numbers, SSNs, emails
-2. Financial information: credit card numbers, bank accounts, passwords
-3. Medical/health information: diagnoses, medications, health conditions
-4. Location data: specific addresses, GPS coordinates
-5. Credentials: passwords, PINs, access codes
-6. Sensitive personal details: birth dates, ID numbers
+        const privacyPrompt = `You are an expert in cybersecurity and data privacy. You are now
+tasked to detect PII from the given text, using the following taxonomy only:
 
-User message: "${userMessage}"
+ADDRESS
+IP_ADDRESS
+URL
+SSN
+PHONE_NUMBER
+EMAIL
+DRIVERS_LICENSE
+PASSPORT_NUMBER
+TAXPAYER_IDENTIFICATION_NUMBER
+ID_NUMBER
+NAME
+USERNAME
+KEYS: Passwords, passkeys, API keys, encryption keys, and any
+other form of security keys.GEOLOCATION: Places and locations, such as cities, provinces,
+countries, international regions, or named infrastructures
+(e.g., bus stops, bridges, etc.).
 
-IMPORTANT:
-- Respond with ONLY raw JSON (no markdown formatting, no code blocks, no explanations)
-- Return a SINGLE object, not an array
-- For the "suggestion" field: Provide the safer version in the following format:
-  Before: "<original_message>"
-  After: "<safer_version>"
-- Make the smallest possible modification to remove sensitive information while keeping the message's meaning intact
-- Replace specific sensitive details with generic placeholders or safer alternatives
+AFFILIATION: Names of organizations, such as public and private companies, schools, universities, public institutions,
+prisons, healthcare institutions, non-governmental organizations, churches, etc.DEMOGRAPHIC_ATTRIBUTE: Demographic attributes of a
+person, such as native language, descent, heritage, ethnicity,
+nationality, religious or political group, birthmarks, ages,
+sexual orientation, gender, and sex.TIME: Description of a specific date, time, or duration.HEALTH_INFORMATION: Details concerning an individual's
+health status, medical conditions, treatment records, and
+health insurance information.FINANCIAL_INFORMATION: Financial details such as bank account numbers, credit card numbers, investment records,
+salary information, and other financial statuses or activities.EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, and certifications.
+
+For the given message that a user sends to a chatbot, identify all the personally identifiable information using the above taxonomy only, and the entity_type should be selected from the all-caps categories.
+Note that the information should be related to a real person not in a public context, but okay if not uniquely identifiable.
+Result should be in its minimum possible unit.
+Rewrite the text to abstract the protected information, without changing other parts.
 
 Use this exact format:
-{"privacy_issue": true/false, "type": "issue_category", "suggestion": "Before: \"<original>\"\nAfter: \"<safer>\"", "explanation": "brief_reason", "severity": "high/medium/low", "affected_text": "specific_text_that_poses_risk"}
+{"privacy_issue": true/false, "type": "issue_category", "suggestion": "Before: \"<original>\"\nAfter: \"<safer>\"", "explanation": "brief_reason", "affected_text": "specific_text_that_poses_risk", "sensitive_text": "specific_text_that_poses_risk"}
+If no privacy issues found, respond with: {"privacy_issue": false, "type": null, "suggestion": null, "explanation": null, "affected_text": null, "sensitive_text": null}
 
-Examples of safer versions:
-- Before: "My name is John Smith and I live at 123 Main St"
-  After: "My name is [Name] and I live at [Address]"
-- Before: "My phone is 555-123-4567"
-  After: "My phone is [Phone Number]"
-- Before: "My credit card is 1234-5678-9012-3456"
-  After: "My credit card is ---"
+For example:
+Input: <Text>I graduated from CMU, and I earn a six-figure
+salary. Today in the office...</Text><ProtectedInformation>CMU,Today</ProtectedInformation>
+Output JSON: {"privacy_issue": true, "type": "EDUCATIONAL_RECORD", "suggestion": "Before: \"I graduated from CMU, and I earn a six-figure salary. Today in the office...\"\nAfter: \"I graduated from [University], and I earn a six-figure salary. Today in the office...\"", "explanation": "The user's educational background and salary information are protected.", "affected_text": "CMU,Today", "sensitive_text": "CMU,Today"}
 
-If no privacy issues found, respond with: {"privacy_issue": false, "type": null, "suggestion": null, "explanation": null, "severity": null, "affected_text": null}`;
+Current user message: "${userMessage}"${contextInfo}`;
 
         const completion = await openaiClient.chat.completions.create({
             model: "gpt-4o",
             messages: [
-                { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues and respond with ONLY valid JSON." },
+                { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues considering conversation context and respond with ONLY valid JSON." },
                 { role: "user", content: privacyPrompt }
             ],
-            max_tokens: 500,
+            max_tokens: 800,
             temperature: 0.1
         });
         const responseText = completion.choices[0].message.content;
@@ -389,8 +496,8 @@ If no privacy issues found, respond with: {"privacy_issue": false, "type": null,
                         type: null,
                         suggestion: null,
                         explanation: null,
-                        severity: null,
-                        affected_text: null
+                        affected_text: null,
+                        contextual_risk: null
                     };
                 }
             } else {
@@ -405,9 +512,8 @@ If no privacy issues found, respond with: {"privacy_issue": false, "type": null,
                     type: processedData.type || null,
                     suggestion: processedData.suggestion || null,
                     explanation: processedData.explanation || null,
-                    severity: processedData.severity || 'medium',
                     affected_text: processedData.affected_text || userMessage,
-                    detection_method: 'ai'
+                    sensitive_text: processedData.sensitive_text || null
                 };
             } else {
                 throw new Error('Invalid privacy_issue field');
@@ -424,56 +530,49 @@ If no privacy issues found, respond with: {"privacy_issue": false, "type": null,
     }
 }
 
-// Pattern-based privacy detection fallback
-function detectPrivacyWithPatterns(userMessage) {
+// Enhanced pattern-based privacy detection with conversation context
+function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
     const privacyIssues = [];
     const sensitivePatterns = [
         { 
             pattern: /\b\d{3}-\d{2}-\d{4}\b/, 
             type: 'Social Security Number',
-            severity: 'high',
             replacement: 'XXX-XX-XXXX',
             explanation: 'SSN detected'
         },
         { 
             pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, 
             type: 'Credit Card Number',
-            severity: 'high',
             replacement: '****-****-****-****',
             explanation: 'Credit card number detected'
         },
         { 
             pattern: /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, 
             type: 'Phone Number',
-            severity: 'medium',
             replacement: '[Phone Number]',
             explanation: 'Phone number detected'
         },
         { 
             pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, 
             type: 'Email Address',
-            severity: 'medium',
             replacement: '[Email]',
             explanation: 'Email address detected'
         },
         { 
             pattern: /\b\d+\s+[A-Za-z\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr)\b/i, 
             type: 'Full Address',
-            severity: 'high',
             replacement: '[Address]',
             explanation: 'Full address detected'
         },
         {
             pattern: /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
             type: 'Full Name',
-            severity: 'medium',
             replacement: '[Name]',
             explanation: 'Full name detected'
         },
         {
             pattern: /\b\d{1,2}\/\d{1,2}\/\d{4}\b/,
             type: 'Date of Birth',
-            severity: 'high',
             replacement: '[Date]',
             explanation: 'Date of birth detected'
         }
@@ -483,15 +582,14 @@ function detectPrivacyWithPatterns(userMessage) {
     let detectedType = null;
     let suggestion = null;
     let explanation = null;
-    let severity = 'medium';
     let affectedText = userMessage;
+    let sensitiveText = null;
 
     // Find the first matching pattern and create a complete modified message
-    for (const { pattern, type, severity: patternSeverity, replacement, explanation: patternExplanation } of sensitivePatterns) {
+    for (const { pattern, type, replacement, explanation: patternExplanation } of sensitivePatterns) {
         if (pattern.test(userMessage)) {
             hasIssues = true;
             detectedType = type;
-            severity = patternSeverity;
             explanation = patternExplanation;
             
             // Create complete modified message by replacing the sensitive text
@@ -522,6 +620,7 @@ function detectPrivacyWithPatterns(userMessage) {
             const match = userMessage.match(pattern);
             if (match) {
                 affectedText = match[0];
+                sensitiveText = match[0];
             }
             break; // Only handle the first match to avoid multiple replacements
         }
@@ -532,13 +631,134 @@ function detectPrivacyWithPatterns(userMessage) {
         type: detectedType,
         suggestion: suggestion,
         explanation: explanation,
-        severity: severity,
         affected_text: affectedText,
-        detection_method: 'pattern'
+        sensitive_text: sensitiveText
     };
 }
 
-// Analyze Log API
+
+
+// Enhanced conversation-wide privacy analysis
+async function analyzeConversationPrivacy(conversationHistory) {
+    if (!conversationHistory || conversationHistory.length === 0) {
+        return { error: 'No conversation history provided' };
+    }
+
+    try {
+        // Extract all user messages
+        const userMessages = conversationHistory
+            .filter(msg => msg.role === 'user')
+            .map(msg => msg.content);
+
+        if (userMessages.length === 0) {
+            return { error: 'No user messages found in conversation' };
+        }
+
+        // Analyze each message with conversation context
+        const privacyAnalysis = [];
+        let totalIssues = 0;
+
+        for (let i = 0; i < userMessages.length; i++) {
+            const message = userMessages[i];
+            const context = conversationHistory.slice(0, i + 1); // All messages up to current
+
+            try {
+                let privacyResult = await detectPrivacyWithAI(message, context);
+                if (!privacyResult || privacyResult.error) {
+                    privacyResult = detectPrivacyWithPatterns(message, context);
+                }
+
+                if (privacyResult.privacy_issue) {
+                    totalIssues++;
+                }
+
+                privacyAnalysis.push({
+                    message_index: i,
+                    message: message,
+                    privacy_result: privacyResult
+                });
+            } catch (error) {
+                console.error(`Privacy analysis error for message ${i}:`, error);
+                privacyAnalysis.push({
+                    message_index: i,
+                    message: message,
+                    privacy_result: { error: error.message }
+                });
+            }
+        }
+
+        // Generate conversation-wide privacy summary
+        const summary = {
+            total_messages: userMessages.length,
+            messages_with_privacy_issues: totalIssues,
+            privacy_risk_level: calculateConversationRiskLevel(totalIssues, userMessages.length),
+            recommendations: generatePrivacyRecommendations(privacyAnalysis)
+        };
+
+        return {
+            success: true,
+            conversation_analysis: privacyAnalysis,
+            summary: summary
+        };
+
+    } catch (error) {
+        console.error('Conversation privacy analysis error:', error);
+        return { error: error.message };
+    }
+}
+
+// Calculate overall conversation privacy risk level
+function calculateConversationRiskLevel(totalIssues, totalMessages) {
+    const issuePercentage = (totalIssues / totalMessages) * 100;
+
+    if (issuePercentage > 50) {
+        return 'HIGH';
+    } else if (issuePercentage > 25) {
+        return 'MEDIUM';
+    } else if (issuePercentage > 0) {
+        return 'LOW';
+    } else {
+        return 'NONE';
+    }
+}
+
+// Generate privacy recommendations based on analysis
+function generatePrivacyRecommendations(privacyAnalysis) {
+    const recommendations = [];
+    const issueTypes = new Set();
+
+    privacyAnalysis.forEach(analysis => {
+        if (analysis.privacy_result.privacy_issue) {
+            if (analysis.privacy_result.type) {
+                issueTypes.add(analysis.privacy_result.type);
+            }
+        }
+    });
+
+    if (issueTypes.has('Social Security Number') || issueTypes.has('Credit Card Number')) {
+        recommendations.push('CRITICAL: Immediately remove any SSN or credit card information from the conversation');
+    }
+
+    if (issueTypes.has('Full Address')) {
+        recommendations.push('HIGH: Consider removing or generalizing specific address information');
+    }
+
+    if (issueTypes.has('Phone Number') || issueTypes.has('Email Address')) {
+        recommendations.push('MEDIUM: Consider removing contact information to prevent unwanted contact');
+    }
+
+    if (issueTypes.has('Full Name')) {
+        recommendations.push('LOW: Consider using initials or pseudonyms instead of full names');
+    }
+
+    if (recommendations.length === 0) {
+        recommendations.push('No immediate privacy concerns detected');
+    }
+
+    return recommendations;
+}
+
+// Analyze Log API with enhanced conversation-wide privacy analysis
 app.post('/api/analyze_log', async (req, res) => {
     try {
         const { conversation_log } = req.body;
@@ -547,65 +767,36 @@ app.post('/api/analyze_log', async (req, res) => {
             return res.status(400).json({ error: 'Valid conversation log is required' });
         }
 
-        // Analyze each user message for privacy issues
-        const analyzedLog = [];
-        let privacyIssuesFound = 0;
+        // Convert conversation log to conversation history format for analysis
+        const conversationHistory = conversation_log.map((msg, index) => ({
+            role: msg.user ? 'user' : 'assistant',
+            content: msg.user || msg.bot || '',
+            timestamp: new Date().toISOString(),
+            step: index
+        }));
 
-        for (const message of conversation_log) {
-            if (message.user) {
-                try {
-                    let privacyResult = await detectPrivacyWithAI(message.user);
-                    if (!privacyResult || privacyResult.error) {
-                        privacyResult = detectPrivacyWithPatterns(message.user);
-                    }
-                    
-                    analyzedLog.push({
-                        user: message.user,
-                        bot: message.bot,
-                        privacy: privacyResult.privacy_issue ? privacyResult : null
-                    });
-
-                    if (privacyResult.privacy_issue) {
-                        privacyIssuesFound++;
-                    }
-                } catch (error) {
-                    console.error('Privacy analysis error for message:', error);
-                    const fallbackResult = detectPrivacyWithPatterns(message.user);
-                    analyzedLog.push({
-                        user: message.user,
-                        bot: message.bot,
-                        privacy: fallbackResult.privacy_issue ? fallbackResult : null
-                    });
-                    
-                    if (fallbackResult.privacy_issue) {
-                        privacyIssuesFound++;
-                    }
-                }
-            } else {
-                analyzedLog.push({
-                    user: message.user,
-                    bot: message.bot,
-                    privacy: null
-                });
-            }
+        // Use enhanced conversation-wide privacy analysis
+        const privacyAnalysis = await analyzeConversationPrivacy(conversationHistory);
+        
+        if (privacyAnalysis.error) {
+            return res.status(500).json({ error: privacyAnalysis.error });
         }
 
-        const analysis = {
-            total_messages: conversation_log.length,
-            user_messages: conversation_log.filter(msg => msg.user).length,
-            assistant_messages: conversation_log.filter(msg => msg.bot).length,
-            privacy_issues_found: privacyIssuesFound,
-            recommendations: [
-                'Consider implementing end-to-end encryption',
-                'Review data retention policies',
-                'Ensure GDPR compliance'
-            ]
-        };
+        // Convert back to the expected format for frontend compatibility
+        const analyzedLog = conversation_log.map((msg, index) => {
+            const privacyResult = privacyAnalysis.conversation_analysis[index];
+            return {
+                user: msg.user,
+                bot: msg.bot,
+                privacy: privacyResult && privacyResult.privacy_result.privacy_issue ? privacyResult.privacy_result : null
+            };
+        });
 
         res.json({
             success: true,
             analyzed_log: analyzedLog,
-            analysis: analysis,
+            analysis: privacyAnalysis.summary,
+            conversation_analysis: privacyAnalysis.conversation_analysis,
             status: 'completed'
         });
     } catch (error) {
@@ -726,6 +917,32 @@ app.post('/api/reset', (req, res) => {
         });
     } catch (error) {
         console.error('Reset error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Conversation Privacy Analysis API
+app.post('/api/conversation_privacy_analysis', async (req, res) => {
+    try {
+        const { conversation_history } = req.body;
+        
+        if (!conversation_history || !Array.isArray(conversation_history)) {
+            return res.status(400).json({ error: 'Valid conversation history is required' });
+        }
+
+        // Use enhanced conversation-wide privacy analysis
+        const privacyAnalysis = await analyzeConversationPrivacy(conversation_history);
+        
+        if (privacyAnalysis.error) {
+            return res.status(500).json({ error: privacyAnalysis.error });
+        }
+
+        res.json({
+            success: true,
+            analysis: privacyAnalysis
+        });
+    } catch (error) {
+        console.error('Conversation privacy analysis error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

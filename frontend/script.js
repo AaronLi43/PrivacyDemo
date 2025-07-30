@@ -36,27 +36,19 @@ class PrivacyDemoApp {
             surveyData: {},
             surveyCompleted: false,
             predefinedQuestions: {
-                naive: [
-                    "What is your name?",
-                    "How old are you?",
-                    "Where do you live?",
-                    "What is your occupation?",
-                    "Do you have any hobbies?"
-                ],
-                neutral: [
-                    "What is your name?",
-                    "How old are you?",
-                    "Where do you live?",
-                    "What is your occupation?",
-                    "Do you have any hobbies?"
-                ],
-                featured: [
-                    "What is your name?",
-                    "How old are you?",
-                    "Where do you live?",
-                    "What is your occupation?",
-                    "Do you have any hobbies?"
-                ]
+                naive: [],
+                neutral: [],
+                featured: []
+            },
+            // Multi-step interface properties
+            currentStepPage: 'introduction',
+            consentChecked: false,
+            qualificationAnswers: {
+                qual1: '',
+                qual2: '',
+                qual3: '',
+                qual4: '',
+                qual5: ''
             }
         };
 
@@ -73,6 +65,157 @@ class PrivacyDemoApp {
         this.checkAPIStatus();
         this.loadFromLocalStorage();
         
+        // Initialize multi-step interface
+        this.initializeMultiStepInterface();
+    }
+
+    // Initialize multi-step interface
+    initializeMultiStepInterface() {
+        // Show introduction page by default
+        this.showStepPage('introduction');
+        
+        // Bind multi-step navigation events
+        this.bindMultiStepEvents();
+    }
+
+    // Bind multi-step navigation events
+    bindMultiStepEvents() {
+        // Introduction page events
+        document.getElementById('start-study-btn').addEventListener('click', () => {
+            this.showStepPage('consent');
+        });
+
+        // Consent page events
+        document.getElementById('back-to-intro-btn').addEventListener('click', () => {
+            this.showStepPage('introduction');
+        });
+
+        document.getElementById('consent-checkbox').addEventListener('change', (e) => {
+            this.state.consentChecked = e.target.checked;
+            this.updateConsentButton();
+            this.saveToLocalStorage();
+        });
+
+        document.getElementById('proceed-to-qualification-btn').addEventListener('click', () => {
+            if (this.state.consentChecked) {
+                this.showStepPage('qualification');
+                this.saveToLocalStorage();
+            }
+        });
+
+        // Qualification page events
+        document.getElementById('back-to-consent-btn').addEventListener('click', () => {
+            this.showStepPage('consent');
+        });
+
+        // Bind qualification question events
+        for (let i = 1; i <= 5; i++) {
+            document.getElementById(`qual-${i}`).addEventListener('change', (e) => {
+                this.state.qualificationAnswers[`qual${i}`] = e.target.value;
+                this.validateQualification();
+                this.saveToLocalStorage();
+            });
+        }
+
+        document.getElementById('proceed-to-chat-btn').addEventListener('click', () => {
+            if (this.isQualified()) {
+                this.showNotification('🎉 Congratulations! You are qualified to participate in this study. You can now start chatting with the AI.', 'success');
+                this.showStepPage('chat');
+                this.startChatInterface();
+                this.saveToLocalStorage();
+            }
+        });
+    }
+
+    // Show specific step page
+    showStepPage(stepName) {
+        // Hide all step pages
+        const stepPages = ['introduction', 'consent', 'qualification', 'chat'];
+        stepPages.forEach(page => {
+            const pageElement = document.getElementById(`${page}-page`);
+            if (pageElement) {
+                pageElement.classList.remove('active');
+            }
+        });
+
+        // Show the requested step page
+        const targetPage = document.getElementById(`${stepName}-page`);
+        if (targetPage) {
+            targetPage.classList.add('active');
+            this.state.currentStepPage = stepName;
+        }
+
+        // Update step indicator in chat page header
+        if (stepName === 'chat') {
+            this.updateChatPageStepIndicator();
+        }
+        
+        // Save state when navigating between steps
+        this.saveToLocalStorage();
+    }
+
+    // Update consent button state
+    updateConsentButton() {
+        const proceedBtn = document.getElementById('proceed-to-qualification-btn');
+        if (proceedBtn) {
+            proceedBtn.disabled = !this.state.consentChecked;
+        }
+    }
+
+    // Validate qualification answers
+    validateQualification() {
+        const isQualified = this.isQualified();
+        const statusElement = document.getElementById('qualification-status');
+        const proceedBtn = document.getElementById('proceed-to-chat-btn');
+
+        if (statusElement) {
+            if (isQualified) {
+                statusElement.className = 'qualification-status valid';
+                statusElement.innerHTML = '<p class="status-message">✓ All qualification requirements met. You can proceed to the chat interface.</p>';
+            } else {
+                statusElement.className = 'qualification-status invalid';
+                statusElement.innerHTML = '<p class="status-message">Please answer all questions with "Yes" to proceed.</p>';
+            }
+        }
+
+        if (proceedBtn) {
+            proceedBtn.disabled = !isQualified;
+        }
+
+        // Update visual feedback for individual questions
+        this.updateQualificationVisualFeedback();
+    }
+
+    // Check if user qualifies
+    isQualified() {
+        const answers = this.state.qualificationAnswers;
+        return answers.qual1 === 'yes' && 
+               answers.qual2 === 'yes' && 
+               answers.qual3 === 'yes' && 
+               answers.qual4 === 'yes' && 
+               answers.qual5 === 'yes';
+    }
+
+    // Update visual feedback for qualification questions
+    updateQualificationVisualFeedback() {
+        for (let i = 1; i <= 5; i++) {
+            const selectElement = document.getElementById(`qual-${i}`);
+            const answer = this.state.qualificationAnswers[`qual${i}`];
+            
+            if (selectElement) {
+                selectElement.classList.remove('valid', 'invalid');
+                
+                if (answer === 'yes') {
+                    selectElement.classList.add('valid');
+                } else if (answer === 'no') {
+                    selectElement.classList.add('invalid');
+                }
+            }
+        }
+    }
+
+    // Start chat interface
+    startChatInterface() {
         // Show Prolific ID popup if not submitted yet
         if (!this.state.prolificIdSubmitted || !this.state.prolificId) {
             this.showProlificIdPopup();
@@ -83,6 +226,18 @@ class PrivacyDemoApp {
                 console.log('Prolific ID already submitted, starting conversation...');
                 this.startConversationAfterProlificId();
             }
+        }
+    }
+
+    // Update chat page step indicator
+    updateChatPageStepIndicator() {
+        const stepIndicator = document.querySelector('#chat-page .step-indicator');
+        if (stepIndicator) {
+            const stepNumber = stepIndicator.querySelector('.step-number');
+            const stepLabel = stepIndicator.querySelector('.step-label');
+            
+            if (stepNumber) stepNumber.textContent = '4';
+            if (stepLabel) stepLabel.textContent = 'Chat Interface';
         }
     }
 
@@ -358,6 +513,9 @@ class PrivacyDemoApp {
         this.state.justCompletedQuestion = false; // Reset completion flag
         this.state.conversationLog = []; // Clear conversation when changing modes
         
+        // Load predefined questions from server
+        await this.loadPredefinedQuestions(mode);
+        
         // Start the conversation with the first question from LLM
         await this.startQuestionConversation();
 
@@ -365,6 +523,25 @@ class PrivacyDemoApp {
         this.updateModeInfo();
         this.updateUI();
         this.saveToLocalStorage();
+    }
+
+    // Load predefined questions from server
+    async loadPredefinedQuestions(mode) {
+        try {
+            const response = await fetch(`/api/predefined_questions/${mode}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.state.predefinedQuestions[mode] = data.questions;
+                console.log(`Loaded ${data.questions.length} questions for mode: ${mode}`);
+            } else {
+                console.error('Failed to load predefined questions:', data.error);
+                this.showNotification('Failed to load questions', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading predefined questions:', error);
+            this.showNotification('Error loading questions', 'error');
+        }
     }
 
     // Get the next uncompleted question index
@@ -403,7 +580,12 @@ class PrivacyDemoApp {
             /\bwhere\s+do\s+you\s+live\b/i,
             /\bwhat\s+is\s+your\s+occupation\b/i,
             /\bdo\s+you\s+have\s+any\s+hobbies\b/i,
-            /\bwhat\s+are\s+your\s+hobbies\b/i
+            /\bwhat\s+are\s+your\s+hobbies\b/i,
+            /\bhow\s+to\s+use\s+genai\b/i,
+            /\bwhat\s+are\s+your\s+thoughts\s+on\b/i,
+            /\bhow\s+do\s+you\s+feel\s+about\b/i,
+            /\bwhat's\s+your\s+experience\s+with\b/i,
+            /\bhow\s+do\s+you\s+manage\b/i
         ];
         
         // Find the sentence that contains the main question
@@ -432,7 +614,7 @@ class PrivacyDemoApp {
     // Start question conversation with LLM
     async startQuestionConversation() {
         try {
-            this.showLoading(true);
+            this.showLoading(true, '🤖 Starting conversation with AI...');
             
             const currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
             const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
@@ -728,7 +910,7 @@ class PrivacyDemoApp {
     // Reset conversation
     async resetConversation() {
         try {
-            this.showLoading(true);
+            this.showLoading(true, '🔄 Resetting conversation...');
             
             // Reset conversation state
             this.state.conversationLog = [];
@@ -807,7 +989,7 @@ class PrivacyDemoApp {
             this.state.currentStep++;
             input.value = '';
             this.updateUI();
-            this.showLoading(true);
+            this.showLoading(true, '🤖 AI is thinking...');
 
             // Handle question mode
             if (this.state.questionMode) {
@@ -1063,6 +1245,12 @@ class PrivacyDemoApp {
     enterEditMode() {
         this.state.editMode = true;
         this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
+        
+        // For naive mode, immediately update the conversation display to show editable fields
+        if (this.state.mode === 'naive') {
+            this.updateConversationDisplay(false); // false = not analysis mode, but will show editable due to editMode flag
+        }
+        
         this.updateUI();
         this.showNotification('✏️ Edit mode enabled - You can now edit your conversation!', 'success');
     }
@@ -1070,6 +1258,12 @@ class PrivacyDemoApp {
     // Exit edit mode
     exitEditMode() {
         this.state.editMode = false;
+        
+        // For naive mode, immediately update the conversation display to show non-editable fields
+        if (this.state.mode === 'naive') {
+            this.updateConversationDisplay(false);
+        }
+        
         this.updateUI();
         this.showNotification('✅ Edit mode disabled', 'info');
     }
@@ -1193,18 +1387,26 @@ class PrivacyDemoApp {
         if (this.state.mode !== 'featured') return;
 
         try {
-            this.showLoading(true);
+            this.showLoading(true, '🔍 Starting Privacy Analysis...');
+            this.showNotification('✏️ You can now do free editing of your conversation! Edit any message to remove or modify personal information before export.', 'info');
+            this.addLoadingNotification('Making free edits on the left to check for privacy leakage while keeping an eye on AI recommendations on the right', 'info');
             
             // Use real backend API for privacy analysis
             const analyzedLog = [];
+            const totalMessages = this.state.conversationLog.length;
             
             for (let i = 0; i < this.state.conversationLog.length; i++) {
                 const turn = this.state.conversationLog[i];
+                
+                // Update progress notification
+                const progress = Math.round(((i + 1) / totalMessages) * 100);
+                this.addLoadingNotification(`Analyzing message ${i + 1} of ${totalMessages} (${progress}% complete)`, 'info');
                 
                 // Analyze user message for privacy issues
                 let userPrivacyResult = null;
                 if (turn.user && turn.user.trim()) {
                     try {
+                        this.addLoadingNotification('Checking user message for privacy issues...', 'info');
                         const response = await fetch('/api/privacy_detection', {
                             method: 'POST',
                             headers: {
@@ -1215,11 +1417,16 @@ class PrivacyDemoApp {
                         
                         if (response.ok) {
                             userPrivacyResult = await response.json();
+                            if (userPrivacyResult.privacy_issue) {
+                                this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
+                            }
                         } else {
                             console.error(`Privacy detection failed for user message ${i}:`, response.status);
+                            this.addLoadingNotification(`❌ Privacy detection failed for user message ${i + 1}`, 'error');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for user message ${i}:`, error);
+                        this.addLoadingNotification(`❌ Error analyzing user message ${i + 1}`, 'error');
                     }
                 }
                 
@@ -1227,6 +1434,7 @@ class PrivacyDemoApp {
                 let botPrivacyResult = null;
                 if (turn.bot && turn.bot.trim()) {
                     try {
+                        this.addLoadingNotification('Checking bot response for privacy issues...', 'info');
                         const response = await fetch('/api/privacy_detection', {
                             method: 'POST',
                             headers: {
@@ -1237,11 +1445,16 @@ class PrivacyDemoApp {
                         
                         if (response.ok) {
                             botPrivacyResult = await response.json();
+                            if (botPrivacyResult.privacy_issue) {
+                                this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
+                            }
                         } else {
                             console.error(`Privacy detection failed for bot message ${i}:`, response.status);
+                            this.addLoadingNotification(`❌ Privacy detection failed for bot response ${i + 1}`, 'error');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for bot message ${i}:`, error);
+                        this.addLoadingNotification(`❌ Error analyzing bot response ${i + 1}`, 'error');
                     }
                 }
                 
@@ -1257,6 +1470,8 @@ class PrivacyDemoApp {
                 
                 analyzedLog.push(analysisEntry);
             }
+            
+            this.addLoadingNotification('✅ Privacy analysis completed! Preparing results...', 'success');
             
             this.state.analyzedLog = analyzedLog;
             this.state.showPrivacyAnalysis = true;
@@ -1271,13 +1486,21 @@ class PrivacyDemoApp {
             
             // Count privacy issues found
             const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
-            this.showNotification(`🔍 Privacy analysis completed - Found ${totalIssues} messages with privacy issues!`, 'success');
-            this.showLoading(false);
+            this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! You can now review and edit them.`, 'success');
+            
+            // Wait a moment to show the final notification
+            setTimeout(() => {
+                this.showLoading(false);
+                this.showNotification(`🔍 Privacy analysis completed - Found ${totalIssues} messages with privacy issues!`, 'success');
+            }, 2000);
             
         } catch (error) {
             console.error('Analysis error:', error);
-            this.showNotification(`❌ Analysis error: ${error.message}`, 'error');
-            this.showLoading(false);
+            this.addLoadingNotification(`❌ Analysis failed: ${error.message}`, 'error');
+            setTimeout(() => {
+                this.showLoading(false);
+                this.showNotification(`❌ Analysis error: ${error.message}`, 'error');
+            }, 2000);
         }
     }
 
@@ -1286,18 +1509,25 @@ class PrivacyDemoApp {
         if (this.state.mode !== 'featured') return;
 
         try {
-            this.showLoading(true);
+            this.showLoading(true, '🔍 Starting Privacy Analysis...');
+            this.addLoadingNotification('Making free edits on the left to check for privacy leakage while keeping an eye on AI recommendations on the right', 'info');
             
             // Use real backend API for privacy analysis
             const analyzedLog = [];
+            const totalMessages = this.state.conversationLog.length;
             
             for (let i = 0; i < this.state.conversationLog.length; i++) {
                 const turn = this.state.conversationLog[i];
+                
+                // Update progress notification
+                const progress = Math.round(((i + 1) / totalMessages) * 100);
+                this.addLoadingNotification(`Analyzing message ${i + 1} of ${totalMessages} (${progress}% complete)`, 'info');
                 
                 // Analyze user message for privacy issues
                 let userPrivacyResult = null;
                 if (turn.user && turn.user.trim()) {
                     try {
+                        this.addLoadingNotification('Checking user message for privacy issues...', 'info');
                         const response = await fetch('/api/privacy_detection', {
                             method: 'POST',
                             headers: {
@@ -1308,11 +1538,16 @@ class PrivacyDemoApp {
                         
                         if (response.ok) {
                             userPrivacyResult = await response.json();
+                            if (userPrivacyResult.privacy_issue) {
+                                this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
+                            }
                         } else {
                             console.error(`Privacy detection failed for user message ${i}:`, response.status);
+                            this.addLoadingNotification(`❌ Privacy detection failed for user message ${i + 1}`, 'error');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for user message ${i}:`, error);
+                        this.addLoadingNotification(`❌ Error analyzing user message ${i + 1}`, 'error');
                     }
                 }
                 
@@ -1320,6 +1555,7 @@ class PrivacyDemoApp {
                 let botPrivacyResult = null;
                 if (turn.bot && turn.bot.trim()) {
                     try {
+                        this.addLoadingNotification('Checking bot response for privacy issues...', 'info');
                         const response = await fetch('/api/privacy_detection', {
                             method: 'POST',
                             headers: {
@@ -1330,11 +1566,16 @@ class PrivacyDemoApp {
                         
                         if (response.ok) {
                             botPrivacyResult = await response.json();
+                            if (botPrivacyResult.privacy_issue) {
+                                this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
+                            }
                         } else {
                             console.error(`Privacy detection failed for bot message ${i}:`, response.status);
+                            this.addLoadingNotification(`❌ Privacy detection failed for bot response ${i + 1}`, 'error');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for bot message ${i}:`, error);
+                        this.addLoadingNotification(`❌ Error analyzing bot response ${i + 1}`, 'error');
                     }
                 }
                 
@@ -1351,6 +1592,8 @@ class PrivacyDemoApp {
                 analyzedLog.push(analysisEntry);
             }
             
+            this.addLoadingNotification('✅ Privacy analysis completed! Preparing export...', 'success');
+            
             this.state.analyzedLog = analyzedLog;
             
             // Generate comprehensive export data with analysis
@@ -1359,6 +1602,7 @@ class PrivacyDemoApp {
             
             // Count privacy issues found
             const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
+            this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! Exporting data...`, 'success');
             
             // Export the data
             const filename = `conversation_analysis_${this.state.currentStep}.json`;
@@ -1454,6 +1698,10 @@ class PrivacyDemoApp {
         this.state.analyzedLog = [];
         this.state.privacyChoices = {};
         this.state.editMode = false; // Disable edit mode when closing analysis
+        
+        // Remove sensitive text highlighting
+        this.removeSensitiveTextHighlighting();
+        
         this.updateUI();
     }
 
@@ -1467,7 +1715,7 @@ class PrivacyDemoApp {
     // Test API connection
     async testAPIConnection() {
         // Skip actual API test - always show success for API focus
-        this.showLoading(true);
+        this.showLoading(true, '🔌 Testing API connection...');
         
         // Simulate a brief loading time
         setTimeout(() => {
@@ -1816,27 +2064,58 @@ class PrivacyDemoApp {
 
     // Update UI
     updateUI() {
-        // Show two-column layout only during Privacy Analysis & Export stage
-        const twoCol = document.getElementById('two-column-layout');
-        const chatContainer = document.querySelector('.chat-container');
-        if (this.state.showPrivacyAnalysis) {
-            if (twoCol) twoCol.style.display = 'flex';
-            if (chatContainer) chatContainer.style.display = 'none';
-            this.updateConversationDisplay(true); // pass flag for analysis mode
-            this.updatePrivacyAnalysis();
-        } else {
-            if (twoCol) twoCol.style.display = 'none';
-            if (chatContainer) chatContainer.style.display = '';
-            this.updateConversationDisplay(false);
+        // Only update chat interface if we're on the chat page
+        if (this.state.currentStepPage === 'chat') {
+            // Show two-column layout only during Privacy Analysis & Export stage
+            const twoCol = document.getElementById('two-column-layout');
+            const chatContainer = document.querySelector('.chat-container');
+            if (this.state.showPrivacyAnalysis) {
+                if (twoCol) twoCol.style.display = 'flex';
+                if (chatContainer) chatContainer.style.display = 'none';
+                this.updateConversationDisplay(true); // pass flag for analysis mode
+                this.updatePrivacyAnalysis();
+            } else {
+                if (twoCol) twoCol.style.display = 'none';
+                if (chatContainer) chatContainer.style.display = '';
+                this.updateConversationDisplay(false);
+            }
+            this.updateStatistics();
+            this.updateExportButtons();
+            this.updateModeInfo();
+            this.updateEditModeUI();
         }
-        this.updateStatistics();
-        this.updateExportButtons();
-        this.updateModeInfo();
-        this.updateEditModeUI();
+        
+        // Update multi-step interface state
+        this.updateMultiStepInterface();
+    }
+
+    // Update multi-step interface state
+    updateMultiStepInterface() {
+        // Update consent checkbox state
+        const consentCheckbox = document.getElementById('consent-checkbox');
+        if (consentCheckbox) {
+            consentCheckbox.checked = this.state.consentChecked;
+        }
+        
+        // Update qualification answers
+        for (let i = 1; i <= 5; i++) {
+            const selectElement = document.getElementById(`qual-${i}`);
+            const answer = this.state.qualificationAnswers[`qual${i}`];
+            if (selectElement && answer) {
+                selectElement.value = answer;
+                this.updateQualificationVisualFeedback();
+            }
+        }
+        
+        // Update qualification status
+        this.validateQualification();
     }
 
     // Update conversation display
     updateConversationDisplay(analysisMode = false) {
+        // Remove any existing sensitive text highlighting first
+        this.removeSensitiveTextHighlighting();
+        
         let container;
         let filterActive = false;
         if (analysisMode) {
@@ -1884,7 +2163,11 @@ class PrivacyDemoApp {
             const turn = this.state.conversationLog[i];
             let userWarning = '';
             let botWarning = '';
-            if (analysisMode) {
+            
+            // Check if we should show editable messages (analysis mode OR naive mode in edit mode)
+            const shouldShowEditable = analysisMode || (this.state.mode === 'naive' && this.state.editMode);
+            
+            if (shouldShowEditable) {
                 const analyzed = this.state.analyzedLog[i];
                 // User privacy issue warning sign
                 if (analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue) {
@@ -1903,7 +2186,8 @@ class PrivacyDemoApp {
                     let privacyIndicator = '';
                     const userChoice = this.state.privacyChoices[i]?.user;
                     
-                    if (analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue && analyzed.userPrivacy.suggestion) {
+                    // Only apply privacy analysis logic in analysis mode
+                    if (analysisMode && analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue && analyzed.userPrivacy.suggestion) {
                         if (userChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.userPrivacy.suggestion;
@@ -1961,7 +2245,8 @@ class PrivacyDemoApp {
                     let privacyIndicator = '';
                     const botChoice = this.state.privacyChoices[i]?.bot;
                     
-                    if (analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue && analyzed.botPrivacy.suggestion) {
+                    // Only apply privacy analysis logic in analysis mode
+                    if (analysisMode && analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue && analyzed.botPrivacy.suggestion) {
                         if (botChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.botPrivacy.suggestion;
@@ -2054,24 +2339,32 @@ class PrivacyDemoApp {
         }
         container.innerHTML = html;
         
-        // Bind edit events in analysis mode
-        if (analysisMode) {
+        // Bind edit events in analysis mode OR naive mode in edit mode
+        if (analysisMode || (this.state.mode === 'naive' && this.state.editMode)) {
             this.bindEditModeEvents();
-            // Bind warning sign clicks for navigation
-            const warningSigns = container.querySelectorAll('.privacy-warning-sign');
-            warningSigns.forEach(sign => {
-                sign.addEventListener('click', () => {
-                    const idx = sign.getAttribute('data-index');
-                    const type = sign.getAttribute('data-type');
-                    // Scroll to and highlight the corresponding analysis result
-                    const analysisEntry = document.querySelector(`#analysis-entry-${type}-${idx}`);
-                    if (analysisEntry) {
-                        analysisEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        analysisEntry.classList.add('nav-highlight');
-                        setTimeout(() => analysisEntry.classList.remove('nav-highlight'), 2000);
-                    }
+            
+            // Bind warning sign clicks for navigation (only in analysis mode)
+            if (analysisMode) {
+                const warningSigns = container.querySelectorAll('.privacy-warning-sign');
+                warningSigns.forEach(sign => {
+                    sign.addEventListener('click', () => {
+                        const idx = sign.getAttribute('data-index');
+                        const type = sign.getAttribute('data-type');
+                        // Scroll to and highlight the corresponding analysis result
+                        const analysisEntry = document.querySelector(`#analysis-entry-${type}-${idx}`);
+                        if (analysisEntry) {
+                            analysisEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            analysisEntry.classList.add('nav-highlight');
+                            setTimeout(() => analysisEntry.classList.remove('nav-highlight'), 2000);
+                        }
+                    });
                 });
-            });
+                
+                // Apply sensitive text highlighting if in analysis mode
+                setTimeout(() => {
+                    this.applySensitiveTextHighlighting();
+                }, 100);
+            }
         }
     }
 
@@ -2356,13 +2649,21 @@ class PrivacyDemoApp {
                         console.warn('Failed to parse user privacy suggestion:', turn.userPrivacy.suggestion);
                     }
                 }
+                // Add contextual risk information if available
+                const contextualRiskInfo = turn.userPrivacy.contextual_risk ? 
+                    `<div class="contextual-risk-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Contextual Risk:</strong> ${this.escapeHtml(turn.userPrivacy.contextual_risk)}
+                    </div>` : '';
+
+                const contextualRiskClass = turn.userPrivacy.contextual_risk ? 'has-contextual-risk' : '';
                 html += `
-                    <div class="choice-item" data-index="${i}" id="analysis-entry-user-${i}">
+                    <div class="choice-item ${contextualRiskClass}" data-index="${i}" id="analysis-entry-user-${i}">
                         <h4>Message ${i + 1}: User Message Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.userPrivacy.type}</p>
-                        <p><strong>Severity:</strong> ${turn.userPrivacy.severity}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
                         ${after ? `<p><strong>Safer Version:</strong> ${this.escapeHtml(after)}</p>` : ''}
+                        ${contextualRiskInfo}
                         <div class="choice-buttons">
                             <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'user', 'accept')" 
                                     ${!after ? 'disabled' : ''}>
@@ -2417,7 +2718,6 @@ class PrivacyDemoApp {
                     <div class="choice-item" data-index="${i}" id="analysis-entry-bot-${i}">
                         <h4>Message ${i + 1}: Bot Response Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.botPrivacy.type}</p>
-                        <p><strong>Severity:</strong> ${turn.botPrivacy.severity}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
                         ${after ? `<p><strong>Safer Version:</strong> ${this.escapeHtml(after)}</p>` : ''}
                         <div class="choice-buttons">
@@ -2620,9 +2920,49 @@ class PrivacyDemoApp {
     }
 
     // Show loading overlay
-    showLoading(show) {
+    showLoading(show, message = 'Processing...') {
         const overlay = document.getElementById('loading-overlay');
-        overlay.style.display = show ? 'flex' : 'none';
+        const loadingMessage = document.getElementById('loading-message');
+        const notificationsContainer = document.getElementById('loading-notifications');
+        
+        if (show) {
+            loadingMessage.textContent = message;
+            notificationsContainer.innerHTML = ''; // Clear previous notifications
+            overlay.style.display = 'flex';
+        } else {
+            overlay.style.display = 'none';
+        }
+    }
+
+    // Add loading notification
+    addLoadingNotification(message, type = 'info') {
+        const notificationsContainer = document.getElementById('loading-notifications');
+        
+        const notification = document.createElement('div');
+        notification.className = `loading-notification ${type}`;
+        
+        const icons = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        };
+        
+        notification.innerHTML = `
+            <i class="${icons[type] || icons.info}"></i>
+            <span>${message}</span>
+        `;
+        
+        notificationsContainer.appendChild(notification);
+        
+        // Auto-remove after 3 seconds for info messages
+        if (type === 'info') {
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 3000);
+        }
     }
 
     // Show notification
@@ -2672,7 +3012,15 @@ class PrivacyDemoApp {
     // Save to localStorage
     saveToLocalStorage() {
         try {
-            localStorage.setItem('privacyDemoState', JSON.stringify(this.state));
+            // Save the current state including multi-step interface state
+            const stateToSave = {
+                ...this.state,
+                // Ensure multi-step state is included
+                currentStepPage: this.state.currentStepPage,
+                consentChecked: this.state.consentChecked,
+                qualificationAnswers: this.state.qualificationAnswers
+            };
+            localStorage.setItem('privacyDemoState', JSON.stringify(stateToSave));
         } catch (error) {
             console.error('Failed to save to localStorage:', error);
         }
@@ -2685,8 +3033,17 @@ class PrivacyDemoApp {
             if (saved) {
                 const savedState = JSON.parse(saved);
                 this.state = { ...this.state, ...savedState };
-                this.updateUI();
-                this.updateSidebarToggle();
+                
+                // If we're in the middle of the multi-step flow, restore the current page
+                if (this.state.currentStepPage && this.state.currentStepPage !== 'introduction') {
+                    // Don't automatically show the saved page - let the user continue from where they left off
+                    // but ensure the UI is properly initialized
+                    this.updateUI();
+                    this.updateSidebarToggle();
+                } else {
+                    this.updateUI();
+                    this.updateSidebarToggle();
+                }
             }
         } catch (error) {
             console.error('Failed to load from localStorage:', error);
@@ -2697,7 +3054,6 @@ class PrivacyDemoApp {
     showPrivacyTooltip(element) {
         const tooltip = document.getElementById('privacy-tooltip-container');
         const title = document.getElementById('tooltip-title');
-        const severity = document.getElementById('tooltip-severity');
         const explanation = document.getElementById('tooltip-explanation');
         const suggestion = document.getElementById('tooltip-suggestion');
         const suggestionText = document.getElementById('tooltip-suggestion-text');
@@ -2713,7 +3069,6 @@ class PrivacyDemoApp {
             // Real-time detection data
             privacyData = {
                 type: element.dataset.privacyType,
-                severity: element.dataset.privacySeverity,
                 explanation: element.dataset.privacyExplanation,
                 suggestion: element.dataset.privacySuggestion,
                 affected_text: element.textContent
@@ -2724,10 +3079,6 @@ class PrivacyDemoApp {
 
         // Update tooltip content
         title.textContent = privacyData.type || 'Privacy Issue';
-        
-        // Set severity
-        severity.textContent = privacyData.severity || 'medium';
-        severity.className = `tooltip-severity ${privacyData.severity || 'medium'}`;
 
         // Hide explanation section
         explanation.style.display = 'none';
@@ -2983,6 +3334,213 @@ class PrivacyDemoApp {
             console.error('Error in redirectToThanksPage:', error);
             // Fallback: show a message to the user
             alert('Please navigate to the thanks page manually. Your data has been downloaded.');
+        }
+    }
+
+    // Highlight sensitive text with red underlines using backend sensitive_text field
+    highlightSensitiveText(text, privacyResult) {
+        if (!privacyResult || !privacyResult.privacy_issue) {
+            return text;
+        }
+
+        // Use the sensitive_text field from the backend if available
+        let sensitiveText = privacyResult.sensitive_text;
+        
+        // Fallback to extracting from suggestion if sensitive_text is not available
+        if (!sensitiveText && privacyResult.suggestion) {
+            const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+            const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+            const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+            
+            if (beforeAfterPattern.test(privacyResult.suggestion)) {
+                const match = privacyResult.suggestion.match(beforeAfterPattern);
+                if (match) {
+                    sensitiveText = match[1];
+                }
+            } else if (beforeAfterPatternAlt.test(privacyResult.suggestion)) {
+                const match = privacyResult.suggestion.match(beforeAfterPatternAlt);
+                if (match) {
+                    sensitiveText = match[1];
+                }
+            } else if (beforeAfterPatternFlexible.test(privacyResult.suggestion)) {
+                const match = privacyResult.suggestion.match(beforeAfterPatternFlexible);
+                if (match) {
+                    sensitiveText = match[1];
+                }
+            }
+        }
+
+        if (!sensitiveText) {
+            return text;
+        }
+
+        // Escape special regex characters in the sensitive text
+        const escapedSensitiveText = this.escapeRegex(sensitiveText);
+        
+        // Create a regex that matches the sensitive text (case-insensitive)
+        const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
+        
+        // Replace the sensitive text with highlighted version
+        return text.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+    }
+
+    // Apply sensitive text highlighting inline within textarea elements
+    applySensitiveTextHighlighting() {
+        if (!this.state.showPrivacyAnalysis || !this.state.analyzedLog.length) {
+            return;
+        }
+
+        // Process each message in the conversation
+        for (let i = 0; i < this.state.analyzedLog.length; i++) {
+            const analyzed = this.state.analyzedLog[i];
+            
+            // Handle user message highlighting
+            if (analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue) {
+                const userTextarea = document.querySelector(`textarea[data-message-index="${i}"][data-message-type="user"]`);
+                if (userTextarea) {
+                    const originalText = this.state.conversationLog[i].user;
+                    const highlightedText = this.highlightSensitiveText(originalText, analyzed.userPrivacy);
+                    
+                    // Create a contenteditable div to replace the textarea for inline highlighting
+                    const container = userTextarea.parentElement;
+                    const highlightedDiv = document.createElement('div');
+                    highlightedDiv.className = 'message-edit-input-highlighted';
+                    highlightedDiv.contentEditable = true;
+                    highlightedDiv.innerHTML = highlightedText;
+                    
+                    // Copy the textarea's computed styles to match exactly
+                    const textareaStyles = window.getComputedStyle(userTextarea);
+                    highlightedDiv.style.cssText = `
+                        width: 100%;
+                        min-height: 60px;
+                        background: ${textareaStyles.backgroundColor};
+                        border: ${textareaStyles.border};
+                        border-radius: ${textareaStyles.borderRadius};
+                        padding: ${textareaStyles.padding};
+                        font-size: ${textareaStyles.fontSize};
+                        font-family: ${textareaStyles.fontFamily};
+                        line-height: ${textareaStyles.lineHeight};
+                        overflow-y: auto;
+                        color: ${textareaStyles.color};
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                        resize: none;
+                        outline: none;
+                        box-sizing: border-box;
+                        margin: 0;
+                    `;
+                    
+                    // Add event listeners to sync with the original textarea
+                    highlightedDiv.addEventListener('input', (e) => {
+                        userTextarea.value = e.target.innerText;
+                        this.saveMessageEdit(i, e.target.innerText, 'user');
+                    });
+                    
+                    highlightedDiv.addEventListener('blur', (e) => {
+                        userTextarea.value = e.target.innerText;
+                        this.saveMessageEdit(i, e.target.innerText, 'user');
+                    });
+                    
+                    // Hide the original textarea and show the highlighted version
+                    userTextarea.style.display = 'none';
+                    container.appendChild(highlightedDiv);
+                }
+            }
+            
+            // Handle bot message highlighting
+            if (analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue) {
+                const botTextarea = document.querySelector(`textarea[data-message-index="${i}"][data-message-type="bot"]`);
+                if (botTextarea) {
+                    const originalText = this.state.conversationLog[i].bot;
+                    const highlightedText = this.highlightSensitiveText(originalText, analyzed.botPrivacy);
+                    
+                    // Create a contenteditable div to replace the textarea for inline highlighting
+                    const container = botTextarea.parentElement;
+                    const highlightedDiv = document.createElement('div');
+                    highlightedDiv.className = 'message-edit-input-highlighted';
+                    highlightedDiv.contentEditable = true;
+                    highlightedDiv.innerHTML = highlightedText;
+                    
+                    // Copy the textarea's computed styles to match exactly
+                    const textareaStyles = window.getComputedStyle(botTextarea);
+                    highlightedDiv.style.cssText = `
+                        width: 100%;
+                        min-height: 60px;
+                        background: ${textareaStyles.backgroundColor};
+                        border: ${textareaStyles.border};
+                        border-radius: ${textareaStyles.borderRadius};
+                        padding: ${textareaStyles.padding};
+                        font-size: ${textareaStyles.fontSize};
+                        font-family: ${textareaStyles.fontFamily};
+                        line-height: ${textareaStyles.lineHeight};
+                        overflow-y: auto;
+                        color: ${textareaStyles.color};
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                        resize: none;
+                        outline: none;
+                        box-sizing: border-box;
+                        margin: 0;
+                    `;
+                    
+                    // Add event listeners to sync with the original textarea
+                    highlightedDiv.addEventListener('input', (e) => {
+                        botTextarea.value = e.target.innerText;
+                        this.saveMessageEdit(i, e.target.innerText, 'bot');
+                    });
+                    
+                    highlightedDiv.addEventListener('blur', (e) => {
+                        botTextarea.value = e.target.innerText;
+                        this.saveMessageEdit(i, e.target.innerText, 'bot');
+                    });
+                    
+                    // Hide the original textarea and show the highlighted version
+                    botTextarea.style.display = 'none';
+                    container.appendChild(highlightedDiv);
+                }
+            }
+        }
+    }
+
+    // Remove sensitive text highlighting
+    removeSensitiveTextHighlighting() {
+        // Remove all highlighted divs
+        const highlightedDivs = document.querySelectorAll('.message-edit-input-highlighted');
+        highlightedDivs.forEach(div => {
+            div.remove();
+        });
+        
+        // Make all textareas visible again
+        const textareas = document.querySelectorAll('textarea[data-message-index]');
+        textareas.forEach(textarea => {
+            textarea.style.display = '';
+        });
+    }
+
+    // Test method for sensitive text highlighting
+    testSensitiveTextHighlighting() {
+        console.log('Testing sensitive text highlighting...');
+        
+        // Create a test privacy result
+        const testPrivacyResult = {
+            privacy_issue: true,
+            type: 'Personal Information',
+            suggestion: 'Before: "My name is John Smith and I live at 123 Main St" After: "My name is [REDACTED] and I live at [REDACTED]"'
+        };
+        
+        // Test text with sensitive information
+        const testText = 'My name is John Smith and I live at 123 Main St';
+        
+        // Test the highlighting function
+        const highlightedText = this.highlightSensitiveText(testText, testPrivacyResult);
+        console.log('Original text:', testText);
+        console.log('Highlighted text:', highlightedText);
+        
+        // Test if the sensitive text was found and highlighted
+        if (highlightedText.includes('sensitive-text-highlight')) {
+            console.log('✅ Sensitive text highlighting test PASSED');
+        } else {
+            console.log('❌ Sensitive text highlighting test FAILED');
         }
     }
 }
