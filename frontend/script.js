@@ -119,7 +119,7 @@ class PrivacyDemoApp {
 
         document.getElementById('proceed-to-chat-btn').addEventListener('click', () => {
             if (this.isQualified()) {
-                this.showNotification('🎉 Congratulations! You are qualified to participate in this study. You can now start chatting with the AI.', 'success');
+                this.showNotification('Reminder: You can edit your conversation freely after completing the interview.', 'info', 'reminder');
                 this.showStepPage('chat');
                 this.startChatInterface();
                 this.saveToLocalStorage();
@@ -1388,7 +1388,7 @@ class PrivacyDemoApp {
 
         try {
             this.showLoading(true, '🔍 Starting Privacy Analysis...');
-            this.showNotification('✏️ You can now do free editing of your conversation! Edit any message to remove or modify personal information before export.', 'info');
+            this.showNotification('Reminder: You can edit your conversation freely after completing the interview.', 'info', 'reminder');
             this.addLoadingNotification('Making free edits on the left to check for privacy leakage while keeping an eye on AI recommendations on the right', 'info');
             
             // Use real backend API for privacy analysis
@@ -2421,6 +2421,7 @@ class PrivacyDemoApp {
         const mainHeaderTitle = document.getElementById('main-header-title');
         const chatInputGroup = document.getElementById('chat-input-group');
         const editExportContainer = document.getElementById('edit-export-container');
+        const editInstructionsChat = document.getElementById('edit-instructions-chat');
         
         if (this.state.editMode) {
             // Show exit edit button
@@ -2445,6 +2446,11 @@ class PrivacyDemoApp {
             };
             mainHeaderTitle.innerHTML = `<i class="fas fa-edit"></i> ${mainHeaderTitles[this.state.mode]}`;
             
+            // Show edit instructions for naive mode
+            if (this.state.mode === 'naive' && editInstructionsChat) {
+                editInstructionsChat.style.display = 'block';
+            }
+            
             // Hide chat input, show export buttons
             chatInputGroup.style.display = 'none';
             editExportContainer.style.display = 'block';
@@ -2462,6 +2468,11 @@ class PrivacyDemoApp {
             
             // Reset main header title for normal mode
             mainHeaderTitle.innerHTML = '<i class="fas fa-lock"></i> Chatbot';
+            
+            // Hide edit instructions
+            if (editInstructionsChat) {
+                editInstructionsChat.style.display = 'none';
+            }
             
             // Show chat input, hide export buttons
             chatInputGroup.style.display = 'flex';
@@ -2966,10 +2977,10 @@ class PrivacyDemoApp {
     }
 
     // Show notification
-    showNotification(message, type = 'info') {
+    showNotification(message, type = 'info', additionalClass = '') {
         // Create notification element
         const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
+        notification.className = `notification notification-${type}${additionalClass ? ' ' + additionalClass : ''}`;
         
         const icons = {
             success: 'fas fa-check-circle',
