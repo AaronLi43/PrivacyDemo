@@ -1160,7 +1160,7 @@ class PrivacyDemoApp {
                             
                             console.log(`Final question exchanges: ${currentQuestionExchanges}`);
                             
-                            if (currentQuestionExchanges >= 2) { // Allow 2 exchanges before auto-completing
+                            if (currentQuestionExchanges >= 4) { // Allow 4 exchanges before auto-completing (increased from 2)
                                 console.log('Final question has had enough exchanges, auto-completing conversation...');
                                 
                                 // Mark the final question as completed
@@ -3233,6 +3233,9 @@ class PrivacyDemoApp {
         console.log('Showing survey popup for export action:', exportAction);
         this.state.pendingExportAction = exportAction;
         
+        // Show/hide mode-specific questions based on current mode
+        this.updateSurveyQuestionsForMode();
+        
         // Show survey directly (consent is handled before this)
         const popup = document.getElementById('survey-popup');
         popup.style.display = 'flex';
@@ -3245,16 +3248,38 @@ class PrivacyDemoApp {
         this.state.pendingExportAction = null;
     }
 
+    // Update survey questions based on current mode
+    updateSurveyQuestionsForMode() {
+        const naiveQuestions = document.getElementById('naive-specific-questions');
+        const featuredQuestions = document.getElementById('featured-specific-questions');
+        
+        // Hide all mode-specific questions first
+        if (naiveQuestions) naiveQuestions.style.display = 'none';
+        if (featuredQuestions) featuredQuestions.style.display = 'none';
+        
+        // Show questions based on current mode
+        if (this.state.mode === 'naive') {
+            if (naiveQuestions) naiveQuestions.style.display = 'block';
+        } else if (this.state.mode === 'featured') {
+            if (featuredQuestions) featuredQuestions.style.display = 'block';
+        }
+        // Neutral mode shows no additional questions
+    }
+
     // Handle survey submission
     handleSurveySubmit() {
         const form = document.getElementById('survey-form');
         const formData = new FormData(form);
         
-        // Collect survey data
+        // Collect survey data - now up to 18 questions (5 overall + up to 5 mode-specific + 4 demographic)
         const surveyData = {};
-        for (let i = 1; i <= 8; i++) {
+        const maxQuestions = 18;
+        
+        for (let i = 1; i <= maxQuestions; i++) {
             const value = formData.get(`q${i}`);
-            surveyData[`q${i}`] = value || '';
+            if (value !== null) { // Only include questions that exist in the form
+                surveyData[`q${i}`] = value || '';
+            }
         }
         
         console.log('Collected survey data:', surveyData);
