@@ -276,6 +276,26 @@ class PrivacyDemoApp {
                 console.log('Test export triggered');
                 this.exportDirect();
             }
+            
+            // Test survey popup with different modes (for debugging)
+            if (e.ctrlKey && e.key === 's') {
+                console.log('Test survey popup triggered');
+                this.showSurveyPopup('exportDirect');
+            }
+            
+            // Test mode switching (for debugging)
+            if (e.ctrlKey && e.key === '1') {
+                console.log('Switching to naive mode');
+                this.setMode('naive');
+            }
+            if (e.ctrlKey && e.key === '2') {
+                console.log('Switching to neutral mode');
+                this.setMode('neutral');
+            }
+            if (e.ctrlKey && e.key === '3') {
+                console.log('Switching to featured mode');
+                this.setMode('featured');
+            }
         });
 
         // Main export buttons (in chat input area)
@@ -651,6 +671,7 @@ class PrivacyDemoApp {
     // Update mode information display
     updateModeInfo() {
         const modeInfo = document.getElementById('mode-info');
+        const modeSelect = document.getElementById('mode-select');
         const modeIcons = {
             naive: '😊',
             neutral: '⚖️',
@@ -664,6 +685,11 @@ class PrivacyDemoApp {
         
         modeInfo.innerHTML = `<p><strong>${modeIcons[this.state.mode]} ${modeDescriptions[this.state.mode]}</strong></p>`;
         document.getElementById('stat-mode').textContent = `${modeIcons[this.state.mode]} ${this.state.mode.charAt(0).toUpperCase() + this.state.mode.slice(1)}`;
+        
+        // Update the mode select element to reflect current mode
+        if (modeSelect) {
+            modeSelect.value = this.state.mode;
+        }
     }
 
     // Show congratulation popup when all questions are completed
@@ -1803,18 +1829,15 @@ class PrivacyDemoApp {
             if (pendingAction === 'survey') {
                 // Show survey after consent
                 console.log('Showing survey after consent');
-                const popup = document.getElementById('survey-popup');
-                popup.style.display = 'flex';
+                this.showSurveyPopup('survey');
             } else if (pendingAction === 'exportDirect') {
                 // Show survey after consent, then export
                 console.log('Showing survey after consent for exportDirect');
-                const popup = document.getElementById('survey-popup');
-                popup.style.display = 'flex';
+                this.showSurveyPopup('exportDirect');
             } else if (pendingAction === 'exportComprehensive') {
                 // Show survey after consent, then export
                 console.log('Showing survey after consent for exportComprehensive');
-                const popup = document.getElementById('survey-popup');
-                popup.style.display = 'flex';
+                this.showSurveyPopup('exportComprehensive');
             } else if (pendingAction === 'analyzeAndExport') {
                 this.analyzeAndExport();
             }
@@ -3230,7 +3253,8 @@ class PrivacyDemoApp {
 
     // Show survey popup
     showSurveyPopup(exportAction) {
-        console.log('Showing survey popup for export action:', exportAction);
+        console.log('🔍 showSurveyPopup called with action:', exportAction);
+        console.log('🔍 Current state mode:', this.state.mode);
         this.state.pendingExportAction = exportAction;
         
         // Show/hide mode-specific questions based on current mode
@@ -3239,6 +3263,10 @@ class PrivacyDemoApp {
         // Show survey directly (consent is handled before this)
         const popup = document.getElementById('survey-popup');
         popup.style.display = 'flex';
+        console.log('🔍 Survey popup displayed');
+        
+        // Show notification about current mode for debugging
+        this.showNotification(`🔍 Survey opened in ${this.state.mode} mode`, 'info');
     }
 
     // Close survey popup
@@ -3250,20 +3278,100 @@ class PrivacyDemoApp {
 
     // Update survey questions based on current mode
     updateSurveyQuestionsForMode() {
+        console.log('🔍 updateSurveyQuestionsForMode called');
+        console.log('🔍 Current mode:', this.state.mode);
+        
+        // Wait a bit to ensure DOM is ready
+        setTimeout(() => {
+            const naiveQuestions = document.getElementById('naive-specific-questions');
+            const featuredQuestions = document.getElementById('featured-specific-questions');
+            
+            console.log('🔍 Found naive questions element:', !!naiveQuestions);
+            console.log('🔍 Found featured questions element:', !!featuredQuestions);
+            
+            if (naiveQuestions) {
+                console.log('🔍 Naive questions element details:', {
+                    id: naiveQuestions.id,
+                    className: naiveQuestions.className,
+                    style: naiveQuestions.style.display
+                });
+            }
+            
+            if (featuredQuestions) {
+                console.log('🔍 Featured questions element details:', {
+                    id: featuredQuestions.id,
+                    className: featuredQuestions.className,
+                    style: featuredQuestions.style.display
+                });
+            }
+            
+            // Hide all mode-specific questions first
+            if (naiveQuestions) {
+                naiveQuestions.style.display = 'none';
+                console.log('🔍 Hidden naive questions');
+            }
+            if (featuredQuestions) {
+                featuredQuestions.style.display = 'none';
+                console.log('🔍 Hidden featured questions');
+            }
+            
+            // Show questions based on current mode
+            if (this.state.mode === 'naive') {
+                if (naiveQuestions) {
+                    naiveQuestions.style.display = 'block';
+                    console.log('🔍 SHOWING naive questions');
+                } else {
+                    console.error('🔍 ERROR: Naive questions element not found!');
+                }
+            } else if (this.state.mode === 'featured') {
+                if (featuredQuestions) {
+                    featuredQuestions.style.display = 'block';
+                    console.log('🔍 SHOWING featured questions');
+                } else {
+                    console.error('🔍 ERROR: Featured questions element not found!');
+                }
+            } else {
+                console.log('🔍 Neutral mode - no additional questions shown');
+            }
+            
+            console.log('🔍 Survey questions update complete');
+        }, 100); // Small delay to ensure DOM is ready
+    }
+
+    // Manual test function for debugging (can be called from browser console)
+    testSurveyQuestions() {
+        console.log('🧪 Manual test of survey questions');
+        console.log('🧪 Current mode:', this.state.mode);
+        
+        // Check if elements exist
         const naiveQuestions = document.getElementById('naive-specific-questions');
         const featuredQuestions = document.getElementById('featured-specific-questions');
         
-        // Hide all mode-specific questions first
-        if (naiveQuestions) naiveQuestions.style.display = 'none';
-        if (featuredQuestions) featuredQuestions.style.display = 'none';
+        console.log('🧪 DOM check:');
+        console.log('🧪 - naive-specific-questions exists:', !!naiveQuestions);
+        console.log('🧪 - featured-specific-questions exists:', !!featuredQuestions);
         
-        // Show questions based on current mode
-        if (this.state.mode === 'naive') {
-            if (naiveQuestions) naiveQuestions.style.display = 'block';
-        } else if (this.state.mode === 'featured') {
-            if (featuredQuestions) featuredQuestions.style.display = 'block';
+        if (naiveQuestions) {
+            console.log('🧪 - naive questions display style:', naiveQuestions.style.display);
+            console.log('🧪 - naive questions computed style:', window.getComputedStyle(naiveQuestions).display);
         }
-        // Neutral mode shows no additional questions
+        
+        if (featuredQuestions) {
+            console.log('🧪 - featured questions display style:', featuredQuestions.style.display);
+            console.log('🧪 - featured questions computed style:', window.getComputedStyle(featuredQuestions).display);
+        }
+        
+        // Test all modes
+        const modes = ['naive', 'neutral', 'featured'];
+        
+        modes.forEach(mode => {
+            console.log(`🧪 Testing mode: ${mode}`);
+            this.state.mode = mode;
+            this.updateSurveyQuestionsForMode();
+        });
+        
+        // Restore original mode
+        console.log('🧪 Test complete');
     }
 
     // Handle survey submission
@@ -3609,6 +3717,10 @@ function closeCongratulationPopup() {
 
 // Initialize the application
 const app = new PrivacyDemoApp();
+
+// Expose test functions globally for debugging
+window.testSurveyQuestions = () => app.testSurveyQuestions();
+window.app = app; // Expose app instance for debugging
 
 // Add CSS for notifications
 const notificationStyles = document.createElement('style');
