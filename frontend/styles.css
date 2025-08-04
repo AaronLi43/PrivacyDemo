@@ -155,6 +155,34 @@ body {
     box-shadow: 0 0 0 3px rgba(135, 241, 255, 0.25);
 }
 
+/* Copy/Paste Disabled Inputs */
+.form-control.copy-paste-disabled,
+textarea.copy-paste-disabled {
+    position: relative;
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #495057;
+    padding-right: 2.5rem; /* Make room for the lock icon */
+}
+
+.form-control.copy-paste-disabled::after,
+textarea.copy-paste-disabled::after {
+    content: "🔒";
+    position: absolute;
+    right: 10px;
+    top: 10px; /* Position at top for textarea */
+    font-size: 14px;
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.form-control.copy-paste-disabled:focus,
+textarea.copy-paste-disabled:focus {
+    border-color: var(--warning-color);
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+}
+
 /* Buttons */
 .btn {
     padding: 0.75rem 1.5rem;
@@ -611,6 +639,34 @@ body {
     margin-bottom: 0.5rem;
 }
 
+.safer-versions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.version-section {
+    background-color: rgba(255, 255, 255, 0.8);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+.version-section strong {
+    color: var(--success-color);
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.version-section span {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    color: var(--text-color);
+}
+
 .tooltip-suggestion strong {
     color: var(--success-color);
     display: block;
@@ -632,12 +688,16 @@ body {
     transition: all 0.2s ease;
 }
 
-.tooltip-btn.apply {
+.tooltip-btn.apply,
+.tooltip-btn.apply-replacing,
+.tooltip-btn.apply-abstraction {
     background-color: var(--success-color);
     color: white;
 }
 
-.tooltip-btn.apply:hover {
+.tooltip-btn.apply:hover,
+.tooltip-btn.apply-replacing:hover,
+.tooltip-btn.apply-abstraction:hover {
     background-color: #218838;
 }
 
@@ -900,6 +960,16 @@ body {
     margin-top: 1rem;
 }
 
+.choice-buttons .btn-primary {
+    background-color: #6f42c1;
+    border-color: #6f42c1;
+}
+
+.choice-buttons .btn-primary:hover {
+    background-color: #5a32a3;
+    border-color: #5a32a3;
+}
+
 .choice-status {
     margin-top: 0.5rem;
     padding: 0.5rem;
@@ -1131,76 +1201,7 @@ body {
     font-weight: 500;
 }
 
-/* Prolific ID Popup */
-.prolific-id-popup {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-    animation: fadeIn 0.3s ease;
-}
 
-.prolific-id-popup .popup-content {
-    background-color: var(--container-bg);
-    border-radius: 12px;
-    padding: 2rem;
-    max-width: 500px;
-    width: 90%;
-    position: relative;
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    border: 2px solid var(--primary-button);
-}
-
-.prolific-id-popup .popup-content h4 {
-    color: var(--primary-button);
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.prolific-id-explanation {
-    color: var(--text-color);
-    font-size: 1.1rem;
-    line-height: 1.6;
-    margin-bottom: 1.5rem;
-}
-
-.prolific-id-explanation p {
-    margin-bottom: 0.5rem;
-}
-
-.prolific-id-input {
-    margin-bottom: 2rem;
-}
-
-.prolific-id-input .form-control {
-    font-size: 1.1rem;
-    padding: 1rem;
-    text-align: center;
-    font-weight: 600;
-}
-
-.prolific-id-actions {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-}
-
-.prolific-id-actions .btn {
-    min-width: 150px;
-    font-size: 1.1rem;
-    padding: 0.75rem 1.5rem;
-}
 
 /* Congratulation Popup */
 .congratulation-popup {
@@ -1255,6 +1256,104 @@ body {
 .congratulation-actions .btn {
     min-width: 150px;
     font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Free Edit Popup */
+.free-edit-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.free-edit-popup.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.free-edit-popup .popup-content {
+    background-color: var(--container-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transform: scale(0.8);
+    transition: transform 0.3s ease;
+}
+
+.free-edit-popup.show .popup-content {
+    transform: scale(1);
+}
+
+.free-edit-popup .popup-content h4 {
+    margin: 0 0 1.5rem 0;
+    color: var(--primary-color);
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.free-edit-message {
+    margin-bottom: 1.5rem;
+}
+
+.free-edit-message p {
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+
+.free-edit-details {
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.free-edit-feature {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text-color);
+}
+
+.free-edit-feature:last-child {
+    margin-bottom: 0;
+}
+
+.free-edit-feature i {
+    color: var(--success-color);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.free-edit-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.free-edit-actions .btn {
+    min-width: 150px;
+    font-size: 1rem;
     padding: 0.75rem 1.5rem;
 }
 
@@ -1347,9 +1446,9 @@ body {
     padding: 0.75rem 1.5rem;
 }
 
-/* Mode-specific survey questions */
+/* Mode-specific survey questions - same styling as regular questions */
 .mode-specific-questions {
-    /* Remove all special styling - make it look like regular questions */
+    /* No special styling - looks exactly like regular questions */
 }
 
 /* Loading Overlay */
@@ -1732,6 +1831,12 @@ body {
 
 /* Highlight effect for privacy corrections */
 .privacy-correction-highlight {
+    animation: privacyCorrectionPulse 3s ease-in-out;
+}
+
+.privacy-revert-highlight {
+    animation: privacyRevertPulse 3s ease-in-out;
+}
     background-color: #d4edda !important;
     border-color: #28a745 !important;
     box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
@@ -2443,4 +2548,188 @@ body {
     resize: none;
     outline: none;
     box-sizing: border-box;
+} 
+
+/* Read More Section Styles */
+.read-more-section {
+    margin-top: 2rem;
+    border-top: 2px solid var(--border-color);
+    padding-top: 1.5rem;
+}
+
+.read-more-btn {
+    width: 100%;
+    text-align: left;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, var(--secondary-button), var(--primary-button));
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.read-more-btn:hover {
+    background: linear-gradient(135deg, var(--secondary-button-hover), var(--primary-button-hover));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.read-more-btn i {
+    transition: transform 0.3s ease;
+}
+
+.read-more-btn.expanded i {
+    transform: rotate(180deg);
+}
+
+.read-more-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    margin-top: 0.5rem;
+}
+
+.read-more-content.expanded {
+    max-height: 2000px;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.additional-study-details h3 {
+    color: var(--primary-button);
+    margin: 1.5rem 0 1rem 0;
+    font-size: 1.3rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.additional-study-details h3:first-child {
+    margin-top: 0;
+}
+
+.additional-study-details p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+
+.additional-study-details ul {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+}
+
+.additional-study-details li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
+.additional-study-details li::before {
+    content: "•";
+    color: var(--primary-button);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+
+.irb-link-section {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid var(--success-color);
+    margin: 1.5rem 0;
+}
+
+.irb-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    padding: 0.75rem 1.5rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border: 2px solid #28a745;
+    border-radius: 8px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
+}
+
+.irb-link-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+    background: linear-gradient(135deg, #20c997, #17a2b8);
+    border-color: #20c997;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.irb-link-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.irb-link-btn i {
+    font-size: 1.2rem;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+.irb-note {
+    color: var(--caption-color);
+    font-style: italic;
+    margin-top: 0.5rem;
+}
+
+.additional-study-details a {
+    color: var(--primary-button);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.additional-study-details a:hover {
+    color: var(--primary-button-hover);
+    text-decoration: underline;
+}
+
+/* Mobile responsiveness for read more section */
+@media (max-width: 768px) {
+    .read-more-btn {
+        font-size: 1rem;
+        padding: 0.875rem 1.25rem;
+    }
+    
+    .read-more-content.expanded {
+        padding: 1rem;
+    }
+    
+    .additional-study-details h3 {
+        font-size: 1.2rem;
+    }
+    
+    .irb-link-section {
+        padding: 1rem;
+    }
+    
+    .irb-link-btn {
+        width: 100%;
+        justify-content: center;
+        font-size: 1rem;
+        padding: 0.875rem 1.25rem;
+    }
+    
+    .irb-link-btn i {
+        font-size: 1.1rem;
+    }
 } 

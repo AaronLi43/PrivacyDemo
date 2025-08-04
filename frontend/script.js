@@ -4,34 +4,20 @@ class PrivacyDemoApp {
         this.state = {
             mode: 'naive',
             conversationLog: [],
-            currentStep: 0,
-            questions: [],
-            analyzedLog: [],
-            privacyChoices: {},
-            showPrivacyAnalysis: false,
-            editMode: false,
-            editableLog: [],
             originalLog: [],
-            conversationHeight: 400,
-            apiConnected: false,
-            sidebarHidden: false,
+            analyzedLog: [],
+            currentStep: 0,
+            editMode: false,
+            showPrivacyAnalysis: false,
             consentGiven: false,
-            pendingExportAction: null,
-            // New properties for featured mode
-            realTimeDetection: false,
-            privacyDetectionQueue: [],
-            isDetecting: false,
-            // Question management properties
+            // Question tracking properties
+            questionMode: false,
             currentQuestionIndex: 0,
             questionsCompleted: false,
-            questionMode: false,
-            predefinedQuestionsCompleted: 0, // Track completed predefined questions
-            // Removed turn counting - letting LLM decide when to move to next question
+            predefinedQuestionsCompleted: 0,
             completedQuestionIndices: [], // Track which specific questions have been completed
             justCompletedQuestion: false, // Track if we just completed a question to avoid duplicate asks
-            // Prolific ID for user identification
-            prolificId: null,
-            prolificIdSubmitted: false,
+
             // Survey data
             surveyData: {},
             surveyCompleted: false,
@@ -46,10 +32,18 @@ class PrivacyDemoApp {
             qualificationAnswers: {
                 qual1: '',
                 qual2: '',
-                qual3: '',
-                qual4: '',
-                qual5: ''
-            }
+                qual3: ''
+            },
+            // Audit LLM properties
+            auditLLMEnabled: false,
+            // Copy/paste functionality
+            copyPasteEnabled: false,
+            // Follow-up questions properties
+            followUpQuestions: [],
+            currentFollowUpQuestionIndex: 0,
+            inFollowUpMode: false,
+            // Background mode property
+            backgroundMode: false
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -62,6 +56,7 @@ class PrivacyDemoApp {
         this.bindEvents();
         this.updateUI();
         this.updateSidebarToggle();
+        this.updateCopyPasteToggle();
         this.checkAPIStatus();
         this.loadFromLocalStorage();
         
@@ -78,12 +73,145 @@ class PrivacyDemoApp {
         this.bindMultiStepEvents();
     }
 
+    // Toggle read more functionality
+    toggleReadMore() {
+        const readMoreToggle = document.getElementById('read-more-toggle');
+        const readMoreContent = document.getElementById('read-more-content');
+        
+        if (readMoreContent.classList.contains('expanded')) {
+            // Collapse the content
+            readMoreContent.classList.remove('expanded');
+            readMoreToggle.classList.remove('expanded');
+            readMoreToggle.innerHTML = '<i class="fas fa-chevron-down"></i> Read More About This Study';
+        } else {
+            // Expand the content
+            readMoreContent.classList.add('expanded');
+            readMoreToggle.classList.add('expanded');
+            readMoreToggle.innerHTML = '<i class="fas fa-chevron-up"></i> Show Less';
+        }
+    }
+
+    // Enable copy/paste functionality on input elements
+    enableCopyPaste(element) {
+        if (!element) return;
+        
+        // Remove visual indicator class
+        element.classList.remove('copy-paste-disabled');
+        
+        // Remove all event listeners by cloning the element
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+        
+        // Update the reference to the new element
+        if (element.id === 'chat-input') {
+            this.chatInput = newElement;
+        }
+    }
+
+    // Disable copy/paste functionality on input elements
+    disableCopyPaste(element) {
+        if (!element) return;
+        
+        // If copy/paste is enabled, don't apply restrictions
+        if (this.state.copyPasteEnabled) {
+            return;
+        }
+        
+        // Add visual indicator class
+        element.classList.add('copy-paste-disabled');
+        
+        // Prevent copy
+        element.addEventListener('copy', (e) => {
+            e.preventDefault();
+            this.showNotification('Copy is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        // Prevent cut
+        element.addEventListener('cut', (e) => {
+            e.preventDefault();
+            this.showNotification('Cut is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        // Prevent paste
+        element.addEventListener('paste', (e) => {
+            e.preventDefault();
+            this.showNotification('Paste is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        // Prevent context menu (right-click) for additional security
+        element.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            return false;
+        });
+    }
+
+    // Toggle copy/paste functionality
+    toggleCopyPaste() {
+        this.state.copyPasteEnabled = !this.state.copyPasteEnabled;
+        this.updateCopyPasteToggle();
+        this.applyCopyPasteSettings();
+        this.saveToLocalStorage();
+        
+        // Show notification about the change
+        const status = this.state.copyPasteEnabled ? 'enabled' : 'disabled';
+        this.showNotification(`Copy & paste has been ${status}.`, 'info');
+    }
+
+    // Update copy/paste toggle button UI
+    updateCopyPasteToggle() {
+        const toggleBtn = document.getElementById('copy-paste-toggle');
+        if (!toggleBtn) return;
+
+        if (this.state.copyPasteEnabled) {
+            toggleBtn.innerHTML = '<i class="fas fa-unlock"></i> Enabled';
+            toggleBtn.className = 'btn btn-success';
+        } else {
+            toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Disabled';
+            toggleBtn.className = 'btn btn-secondary';
+        }
+    }
+
+    // Apply copy/paste settings to all relevant elements
+    applyCopyPasteSettings() {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            if (this.state.copyPasteEnabled) {
+                this.enableCopyPaste(chatInput);
+            } else {
+                this.disableCopyPaste(chatInput);
+            }
+        }
+
+        // Apply to any textarea elements in edit mode
+        const textareas = document.querySelectorAll('textarea');
+        textareas.forEach(textarea => {
+            if (this.state.copyPasteEnabled) {
+                this.enableCopyPaste(textarea);
+            } else {
+                this.disableCopyPaste(textarea);
+            }
+        });
+    }
+
     // Bind multi-step navigation events
     bindMultiStepEvents() {
         // Introduction page events
         document.getElementById('start-study-btn').addEventListener('click', () => {
-            this.showStepPage('consent');
+            this.showStepPage('qualification');
         });
+
+        // Read more toggle functionality
+        const readMoreToggle = document.getElementById('read-more-toggle');
+        const readMoreContent = document.getElementById('read-more-content');
+        
+        if (readMoreToggle && readMoreContent) {
+            readMoreToggle.addEventListener('click', () => {
+                this.toggleReadMore();
+            });
+        }
 
         // Consent page events
         document.getElementById('back-to-intro-btn').addEventListener('click', () => {
@@ -105,11 +233,11 @@ class PrivacyDemoApp {
 
         // Qualification page events
         document.getElementById('back-to-consent-btn').addEventListener('click', () => {
-            this.showStepPage('consent');
+            this.showStepPage('introduction');
         });
 
         // Bind qualification question events
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 3; i++) {
             document.getElementById(`qual-${i}`).addEventListener('change', (e) => {
                 this.state.qualificationAnswers[`qual${i}`] = e.target.value;
                 this.validateQualification();
@@ -119,10 +247,13 @@ class PrivacyDemoApp {
 
         document.getElementById('proceed-to-chat-btn').addEventListener('click', () => {
             if (this.isQualified()) {
-                this.showNotification('Reminder: You can edit your conversation freely after completing the interview.', 'info', 'reminder');
+                this.showFreeEditPopup();
                 this.showStepPage('chat');
                 this.startChatInterface();
                 this.saveToLocalStorage();
+            } else {
+                // Redirect to thank you page if not qualified
+                this.redirectToThanksPage();
             }
         });
     }
@@ -130,7 +261,7 @@ class PrivacyDemoApp {
     // Show specific step page
     showStepPage(stepName) {
         // Hide all step pages
-        const stepPages = ['introduction', 'consent', 'qualification', 'chat'];
+        const stepPages = ['introduction', 'qualification', 'chat'];
         stepPages.forEach(page => {
             const pageElement = document.getElementById(`${page}-page`);
             if (pageElement) {
@@ -164,24 +295,6 @@ class PrivacyDemoApp {
 
     // Validate qualification answers
     validateQualification() {
-        const isQualified = this.isQualified();
-        const statusElement = document.getElementById('qualification-status');
-        const proceedBtn = document.getElementById('proceed-to-chat-btn');
-
-        if (statusElement) {
-            if (isQualified) {
-                statusElement.className = 'qualification-status valid';
-                statusElement.innerHTML = '<p class="status-message">✓ All qualification requirements met. You can proceed to the chat interface.</p>';
-            } else {
-                statusElement.className = 'qualification-status invalid';
-                statusElement.innerHTML = '<p class="status-message">Please answer all questions with "Yes" to proceed.</p>';
-            }
-        }
-
-        if (proceedBtn) {
-            proceedBtn.disabled = !isQualified;
-        }
-
         // Update visual feedback for individual questions
         this.updateQualificationVisualFeedback();
     }
@@ -191,14 +304,12 @@ class PrivacyDemoApp {
         const answers = this.state.qualificationAnswers;
         return answers.qual1 === 'yes' && 
                answers.qual2 === 'yes' && 
-               answers.qual3 === 'yes' && 
-               answers.qual4 === 'yes' && 
-               answers.qual5 === 'yes';
+               answers.qual3 === 'yes';
     }
 
     // Update visual feedback for qualification questions
     updateQualificationVisualFeedback() {
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 3; i++) {
             const selectElement = document.getElementById(`qual-${i}`);
             const answer = this.state.qualificationAnswers[`qual${i}`];
             
@@ -216,16 +327,10 @@ class PrivacyDemoApp {
 
     // Start chat interface
     startChatInterface() {
-        // Show Prolific ID popup if not submitted yet
-        if (!this.state.prolificIdSubmitted || !this.state.prolificId) {
-            this.showProlificIdPopup();
-        } else {
-            // If Prolific ID is already submitted but conversation hasn't started, start it
-            if (this.state.prolificIdSubmitted && this.state.prolificId && 
-                (!this.state.questionMode || this.state.conversationLog.length === 0)) {
-                console.log('Prolific ID already submitted, starting conversation...');
-                this.startConversationAfterProlificId();
-            }
+        // Start conversation directly without requiring Prolific ID
+        if (!this.state.questionMode || this.state.conversationLog.length === 0) {
+            console.log('Starting conversation directly...');
+            this.startConversationDirectly();
         }
     }
 
@@ -268,6 +373,11 @@ class PrivacyDemoApp {
 
         document.getElementById('show-congratulation-btn').addEventListener('click', () => {
             this.showCongratulationPopup();
+        });
+
+        // Copy/paste toggle
+        document.getElementById('copy-paste-toggle').addEventListener('click', () => {
+            this.toggleCopyPaste();
         });
 
         // Test export button (for debugging)
@@ -356,6 +466,9 @@ class PrivacyDemoApp {
             }
         });
 
+        // Apply copy/paste settings to chat input
+        this.applyCopyPasteSettings();
+
         // API test
         document.getElementById('test-api-btn').addEventListener('click', () => {
             this.testAPIConnection();
@@ -373,9 +486,14 @@ class PrivacyDemoApp {
         });
 
         // Privacy tooltip events
-        document.getElementById('tooltip-apply-btn').addEventListener('click', (e) => {
+        document.getElementById('tooltip-apply-replacing-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            this.applyTooltipSuggestion();
+            this.applyTooltipSuggestion('replacing');
+        });
+
+        document.getElementById('tooltip-apply-abstraction-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.applyTooltipSuggestion('abstraction');
         });
 
         document.getElementById('tooltip-close-btn').addEventListener('click', (e) => {
@@ -415,24 +533,7 @@ class PrivacyDemoApp {
             }
         });
 
-        // Prolific ID popup events
-        document.getElementById('prolific-id-submit-btn').addEventListener('click', () => {
-            this.handleProlificIdSubmit();
-        });
 
-        // Close prolific ID popup on outside click
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'prolific-id-popup') {
-                this.closeProlificIdPopup();
-            }
-        });
-
-        // Prolific ID input enter key
-        document.getElementById('prolific-id-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.handleProlificIdSubmit();
-            }
-        });
 
         // Congratulation popup events
         document.getElementById('next-stage-btn').addEventListener('click', () => {
@@ -443,6 +544,21 @@ class PrivacyDemoApp {
         document.addEventListener('click', (e) => {
             if (e.target.id === 'congratulation-popup') {
                 this.closeCongratulationPopup();
+            }
+        });
+
+        // Free Edit popup events
+        const freeEditBtn = document.getElementById('free-edit-understood-btn');
+        if (freeEditBtn) {
+            freeEditBtn.addEventListener('click', () => {
+                this.closeFreeEditPopup();
+            });
+        }
+
+        // Close free edit popup on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'free-edit-popup') {
+                this.closeFreeEditPopup();
             }
         });
 
@@ -564,6 +680,8 @@ class PrivacyDemoApp {
         }
     }
 
+
+
     // Get the next uncompleted question index
     getNextUncompletedQuestionIndex() {
         const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
@@ -631,10 +749,14 @@ class PrivacyDemoApp {
         return sentences.slice(0, 2).join('. ').trim() + '.';
     }
 
+
+
+
+
     // Start question conversation with LLM
     async startQuestionConversation() {
         try {
-            this.showLoading(true, '🤖 Starting conversation with AI...');
+            this.showLoading(true, '🤖 Starting main interview questions...');
             
             const currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
             const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
@@ -950,6 +1072,8 @@ class PrivacyDemoApp {
             this.state.consentGiven = false;
             this.state.pendingExportAction = null;
             
+
+            
             // Reset question mode
             this.state.currentQuestionIndex = 0;
             this.state.questionsCompleted = false;
@@ -959,9 +1083,12 @@ class PrivacyDemoApp {
             this.state.completedQuestionIndices = []; // Reset completed questions tracking
             this.state.justCompletedQuestion = false; // Reset completion flag
             
-            // Reset Prolific ID state
-            this.state.prolificId = null;
-            this.state.prolificIdSubmitted = false;
+            // Reset follow-up mode
+            this.state.followUpQuestions = [];
+            this.state.currentFollowUpQuestionIndex = 0;
+            this.state.inFollowUpMode = false;
+            
+            
             
             // Reset survey data
             this.state.surveyData = {};
@@ -970,7 +1097,8 @@ class PrivacyDemoApp {
             // Clear real-time detection
             this.clearRealTimeDetection();
             
-            // Start asking questions again with LLM
+            // Load predefined questions and start main conversation
+            await this.loadPredefinedQuestions(this.state.mode);
             await this.startQuestionConversation();
             
             this.updateUI();
@@ -987,12 +1115,7 @@ class PrivacyDemoApp {
 
     // Send message
     async sendMessage() {
-        // Check if Prolific ID has been submitted
-        if (!this.state.prolificIdSubmitted) {
-            this.showNotification('Please enter your Prolific ID first to continue.', 'warning');
-            this.showProlificIdPopup();
-            return;
-        }
+
 
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
@@ -1017,6 +1140,61 @@ class PrivacyDemoApp {
             this.updateUI();
             this.showLoading(true, '🤖 AI is thinking...');
 
+
+            
+            // Handle follow-up question mode
+            if (this.state.questionMode && this.state.inFollowUpMode) {
+                try {
+                    console.log(`Frontend: Sending follow-up question ${this.state.currentFollowUpQuestionIndex + 1}/${this.state.followUpQuestions.length}`);
+                    
+                    const response = await API.sendMessage(message, this.state.currentStep, {
+                        questionMode: true,
+                        currentQuestion: this.state.followUpQuestions[this.state.currentFollowUpQuestionIndex],
+                        predefinedQuestions: this.state.followUpQuestions,
+                        isFinalQuestion: (this.state.currentFollowUpQuestionIndex === this.state.followUpQuestions.length - 1),
+                        followUpMode: true
+                    });
+                    
+                    if (response && response.bot_response) {
+                        console.log('Raw bot response from server (follow-up):', response.bot_response);
+                        let botResponse = response.bot_response;
+                        
+                        this.state.conversationLog.push({
+                            user: '',
+                            bot: botResponse,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        // Check if follow-up questions are completed
+                        if (response.question_completed) {
+                            this.state.inFollowUpMode = false;
+                            this.state.followUpQuestions = [];
+                            this.state.currentFollowUpQuestionIndex = 0;
+                            console.log('Follow-up questions completed, returning to main question flow');
+                        } else {
+                            // Move to next follow-up question if available
+                            this.state.currentFollowUpQuestionIndex++;
+                            if (this.state.currentFollowUpQuestionIndex >= this.state.followUpQuestions.length) {
+                                // All follow-up questions asked, return to main flow
+                                this.state.inFollowUpMode = false;
+                                this.state.followUpQuestions = [];
+                                this.state.currentFollowUpQuestionIndex = 0;
+                                console.log('All follow-up questions completed, returning to main question flow');
+                            }
+                        }
+                    }
+                    
+                    this.updateUI();
+                    this.scrollToBottom();
+                    this.showLoading(false);
+                    
+                } catch (error) {
+                    console.error('Error in follow-up mode:', error);
+                    this.showLoading(false);
+                }
+                return;
+            }
+            
             // Handle question mode
             if (this.state.questionMode) {
                 // In question mode, send to backend with question parameters
@@ -1131,7 +1309,30 @@ class PrivacyDemoApp {
                     const hasEndingPattern = isFinalQuestion && response && response.bot_response && 
                         endingPatterns.some(pattern => pattern.test(response.bot_response));
                     
+                    // Log audit LLM information if available
+                    if (response.audit_result) {
+                        console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
+                    }
+                    
+                    // Handle follow-up questions from audit LLM
+                    if (response.follow_up_questions && response.follow_up_questions.length > 0) {
+                        console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
+                        this.state.followUpQuestions = response.follow_up_questions;
+                        this.state.currentFollowUpQuestionIndex = 0;
+                        this.state.inFollowUpMode = true;
+                        console.log('Entered follow-up question mode');
+                    }
+                    
                     console.log(`Question completion check - Backend: ${response.question_completed}, NEXT_QUESTION signal: ${hasNextQuestionSignal}, Ending pattern: ${hasEndingPattern}`);
+                    
+                    // Handle follow-up question completion
+                    if (this.state.inFollowUpMode && response && response.question_completed) {
+                        console.log('Follow-up questions completed, transitioning back to main question flow');
+                        this.state.inFollowUpMode = false;
+                        this.state.followUpQuestions = [];
+                        this.state.currentFollowUpQuestionIndex = 0;
+                    }
+                    
                     if (response && (response.question_completed || hasNextQuestionSignal || hasEndingPattern)) {
                         // Mark the current question as completed
                         if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
@@ -1272,11 +1473,7 @@ class PrivacyDemoApp {
         this.state.editMode = true;
         this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
         
-        // For naive mode, immediately update the conversation display to show editable fields
-        if (this.state.mode === 'naive') {
-            this.updateConversationDisplay(false); // false = not analysis mode, but will show editable due to editMode flag
-        }
-        
+        // Update UI will handle the conversation display update
         this.updateUI();
         this.showNotification('✏️ Edit mode enabled - You can now edit your conversation!', 'success');
     }
@@ -1285,11 +1482,7 @@ class PrivacyDemoApp {
     exitEditMode() {
         this.state.editMode = false;
         
-        // For naive mode, immediately update the conversation display to show non-editable fields
-        if (this.state.mode === 'naive') {
-            this.updateConversationDisplay(false);
-        }
-        
+        // Update UI will handle the conversation display update
         this.updateUI();
         this.showNotification('✅ Edit mode disabled', 'info');
     }
@@ -1315,7 +1508,6 @@ class PrivacyDemoApp {
                         export_timestamp: this.state.currentStep,
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
-                        prolific_id: this.state.prolificId,
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
@@ -1363,7 +1555,6 @@ class PrivacyDemoApp {
                         export_timestamp: this.state.currentStep,
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
-                        prolific_id: this.state.prolificId,
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
@@ -1414,7 +1605,7 @@ class PrivacyDemoApp {
 
         try {
             this.showLoading(true, '🔍 Starting Privacy Analysis...');
-            this.showNotification('Reminder: You can edit your conversation freely after completing the interview.', 'info', 'reminder');
+            this.showFreeEditPopup();
             this.addLoadingNotification('Making free edits on the left to check for privacy leakage while keeping an eye on AI recommendations on the right', 'info');
             
             // Use real backend API for privacy analysis
@@ -1736,6 +1927,9 @@ class PrivacyDemoApp {
         // Skip backend server check - always show as connected for API focus
         this.state.apiConnected = true;
         this.updateAPIStatus();
+        
+        // Check audit LLM configuration
+        await this.checkAuditLLMStatus();
     }
 
     // Test API connection
@@ -1750,6 +1944,34 @@ class PrivacyDemoApp {
             this.updateAPIStatus();
             this.showLoading(false);
         }, 500);
+    }
+
+    // Check audit LLM status
+    async checkAuditLLMStatus() {
+        try {
+            const response = await fetch('/api/config');
+            const data = await response.json();
+            this.state.auditLLMEnabled = data.audit_llm_enabled;
+            this.updateAuditLLMStatus();
+        } catch (error) {
+            console.error('Error checking audit LLM status:', error);
+            this.state.auditLLMEnabled = false;
+            this.updateAuditLLMStatus();
+        }
+    }
+
+    // Update audit LLM status display
+    updateAuditLLMStatus() {
+        const auditStatusDot = document.querySelector('#audit-llm-status .status-dot');
+        const auditStatusText = document.querySelector('#audit-llm-status .status-text');
+        
+        if (this.state.auditLLMEnabled) {
+            auditStatusDot.className = 'status-dot connected';
+            auditStatusText.textContent = '🔍 Audit LLM: Enabled';
+        } else {
+            auditStatusDot.className = 'status-dot error';
+            auditStatusText.textContent = '🔍 Audit LLM: Disabled';
+        }
     }
 
     // Update API status display
@@ -1886,10 +2108,8 @@ class PrivacyDemoApp {
                 consent_given: this.state.consentGiven,
                 consent_details: {
                     original_data_included: this.state.consentGiven,
-                    survey_data_included: this.state.surveyCompleted,
-                    prolific_id_included: !!this.state.prolificId
+                    survey_data_included: this.state.surveyCompleted
                 },
-                prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
             conversation: conversationToExport,
@@ -1920,10 +2140,8 @@ class PrivacyDemoApp {
                 consent_given: this.state.consentGiven,
                 consent_details: {
                     original_data_included: this.state.consentGiven,
-                    survey_data_included: this.state.surveyCompleted,
-                    prolific_id_included: !!this.state.prolificId
+                    survey_data_included: this.state.surveyCompleted
                 },
-                prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
             conversation: conversationToExport,
@@ -1977,7 +2195,6 @@ class PrivacyDemoApp {
                 edited_bot_messages: exportLog.filter(turn => turn.bot_edited).length,
                 export_type: 'analysis_with_edits',
                 consent_given: this.state.consentGiven,
-                prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
             conversation: exportLog,
@@ -2012,10 +2229,8 @@ class PrivacyDemoApp {
                 consent_details: {
                     original_data_included: this.state.consentGiven,
                     survey_data_included: this.state.surveyCompleted,
-                    prolific_id_included: !!this.state.prolificId,
                     privacy_choices_included: Object.keys(this.state.privacyChoices).length > 0
                 },
-                prolific_id: this.state.prolificId,
                 survey_completed: this.state.surveyCompleted
             },
             conversation: conversationToExport,
@@ -2089,17 +2304,30 @@ class PrivacyDemoApp {
     updateUI() {
         // Only update chat interface if we're on the chat page
         if (this.state.currentStepPage === 'chat') {
+            // Update chat header with background mode indicator
+            this.updateChatHeader();
+            
             // Show two-column layout only during Privacy Analysis & Export stage
             const twoCol = document.getElementById('two-column-layout');
             const chatContainer = document.querySelector('.chat-container');
             if (this.state.showPrivacyAnalysis) {
                 if (twoCol) twoCol.style.display = 'flex';
                 if (chatContainer) chatContainer.style.display = 'none';
+                // Clear the chat container to prevent duplication
+                const chatConversationContainer = chatContainer?.querySelector('#conversation-container');
+                if (chatConversationContainer) {
+                    chatConversationContainer.innerHTML = '';
+                }
                 this.updateConversationDisplay(true); // pass flag for analysis mode
                 this.updatePrivacyAnalysis();
             } else {
                 if (twoCol) twoCol.style.display = 'none';
                 if (chatContainer) chatContainer.style.display = '';
+                // Clear the analysis container to prevent duplication
+                const analysisConversationContainer = twoCol?.querySelector('#analysis-conversation-container');
+                if (analysisConversationContainer) {
+                    analysisConversationContainer.innerHTML = '';
+                }
                 this.updateConversationDisplay(false);
             }
             this.updateStatistics();
@@ -2110,6 +2338,22 @@ class PrivacyDemoApp {
         
         // Update multi-step interface state
         this.updateMultiStepInterface();
+    }
+
+    // Update chat header with background mode indicator
+    updateChatHeader() {
+        const chatHeaderTitle = document.getElementById('chat-header-title');
+        if (chatHeaderTitle) {
+            if (this.state.questionMode && !this.state.questionsCompleted) {
+                if (this.state.inFollowUpMode) {
+                    chatHeaderTitle.innerHTML = '<i class="fas fa-question-circle"></i> Follow-up Questions';
+                } else {
+                    chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Interview Questions';
+                }
+            } else {
+                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
+            }
+        }
     }
 
     // Update multi-step interface state
@@ -2139,6 +2383,16 @@ class PrivacyDemoApp {
         // Remove any existing sensitive text highlighting first
         this.removeSensitiveTextHighlighting();
         
+        // Debug logging to track duplication issues
+        console.log(`updateConversationDisplay called with analysisMode=${analysisMode}, conversationLog.length=${this.state.conversationLog.length}`);
+        
+        // Prevent rapid successive calls that might cause duplication
+        if (this._lastUpdateTime && Date.now() - this._lastUpdateTime < 100) {
+            console.log('Skipping updateConversationDisplay due to rapid successive calls');
+            return;
+        }
+        this._lastUpdateTime = Date.now();
+        
         let container;
         let filterActive = false;
         if (analysisMode) {
@@ -2162,14 +2416,21 @@ class PrivacyDemoApp {
             return;
         }
         
+        // Clear the container before rendering to prevent any residual content
+        container.innerHTML = '';
+        
         if (this.state.conversationLog.length === 0) {
             let emptyMessage = 'Start a conversation by typing a message below!';
+            let icon = 'fas fa-comment-dots';
+            
             if (this.state.questionMode) {
                 emptyMessage = 'The chatbot will start asking you questions. Please wait...';
+                icon = 'fas fa-question-circle';
             }
+            
             container.innerHTML = `
                 <div class="empty-state">
-                    <i class="fas fa-comment-dots"></i>
+                    <i class="${icon}"></i>
                     <p>${emptyMessage}</p>
                 </div>
             `;
@@ -2402,6 +2663,13 @@ class PrivacyDemoApp {
     bindEditModeEvents() {
         const editInputs = document.querySelectorAll('.message-edit-input');
         editInputs.forEach(input => {
+            // Apply copy/paste settings based on current state
+            if (this.state.copyPasteEnabled) {
+                this.enableCopyPaste(input);
+            } else {
+                this.disableCopyPaste(input);
+            }
+            
             // Save changes on blur (when user clicks away)
             input.addEventListener('blur', (e) => {
                 const messageIndex = parseInt(e.target.dataset.messageIndex);
@@ -2487,10 +2755,15 @@ class PrivacyDemoApp {
             
             // Reset header for normal mode
             chatHeader.classList.remove('edit-mode');
-            chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
             
-            // Reset main header title for normal mode
-            mainHeaderTitle.innerHTML = '<i class="fas fa-lock"></i> Chatbot';
+            // Set appropriate header based on current mode
+            if (this.state.questionMode) {
+                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Main Interview Questions';
+                mainHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Main Interview Questions';
+            } else {
+                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
+                mainHeaderTitle.innerHTML = '<i class="fas fa-lock"></i> Chatbot';
+            }
             
             // Hide edit instructions
             if (editInstructionsChat) {
@@ -2553,7 +2826,7 @@ class PrivacyDemoApp {
             const turnsInfo = '';
             // Show current question number (1-based) instead of completed count (0-based)
             const currentQuestionNumber = this.state.currentQuestionIndex + 1;
-            document.getElementById('stat-step').textContent = `${currentQuestionNumber}/${totalQuestions}${turnsInfo}`;
+            document.getElementById('stat-step').textContent = `Main: ${currentQuestionNumber}/${totalQuestions}${turnsInfo}`;
         } else {
             document.getElementById('stat-step').textContent = this.state.currentStep;
         }
@@ -2691,21 +2964,39 @@ class PrivacyDemoApp {
                     </div>` : '';
 
                 const contextualRiskClass = turn.userPrivacy.contextual_risk ? 'has-contextual-risk' : '';
+                
+                // Get both safer versions if available
+                let placeholderVersion = after;
+                let fakeDataVersion = '';
+                
+                if (turn.userPrivacy.safer_versions) {
+                    placeholderVersion = turn.userPrivacy.safer_versions.replacing;
+                    fakeDataVersion = turn.userPrivacy.safer_versions.abstraction;
+                }
+                
                 html += `
                     <div class="choice-item ${contextualRiskClass}" data-index="${i}" id="analysis-entry-user-${i}">
                         <h4>Message ${i + 1}: User Message Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.userPrivacy.type}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
-                        ${after ? `<p><strong>Safer Version:</strong> ${this.escapeHtml(after)}</p>` : ''}
+                        ${placeholderVersion ? `<p><strong>Placeholder Version:</strong> ${this.escapeHtml(placeholderVersion)}</p>` : ''}
+                        ${fakeDataVersion ? `<p><strong>Fake Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
                         ${contextualRiskInfo}
                         <div class="choice-buttons">
-                            <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'user', 'accept')" 
-                                    ${!after ? 'disabled' : ''}>
-                                ✅ Accept Suggestion
-                            </button>
-                            <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'user', 'keep')">
-                                ⚠️ Keep Original
-                            </button>
+                            ${userChoice === 'none' ? `
+                                <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'user', 'accept')" 
+                                        ${!placeholderVersion ? 'disabled' : ''}>
+                                    ✅ Accept Placeholder
+                                </button>
+                                <button class="btn btn-primary" onclick="app.makePrivacyChoice(${i}, 'user', 'accept_fake')" 
+                                        ${!fakeDataVersion ? 'disabled' : ''}>
+                                    🎭 Accept Fake Data
+                                </button>
+                            ` : `
+                                <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'user', 'keep')">
+                                    ⚠️ Keep Original
+                                </button>
+                            `}
                             <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="user" type="button">Go to Log</button>
                         </div>
                         <div class="choice-status ${userChoice}">
@@ -2748,20 +3039,37 @@ class PrivacyDemoApp {
                         console.warn('Failed to parse bot privacy suggestion:', turn.botPrivacy.suggestion);
                     }
                 }
+                // Get both safer versions if available
+                let placeholderVersion = after;
+                let fakeDataVersion = '';
+                
+                if (turn.botPrivacy.safer_versions) {
+                    placeholderVersion = turn.botPrivacy.safer_versions.replacing;
+                    fakeDataVersion = turn.botPrivacy.safer_versions.abstraction;
+                }
+                
                 html += `
                     <div class="choice-item" data-index="${i}" id="analysis-entry-bot-${i}">
                         <h4>Message ${i + 1}: Bot Response Privacy Issue</h4>
                         <p><strong>Issue:</strong> ${turn.botPrivacy.type}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
-                        ${after ? `<p><strong>Safer Version:</strong> ${this.escapeHtml(after)}</p>` : ''}
+                        ${placeholderVersion ? `<p><strong>Placeholder Version:</strong> ${this.escapeHtml(placeholderVersion)}</p>` : ''}
+                        ${fakeDataVersion ? `<p><strong>Fake Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
                         <div class="choice-buttons">
-                            <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept')" 
-                                    ${!after ? 'disabled' : ''}>
-                                ✅ Accept Suggestion
-                            </button>
-                            <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'bot', 'keep')">
-                                ⚠️ Keep Original
-                            </button>
+                            ${botChoice === 'none' ? `
+                                <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept')" 
+                                        ${!placeholderVersion ? 'disabled' : ''}>
+                                    ✅ Accept Placeholder
+                                </button>
+                                <button class="btn btn-primary" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept_fake')" 
+                                        ${!fakeDataVersion ? 'disabled' : ''}>
+                                    🎭 Accept Fake Data
+                                </button>
+                            ` : `
+                                <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'bot', 'keep')">
+                                    ⚠️ Keep Original
+                                </button>
+                            `}
                             <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="bot" type="button">Go to Log</button>
                         </div>
                         <div class="choice-status ${botChoice}">
@@ -2804,59 +3112,79 @@ class PrivacyDemoApp {
             delete this.state.privacyChoices[index];
         }
         
-        // Apply privacy correction immediately if choice is 'accept'
-        if (choice === 'accept' && this.state.analyzedLog[index]) {
+        // Apply privacy correction immediately if choice is 'accept' or 'accept_fake'
+        if ((choice === 'accept' || choice === 'accept_fake') && this.state.analyzedLog[index]) {
             console.log(`Applying privacy correction for index ${index}, issueType: ${issueType}, choice: ${choice}`);
             const analyzedTurn = this.state.analyzedLog[index];
             let correctionApplied = false;
             
-            if (issueType === 'user' && analyzedTurn.userPrivacy && analyzedTurn.userPrivacy.privacy_issue && analyzedTurn.userPrivacy.suggestion) {
+            if (issueType === 'user' && analyzedTurn.userPrivacy && analyzedTurn.userPrivacy.privacy_issue) {
                 let after = analyzedTurn.user;
-                // More robust regex to handle different quote types and spacing
-                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
-                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
-                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                 
-                if (beforeAfterPattern.test(analyzedTurn.userPrivacy.suggestion)) {
-                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPattern);
-                    if (match) {
-                        after = match[2];
+                // Use safer_versions if available, otherwise fall back to suggestion parsing
+                if (analyzedTurn.userPrivacy.safer_versions) {
+                    if (choice === 'accept') {
+                        after = analyzedTurn.userPrivacy.safer_versions.replacing;
+                    } else if (choice === 'accept_fake') {
+                        after = analyzedTurn.userPrivacy.safer_versions.abstraction;
                     }
-                } else if (beforeAfterPatternAlt.test(analyzedTurn.userPrivacy.suggestion)) {
-                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternAlt);
-                    if (match) {
-                        after = match[2];
-                    }
-                } else if (beforeAfterPatternFlexible.test(analyzedTurn.userPrivacy.suggestion)) {
-                    const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
-                    if (match) {
-                        after = match[2];
+                } else if (analyzedTurn.userPrivacy.suggestion) {
+                    // Fallback to parsing suggestion (for backward compatibility)
+                    const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                    const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                    const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                    
+                    if (beforeAfterPattern.test(analyzedTurn.userPrivacy.suggestion)) {
+                        const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPattern);
+                        if (match) {
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternAlt.test(analyzedTurn.userPrivacy.suggestion)) {
+                        const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternAlt);
+                        if (match) {
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternFlexible.test(analyzedTurn.userPrivacy.suggestion)) {
+                        const match = analyzedTurn.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                        if (match) {
+                            after = match[2];
+                        }
                     }
                 }
                 console.log(`Setting user message to: "${after}"`);
                 this.state.conversationLog[index].user = after;
                 correctionApplied = true;
-            } else if (issueType === 'bot' && analyzedTurn.botPrivacy && analyzedTurn.botPrivacy.privacy_issue && analyzedTurn.botPrivacy.suggestion) {
+            } else if (issueType === 'bot' && analyzedTurn.botPrivacy && analyzedTurn.botPrivacy.privacy_issue) {
                 let after = analyzedTurn.bot;
-                // More robust regex to handle different quote types and spacing
-                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
-                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
-                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                 
-                if (beforeAfterPattern.test(analyzedTurn.botPrivacy.suggestion)) {
-                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPattern);
-                    if (match) {
-                        after = match[2];
+                // Use safer_versions if available, otherwise fall back to suggestion parsing
+                if (analyzedTurn.botPrivacy.safer_versions) {
+                    if (choice === 'accept') {
+                        after = analyzedTurn.botPrivacy.safer_versions.replacing;
+                    } else if (choice === 'accept_fake') {
+                        after = analyzedTurn.botPrivacy.safer_versions.abstraction;
                     }
-                } else if (beforeAfterPatternAlt.test(analyzedTurn.botPrivacy.suggestion)) {
-                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternAlt);
-                    if (match) {
-                        after = match[2];
-                    }
-                } else if (beforeAfterPatternFlexible.test(analyzedTurn.botPrivacy.suggestion)) {
-                    const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
-                    if (match) {
-                        after = match[2];
+                } else if (analyzedTurn.botPrivacy.suggestion) {
+                    // Fallback to parsing suggestion (for backward compatibility)
+                    const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                    const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                    const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                    
+                    if (beforeAfterPattern.test(analyzedTurn.botPrivacy.suggestion)) {
+                        const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPattern);
+                        if (match) {
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternAlt.test(analyzedTurn.botPrivacy.suggestion)) {
+                        const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternAlt);
+                        if (match) {
+                            after = match[2];
+                        }
+                    } else if (beforeAfterPatternFlexible.test(analyzedTurn.botPrivacy.suggestion)) {
+                        const match = analyzedTurn.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
+                        if (match) {
+                            after = match[2];
+                        }
                     }
                 }
                 console.log(`Setting bot message to: "${after}"`);
@@ -2928,6 +3256,10 @@ class PrivacyDemoApp {
                     }
                 }, 100);
             }
+            
+            // Reset the choice to 'none' after reverting
+            this.makePrivacyChoice(index, issueType, 'none');
+            return; // Exit early since we're resetting the choice
         }
         
         this.updatePrivacyChoices();
@@ -2939,7 +3271,9 @@ class PrivacyDemoApp {
     getChoiceStatusText(choice) {
         switch (choice) {
             case 'accept':
-                return '✅ Choice: Accept Suggestion - Will use safer text in export';
+                return '✅ Choice: Accept Placeholder - Will use placeholder text in export';
+            case 'accept_fake':
+                return '🎭 Choice: Accept Fake Data - Will use fake data text in export';
             case 'keep':
                 return '⚠️ Choice: Keep Original - Will use original text in export';
             default:
@@ -3068,15 +3402,25 @@ class PrivacyDemoApp {
                 const savedState = JSON.parse(saved);
                 this.state = { ...this.state, ...savedState };
                 
+                // Ensure background mode is properly restored for ongoing conversations
+                if (this.state.conversationLog.length > 0) {
+                    // If we have a conversation in progress, ensure background mode is properly set
+                    this.state.backgroundMode = true;
+                }
+                
                 // If we're in the middle of the multi-step flow, restore the current page
                 if (this.state.currentStepPage && this.state.currentStepPage !== 'introduction') {
                     // Don't automatically show the saved page - let the user continue from where they left off
                     // but ensure the UI is properly initialized
                     this.updateUI();
                     this.updateSidebarToggle();
+                    this.updateCopyPasteToggle();
+                    this.applyCopyPasteSettings();
                 } else {
                     this.updateUI();
                     this.updateSidebarToggle();
+                    this.updateCopyPasteToggle();
+                    this.applyCopyPasteSettings();
                 }
             }
         } catch (error) {
@@ -3090,8 +3434,10 @@ class PrivacyDemoApp {
         const title = document.getElementById('tooltip-title');
         const explanation = document.getElementById('tooltip-explanation');
         const suggestion = document.getElementById('tooltip-suggestion');
-        const suggestionText = document.getElementById('tooltip-suggestion-text');
-        const applyBtn = document.getElementById('tooltip-apply-btn');
+        const replacingText = document.getElementById('tooltip-replacing-text');
+        const abstractionText = document.getElementById('tooltip-abstraction-text');
+        const applyReplacingBtn = document.getElementById('tooltip-apply-replacing-btn');
+        const applyAbstractionBtn = document.getElementById('tooltip-apply-abstraction-btn');
 
         // Get privacy data from element (support both analyzed log and real-time data)
         let privacyData = null;
@@ -3118,25 +3464,67 @@ class PrivacyDemoApp {
         explanation.style.display = 'none';
         
         // Show suggestion if available
-        if (privacyData.suggestion) {
+        if (privacyData.safer_versions) {
             suggestion.style.display = 'block';
-            suggestionText.textContent = privacyData.suggestion;
-            applyBtn.style.display = 'inline-block';
             
-            // Store data for applying suggestion
+            // Display both safer versions
+            replacingText.textContent = privacyData.safer_versions.replacing;
+            abstractionText.textContent = privacyData.safer_versions.abstraction;
+            
+            applyReplacingBtn.style.display = 'inline-block';
+            applyAbstractionBtn.style.display = 'inline-block';
+            
+            // Store data for applying suggestions
             if (messageIndex !== undefined) {
-                applyBtn.dataset.messageIndex = messageIndex;
-                applyBtn.dataset.originalText = element.textContent;
-                applyBtn.dataset.suggestionText = privacyData.suggestion;
+                applyReplacingBtn.dataset.messageIndex = messageIndex;
+                applyReplacingBtn.dataset.originalText = element.textContent;
+                applyReplacingBtn.dataset.suggestionText = privacyData.safer_versions.replacing;
+                
+                applyAbstractionBtn.dataset.messageIndex = messageIndex;
+                applyAbstractionBtn.dataset.originalText = element.textContent;
+                applyAbstractionBtn.dataset.suggestionText = privacyData.safer_versions.abstraction;
             } else {
                 // For real-time detection, apply to input field
-                applyBtn.dataset.realtime = 'true';
-                applyBtn.dataset.originalText = element.textContent;
-                applyBtn.dataset.suggestionText = privacyData.suggestion;
+                applyReplacingBtn.dataset.realtime = 'true';
+                applyReplacingBtn.dataset.originalText = element.textContent;
+                applyReplacingBtn.dataset.suggestionText = privacyData.safer_versions.replacing;
+                
+                applyAbstractionBtn.dataset.realtime = 'true';
+                applyAbstractionBtn.dataset.originalText = element.textContent;
+                applyAbstractionBtn.dataset.suggestionText = privacyData.safer_versions.abstraction;
+            }
+        } else if (privacyData.suggestion) {
+            // Fallback to old format
+            suggestion.style.display = 'block';
+            replacingText.textContent = privacyData.suggestion;
+            abstractionText.textContent = privacyData.suggestion;
+            
+            applyReplacingBtn.style.display = 'inline-block';
+            applyAbstractionBtn.style.display = 'inline-block';
+            
+            // Store data for applying suggestions
+            if (messageIndex !== undefined) {
+                applyReplacingBtn.dataset.messageIndex = messageIndex;
+                applyReplacingBtn.dataset.originalText = element.textContent;
+                applyReplacingBtn.dataset.suggestionText = privacyData.suggestion;
+                
+                applyAbstractionBtn.dataset.messageIndex = messageIndex;
+                applyAbstractionBtn.dataset.originalText = element.textContent;
+                applyAbstractionBtn.dataset.suggestionText = privacyData.suggestion;
+            } else {
+                // For real-time detection, apply to input field
+                applyReplacingBtn.dataset.realtime = 'true';
+                applyReplacingBtn.dataset.originalText = element.textContent;
+                applyReplacingBtn.dataset.suggestionText = privacyData.suggestion;
+                
+                applyAbstractionBtn.dataset.realtime = 'true';
+                applyAbstractionBtn.dataset.originalText = element.textContent;
+                applyAbstractionBtn.dataset.suggestionText = privacyData.suggestion;
             }
         } else {
             suggestion.style.display = 'none';
-            applyBtn.style.display = 'none';
+            applyReplacingBtn.style.display = 'none';
+            applyAbstractionBtn.style.display = 'none';
         }
 
         // Position tooltip
@@ -3155,64 +3543,87 @@ class PrivacyDemoApp {
     }
 
     // Apply tooltip suggestion
-    async applyTooltipSuggestion() {
+    async applyTooltipSuggestion(version = 'replacing') {
         const tooltip = document.getElementById('privacy-tooltip-container');
-        const suggestionText = document.getElementById('tooltip-suggestion-text').textContent;
-        const targetElement = tooltip.dataset.targetElement;
+        let suggestionText = '';
         
-        if (targetElement) {
-            const element = document.querySelector(targetElement);
-            if (element) {
-                element.textContent = suggestionText;
-                element.classList.remove('privacy-error');
+        if (version === 'replacing') {
+            suggestionText = document.getElementById('tooltip-replacing-text').textContent;
+        } else if (version === 'abstraction') {
+            suggestionText = document.getElementById('tooltip-abstraction-text').textContent;
+        }
+        
+        // Get the clicked button to access its dataset
+        const clickedButton = event.target.closest('button');
+        if (!clickedButton) return;
+        
+        const messageIndex = clickedButton.dataset.messageIndex;
+        const originalText = clickedButton.dataset.originalText;
+        const isRealtime = clickedButton.dataset.realtime === 'true';
+        
+        if (isRealtime) {
+            // Apply to input field for real-time detection
+            const chatInput = document.getElementById('chat-input');
+            if (chatInput) {
+                chatInput.value = suggestionText;
+                this.clearRealTimeDetection();
                 this.hidePrivacyTooltip();
-                this.showNotification('✅ Privacy fix applied', 'success');
+                this.showNotification(`✅ ${version === 'replacing' ? 'Placeholder' : 'Fake Data'} version applied`, 'success');
             }
+        } else if (messageIndex !== undefined) {
+            // Apply to existing message
+            const messageIndexInt = parseInt(messageIndex);
+            await this.applyPrivacyCorrection(messageIndexInt, originalText, suggestionText);
+            this.hidePrivacyTooltip();
+            this.showNotification(`✅ ${version === 'replacing' ? 'Placeholder' : 'Fake Data'} version applied`, 'success');
         }
     }
 
-    // Show Prolific ID popup
-    showProlificIdPopup() {
-        const popup = document.getElementById('prolific-id-popup');
-        const input = document.getElementById('prolific-id-input');
-        
-        // Clear any previous input
-        input.value = '';
-        
-        // Show popup
-        popup.style.display = 'flex';
-        
-        // Focus on input
-        setTimeout(() => {
-            input.focus();
-        }, 100);
+
+
+    // Show Free Edit popup
+    showFreeEditPopup() {
+        const popup = document.getElementById('free-edit-popup');
+        if (popup) {
+            popup.classList.add('show');
+            // Focus the understood button for accessibility
+            setTimeout(() => {
+                const understoodBtn = document.getElementById('free-edit-understood-btn');
+                if (understoodBtn) {
+                    understoodBtn.focus();
+                }
+            }, 100);
+        }
     }
 
-    // Close Prolific ID popup
-    closeProlificIdPopup() {
-        const popup = document.getElementById('prolific-id-popup');
-        popup.style.display = 'none';
+    // Close Free Edit popup
+    closeFreeEditPopup() {
+        const popup = document.getElementById('free-edit-popup');
+        if (popup) {
+            popup.classList.remove('show');
+        }
     }
 
-    // Start conversation after Prolific ID submission
-    async startConversationAfterProlificId() {
+    // Start conversation directly without requiring Prolific ID
+    async startConversationDirectly() {
         // If no mode is selected, default to naive mode
         if (!this.state.mode) {
             this.state.mode = 'naive';
             console.log('No mode selected, defaulting to naive mode');
         }
         
-        // Initialize question mode if not already set
-        if (!this.state.questionMode) {
-            this.state.questionMode = true;
-            this.state.currentQuestionIndex = 0;
-            this.state.questionsCompleted = false;
-            this.state.predefinedQuestionsCompleted = 0;
-            // Removed turn counting - letting LLM decide when to move to next question
-            this.state.completedQuestionIndices = [];
-            this.state.justCompletedQuestion = false;
-            console.log('Initialized question mode after Prolific ID submission');
-        }
+        // Always ensure background mode is enabled for new conversations
+        this.state.backgroundMode = true;
+
+        
+        // Initialize question mode for later use
+        this.state.questionMode = true;
+        this.state.currentQuestionIndex = 0;
+        this.state.questionsCompleted = false;
+        this.state.predefinedQuestionsCompleted = 0;
+        this.state.completedQuestionIndices = [];
+        this.state.justCompletedQuestion = false;
+        console.log('✅ Initialized background mode for direct conversation start');
         
         // Update UI to reflect the current mode
         this.updateModeInfo();
@@ -3220,36 +3631,11 @@ class PrivacyDemoApp {
         
         // Add a small delay to ensure UI is updated before starting conversation
         setTimeout(async () => {
-            await this.startQuestionConversation();
+
         }, 100);
     }
 
-    // Handle Prolific ID submission
-    handleProlificIdSubmit() {
-        const input = document.getElementById('prolific-id-input');
-        const prolificId = input.value.trim();
-        
-        if (!prolificId) {
-            this.showNotification('Please enter your Prolific ID to continue.', 'warning');
-            return;
-        }
-        
-        // Save Prolific ID to state
-        this.state.prolificId = prolificId;
-        this.state.prolificIdSubmitted = true;
-        
-        // Save to localStorage
-        this.saveToLocalStorage();
-        
-        // Close popup
-        this.closeProlificIdPopup();
-        
-        // Show success notification
-        this.showNotification(`Welcome! Prolific ID: ${prolificId}`, 'success');
-        
-        // Start the conversation automatically
-        this.startConversationAfterProlificId();
-    }
+
 
     // Show survey popup
     showSurveyPopup(exportAction) {
@@ -3264,6 +3650,18 @@ class PrivacyDemoApp {
         const popup = document.getElementById('survey-popup');
         popup.style.display = 'flex';
         console.log('🔍 Survey popup displayed');
+        
+        // Apply copy/paste settings to all textarea elements in the survey
+        setTimeout(() => {
+            const textareas = popup.querySelectorAll('textarea');
+            textareas.forEach(textarea => {
+                if (this.state.copyPasteEnabled) {
+                    this.enableCopyPaste(textarea);
+                } else {
+                    this.disableCopyPaste(textarea);
+                }
+            });
+        }, 200); // Delay to ensure DOM is ready
         
         // Show notification about current mode for debugging
         this.showNotification(`🔍 Survey opened in ${this.state.mode} mode`, 'info');
@@ -3451,8 +3849,7 @@ class PrivacyDemoApp {
     // Redirect to thanks page
     redirectToThanksPage() {
         try {
-            const prolificId = this.state.prolificId || '';
-            const thanksUrl = `/thanks?prolific_id=${encodeURIComponent(prolificId)}`;
+            const thanksUrl = `/thanks`;
             console.log('Redirecting to thanks page:', thanksUrl);
             
             // Show a notification before redirecting
@@ -3705,14 +4102,18 @@ function closeSurveyPopup() {
     popup.style.display = 'none';
 }
 
-function closeProlificIdPopup() {
-    const popup = document.getElementById('prolific-id-popup');
-    popup.style.display = 'none';
-}
+
 
 function closeCongratulationPopup() {
     const popup = document.getElementById('congratulation-popup');
     popup.style.display = 'none';
+}
+
+function closeFreeEditPopup() {
+    const popup = document.getElementById('free-edit-popup');
+    if (popup) {
+        popup.classList.remove('show');
+    }
 }
 
 // Initialize the application

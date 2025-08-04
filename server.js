@@ -27,6 +27,10 @@ try {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Audit LLM configuration
+const ENABLE_AUDIT_LLM = process.env.ENABLE_AUDIT_LLM === 'true';
+console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -46,9 +50,36 @@ let uploadedQuestions = [];
 let uploadedReturnLog = [];
 let activeChatSession = null; // Store the active chat session for context
 
+// Global PII category counters for conversation-wide placeholder numbering
+let globalPiiCounters = {
+    ADDRESS: 0,
+    IP_ADDRESS: 0,
+    URL: 0,
+    SSN: 0,
+    PHONE_NUMBER: 0,
+    EMAIL: 0,
+    DRIVERS_LICENSE: 0,
+    PASSPORT_NUMBER: 0,
+    TAXPAYER_IDENTIFICATION_NUMBER: 0,
+    ID_NUMBER: 0,
+    NAME: 0,
+    USERNAME: 0,
+    KEYS: 0,
+    GEOLOCATION: 0,
+    AFFILIATION: 0,
+    DEMOGRAPHIC_ATTRIBUTE: 0,
+    TIME: 0,
+    HEALTH_INFORMATION: 0,
+    FINANCIAL_INFORMATION: 0,
+    EDUCATIONAL_RECORD: 0
+};
+
 // Predefined questions stored on server
 const predefinedQuestions = {
     naive: [
+        "What was your major or field of study in college/university?",
+        "What is your current job title and what do you do in your role?",
+        "How long have you been using AI tools like ChatGPT, Claude, or similar platforms?",
         "How did you first come across the idea of using GenAI (e.g., ChatGPT, Gemini) to help with job interviews?",
         "Can you walk us through a time when you used GenAI as part of your job interview preparation process?",
         "Has AI ever played a major role in your interview preparation? Tell us about that experience.",
@@ -70,6 +101,9 @@ const predefinedQuestions = {
         "Are there any stories you'd like to share — surprising, funny, embarrassing, or impressive — about your journey using AI in job interviews?"
     ],
     neutral: [
+        "What was your major or field of study in college/university?",
+        "What is your current job title and what do you do in your role?",
+        "How long have you been using AI tools like ChatGPT, Claude, or similar platforms?",
         "How did you first come across the idea of using GenAI (e.g., ChatGPT, Gemini) to help with job interviews?",
         "Can you walk us through a time when you used GenAI as part of your job interview preparation process?",
         "Has AI ever played a major role in your interview preparation? Tell us about that experience.",
@@ -91,6 +125,9 @@ const predefinedQuestions = {
         "Are there any stories you'd like to share — surprising, funny, embarrassing, or impressive — about your journey using AI in job interviews?"
     ],
     featured: [
+        "What was your major or field of study in college/university?",
+        "What is your current job title and what do you do in your role?",
+        "How long have you been using AI tools like ChatGPT, Claude, or similar platforms?",
         "How did you first come across the idea of using GenAI (e.g., ChatGPT, Gemini) to help with job interviews?",
         "Can you walk us through a time when you used GenAI as part of your job interview preparation process?",
         "Has AI ever played a major role in your interview preparation? Tell us about that experience.",
@@ -113,6 +150,8 @@ const predefinedQuestions = {
     ]
 };
 
+
+
 // Helper function to manage conversation context
 function manageConversationContext() {
     // Keep track of conversation context without resetting
@@ -125,6 +164,49 @@ function manageConversationContext() {
         // Keep only recent messages in history for reference but maintain chat session
         conversationHistory = conversationHistory.slice(-100);
     }
+}
+
+// Helper function to get the next uncompleted question index
+function getNextUncompletedQuestionIndex() {
+    // This is a simplified implementation for the server
+    // In a real implementation, you would track completed questions in the conversation state
+    // For now, we'll use a simple approach based on the current conversation step
+    
+    // Get the current step from the conversation history
+    const currentStep = conversationHistory.length;
+    
+    // Assuming questions are processed sequentially, the next question index would be the current step
+    // This is a basic implementation - in production you'd want more sophisticated tracking
+    return currentStep;
+}
+
+// Helper function to get the next placeholder number for a PII category
+function getNextPlaceholderNumber(piiCategory) {
+    if (globalPiiCounters.hasOwnProperty(piiCategory)) {
+        globalPiiCounters[piiCategory]++;
+        return globalPiiCounters[piiCategory];
+    }
+    // For unknown categories, use a generic counter
+    if (!globalPiiCounters['UNKNOWN']) {
+        globalPiiCounters['UNKNOWN'] = 0;
+    }
+    globalPiiCounters['UNKNOWN']++;
+    return globalPiiCounters['UNKNOWN'];
+}
+
+// Enhanced function to get next question from predefined questions array
+function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
+    if (!predefinedQuestions || !Array.isArray(predefinedQuestions)) {
+        return null;
+    }
+    
+    // If we're at the end of the questions, return null
+    if (currentIndex >= predefinedQuestions.length) {
+        return null;
+    }
+    
+    // Return the next question
+    return predefinedQuestions[currentIndex];
 }
 
 // API Routes
@@ -163,6 +245,8 @@ app.get('/api/predefined_questions/:mode', (req, res) => {
     }
 });
 
+
+
 // Debug API to show conversation context
 app.get('/api/debug_context', (req, res) => {
     res.json({
@@ -170,14 +254,28 @@ app.get('/api/debug_context', (req, res) => {
         active_chat_session: activeChatSession !== null,
         current_mode: currentMode,
         uploaded_questions: uploadedQuestions,
-        uploaded_return_log: uploadedReturnLog
+        uploaded_return_log: uploadedReturnLog,
+        global_pii_counters: globalPiiCounters
+    });
+});
+
+// Configuration API
+app.get('/api/config', (req, res) => {
+    res.json({
+        audit_llm_enabled: ENABLE_AUDIT_LLM,
+        openai_available: openaiClient !== null,
+        features: {
+            audit_llm: ENABLE_AUDIT_LLM,
+            privacy_detection: currentMode === 'featured',
+            question_mode: true
+        }
     });
 });
 
 // Chat API
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false } = req.body;
+        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false } = req.body;
         
         if (!message || message.trim() === '') {
             return res.status(400).json({ error: 'Message is required and cannot be empty' });
@@ -196,9 +294,14 @@ app.post('/api/chat', async (req, res) => {
         // Manage conversation context (reset if too long)
         manageConversationContext();
 
+        // Check if this is the first exchange (only one user message in history)
+        const isFirstExchange = conversationHistory.length === 1;
+        console.log(`Conversation history length: ${conversationHistory.length}, isFirstExchange: ${isFirstExchange}`);
+        
         // Generate AI response using OpenAI or fallback
         let aiResponse;
         let questionCompleted = false;
+        let auditResult = null;
         
         if (openaiClient) {
             try {
@@ -211,11 +314,32 @@ app.post('/api/chat', async (req, res) => {
                         "\n\nFINAL QUESTION INSTRUCTIONS: This is the LAST question in the conversation. You should engage in natural follow-up conversation about this topic, asking 3-4 follow-up questions to gather detailed information before ending. Do NOT use 'NEXT_QUESTION:' for the final question. After sufficient discussion (3-4 exchanges), provide a natural conclusion that:\n1. Thanks the user for their participation\n2. Briefly summarizes what you've learned about them\n3. Clearly indicates the conversation is complete\n\nCRITICAL: Only end the conversation after you've had a meaningful discussion with 3-4 follow-up questions. Do not rush to end the conversation.\n\nExample ending: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your background, your work at MIT, and your love for hiking. You seem like a fascinating person. This concludes our conversation - thank you for your time!'" : 
                         "";
                     
-                    systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+                    if (isFirstExchange) {
+                        systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+
+Your role is to:
+1. Provide a warm, welcoming introduction
+2. Explain that you'll be asking questions about their experiences with AI and job interviews
+3. Then naturally transition to asking the first question
+
+IMPORTANT: Do NOT immediately jump into asking the first question. Start with a proper introduction and welcome.
+
+Example of a good first response:
+"Hello! Thank you for joining me today. I'm here to have a conversation with you about your experiences with AI and job interviews. I'll be asking you some questions to learn more about how you've used AI tools in your interview preparation process. 
+
+Let's start with a bit about your background. What was your major or field of study in college or university?"
+
+Current question context: ${currentQuestion || 'Starting conversation'}
+
+Predefined questions to cover: ${predefinedQuestions.join(', ')}
+
+Remember to be warm, welcoming, and conversational. Provide context about what the conversation will be about before asking your first question.${finalQuestionNote}`;
+                    } else {
+                        systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
 
 Your role is to ask the predefined questions naturally and engage in follow-up conversation based on the user's responses. You should:
 
-1. Start with the general topic from the predefined question
+1. Ask the predefined questions naturally and engage in follow-up conversation based on the user's responses
 2. Gradually ask more specific and personal follow-up questions to gather concrete, real stories
 3. Show genuine interest in their answers
 4. Keep responses concise but engaging
@@ -229,7 +353,7 @@ CONVERSATION FLOW INSTRUCTIONS:
 - Always start with the general topic from the predefined question
 - Gradually ask more specific and personal follow-up questions to gather concrete, real stories
 - The follow-up questions should be more generic and focused on concrete, real experiences
-- Example flow: General topic → Specific experience → Personal story → Real example
+- Example flow: From General topic to Specific experience then to Personal story finally to Real examples
 - Generate your own follow-up questions based on the user's responses to gather more specific and personal information
 
 CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
@@ -267,7 +391,10 @@ CONVERSATION FLOW EXAMPLES:
 The response should be exactly ONE transition sentence followed by ONE main question, nothing more.
 
 Remember to be conversational and ask follow-up questions based on what the user shares. Don't rush through questions, but also don't artificially extend conversations that feel complete.${finalQuestionNote}`;
+                    }
                 }
+
+                console.log(`System prompt type: ${isFirstExchange ? 'FIRST_EXCHANGE' : 'REGULAR'}`);
 
                 // Build messages array for OpenAI
                 const messages = [
@@ -305,9 +432,10 @@ Remember to be conversational and ask follow-up questions based on what the user
 
                 aiResponse = completion.choices[0].message.content;
                 
-                // Check if LLM signaled question completion or conversation ending
+                // Check if LLM signaled question completion
+                let mainLLMCompleted = false;
                 if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
-                    questionCompleted = true;
+                    mainLLMCompleted = true;
                     aiResponse = aiResponse.replace('NEXT_QUESTION:', '').trim();
                     console.log('Question completed via NEXT_QUESTION signal');
                 } else if (questionMode && isFinalQuestion) {
@@ -323,9 +451,56 @@ Remember to be conversational and ask follow-up questions based on what the user
                     
                     const hasEndingPattern = endingPatterns.some(pattern => pattern.test(aiResponse));
                     if (hasEndingPattern) {
-                        questionCompleted = true;
+                        mainLLMCompleted = true;
                         console.log('Final question completed via conversation ending signal');
                     }
+                }
+
+                // Audit LLM evaluation for question completion
+                if (ENABLE_AUDIT_LLM && questionMode && currentQuestion) {
+                    console.log('Calling audit LLM for question completion evaluation...');
+                    auditResult = await auditQuestionCompletion(message, aiResponse, currentQuestion, conversationHistory, isFinalQuestion, followUpMode);
+                    
+                    // If audit LLM recommends proceeding and confidence is high enough
+                    if (auditResult && auditResult.shouldProceed && auditResult.confidence >= 0.7) {
+                        console.log(`Audit LLM recommends proceeding to next question: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
+                        
+                        // For now, just mark the question as completed and let the frontend handle the next question
+                        // The frontend will automatically move to the next question in its flow
+                        questionCompleted = true;
+                        console.log('Question completed via audit LLM recommendation');
+                    } else if (auditResult && !auditResult.shouldProceed && !followUpMode && auditResult.followUpQuestions && auditResult.followUpQuestions.length > 0) {
+                        // Audit LLM suggests follow-up questions (only when not already in follow-up mode)
+                        console.log(`Audit LLM suggests follow-up questions: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
+                        console.log(`Follow-up questions: ${auditResult.followUpQuestions.join(', ')}`);
+                        
+                        // Additional safety check: ensure the first followUpQuestion is actually a valid question
+                        const firstFollowUpQuestion = auditResult.followUpQuestions[0];
+                        if (firstFollowUpQuestion && typeof firstFollowUpQuestion === 'string' && firstFollowUpQuestion.trim().length > 0) {
+                            // Validate that it's actually a question and not reasoning text
+                            const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
+                            const endsWithQuestionMark = /\?$/;
+                            const isReasoningText = /(reason|confidence|brief explanation|minimal information|detailed response|topic sufficiently explored|follow-up conversation|conversation ready|adequately addressed|thoroughly addressed|audit decision|evaluation criteria|decision guidelines)/i;
+                            
+                            if ((questionWords.test(firstFollowUpQuestion) || endsWithQuestionMark.test(firstFollowUpQuestion)) && !isReasoningText.test(firstFollowUpQuestion)) {
+                                aiResponse = firstFollowUpQuestion;
+                                console.log('Added follow-up question via audit LLM recommendation');
+                            } else {
+                                console.log('First followUpQuestion appears to be reasoning text, using fallback response');
+                                aiResponse = "Could you share a bit more about this topic?";
+                            }
+                        } else {
+                            console.log('No valid followUpQuestions found, using fallback response');
+                            aiResponse = "Could you share a bit more about this topic?";
+                        }
+                    } else if (auditResult) {
+                        console.log(`Audit LLM recommends continuing current question: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
+                    }
+                }
+
+                // Final decision: use main LLM's decision if it made one
+                if (mainLLMCompleted) {
+                    questionCompleted = true;
                 }
                 
             } catch (aiError) {
@@ -368,6 +543,9 @@ Remember to be conversational and ask follow-up questions based on what the user
         if (questionMode) {
             console.log(`Question completion status: ${questionCompleted}`);
             console.log(`Final AI response being sent: "${aiResponse}"`);
+            if (auditResult) {
+                console.log(`Audit LLM evaluation: ${JSON.stringify(auditResult)}`);
+            }
         }
         
         res.json({
@@ -376,7 +554,9 @@ Remember to be conversational and ask follow-up questions based on what the user
             conversation_history: conversationHistory,
             step: step,
             privacy_detection: privacyDetection,
-            question_completed: questionCompleted
+            question_completed: questionCompleted,
+            audit_result: auditResult,
+            follow_up_questions: auditResult && auditResult.followUpQuestions ? auditResult.followUpQuestions : null
         });
     } catch (error) {
         console.error('Chat API error:', error);
@@ -401,6 +581,23 @@ app.post('/api/privacy_detection', async (req, res) => {
             console.log('AI privacy detection failed, using pattern matching fallback');
             privacyResult = detectPrivacyWithPatterns(user_message, conversationHistory);
         }
+        
+        // For simple patterns (names, emails, phones), prefer pattern-based detection for consistency
+        const simplePatterns = [
+            /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/, // Full Name
+            /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, // Email
+            /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, // Phone Number
+            /\b\d{3}-\d{2}-\d{4}\b/, // SSN
+            /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/ // Credit Card
+        ];
+        
+        const hasSimplePattern = simplePatterns.some(pattern => pattern.test(user_message));
+        if (hasSimplePattern) {
+            console.log('Simple pattern detected, using pattern-based detection for consistency');
+            privacyResult = detectPrivacyWithPatterns(user_message, conversationHistory);
+        }
+        
+
 
         res.json(privacyResult);
     } catch (error) {
@@ -410,6 +607,185 @@ app.post('/api/privacy_detection', async (req, res) => {
         res.json(fallbackResult);
     }
 });
+
+// Audit LLM for Question Completion Evaluation
+async function auditQuestionCompletion(userMessage, aiResponse, currentQuestion, conversationHistory, isFinalQuestion = false, followUpMode = false) {
+    if (!openaiClient) {
+        console.log('⚠️  Audit LLM not available - skipping question completion audit');
+        return { shouldProceed: false, reason: 'Audit LLM not available' };
+    }
+
+    try {
+        const auditPrompt = `You are an impartial auditor evaluating whether a conversation should proceed to the next question.
+
+CURRENT CONTEXT:
+- Current Question: "${currentQuestion}"
+- User's Latest Response: "${userMessage}"
+- AI's Response: "${aiResponse}"
+- Is Final Question: ${isFinalQuestion}
+- Follow-up Mode: ${followUpMode}
+
+EVALUATION CRITERIA:
+1. Has the user provided substantial information about the current question?
+2. Has the conversation about this topic reached a natural conclusion?
+3. Would moving to the next question feel natural and appropriate?
+4. Has the AI gathered enough meaningful information about this topic?
+
+For the final question only:
+- Has the AI engaged in sufficient follow-up conversation (3-4 exchanges)?
+- Is the conversation ready to conclude naturally?
+
+DECISION GUIDELINES:
+- If user response is brief (1-2 sentences): shouldProceed = false, suggest follow-up questions
+- If user response is moderate (3-4 sentences with some detail): shouldProceed = false, suggest follow-up questions
+- If user response is comprehensive (5+ sentences with specific examples): shouldProceed = true
+- For final questions: require more follow-up conversation before concluding
+
+FOLLOW-UP MODE GUIDELINES:
+When in follow-up mode (Follow-up Mode: true):
+- Be more lenient about completing follow-up questions
+- Allow completion after 1-2 exchanges for follow-up questions
+- Focus on whether the specific follow-up question has been adequately addressed
+- Do not suggest additional follow-up questions (since we're already in follow-up mode)
+
+FOLLOW-UP QUESTION GUIDELINES:
+When shouldProceed = false AND NOT in follow-up mode, you should suggest 1-2 specific follow-up questions that would help gather more information about the current topic. These questions should:
+- Be specific and relevant to what the user just shared
+- Ask for concrete examples, details, or experiences
+- Help deepen the conversation about the current topic
+- Be natural and conversational in tone
+- Focus on practical experiences and actions rather than personal opinions or feelings
+- keep it interactive and engaging
+- Ask about specific tools, methods, outcomes, or concrete situations
+
+- MUST be actual questions that start with question words (What, How, Why, When, Where, Who, Did, Do, Can, Are, Is, Could, Would, Will, Have, Has, Was, Were)
+- MUST end with a question mark (?)
+- MUST NOT contain any reasoning, explanations, or audit decision text
+- MUST NOT contain phrases like "User has not yet provided", "need more follow-up questions", "should proceed", "confidence", "reason", etc.
+
+CRITICAL: The followUpQuestions array should contain ONLY actual questions that will be asked to the user. Do NOT include any reasoning, explanations, or audit decision text in the followUpQuestions array.
+
+NOTE: When in follow-up mode, do NOT suggest additional follow-up questions since we're already asking follow-up questions.
+
+RESPONSE FORMAT:
+Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
+{
+    "shouldProceed": true/false,
+    "reason": "Brief explanation of your decision",
+    "confidence": 0.0-1.0,
+    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode)
+}
+
+EXAMPLES:
+- Brief response: {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up questions", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
+- Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples, topic sufficiently explored", "confidence": 0.9}
+- Final question needs more discussion: {"shouldProceed": false, "reason": "Final question needs more follow-up conversation before concluding", "confidence": 0.7, "followUpQuestions": ["What specific outcomes did you achieve from using AI?", "Can you share another example of how you used AI in your preparation?"]}
+- Follow-up mode brief response: {"shouldProceed": true, "reason": "Follow-up question adequately addressed, ready to proceed", "confidence": 0.8}
+- Follow-up mode comprehensive response: {"shouldProceed": true, "reason": "Follow-up question thoroughly addressed", "confidence": 0.9}
+
+IMPORTANT: Notice that the "reason" field contains the explanation, while the "followUpQuestions" array contains ONLY actual questions that will be asked to the user.
+
+IMPORTANT: Never generate follow-up questions that ask about skepticism, doubts, concerns, or negative feelings. Always focus on positive experiences, practical applications, and concrete outcomes.
+
+IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
+
+        const auditMessages = [
+            { role: 'system', content: auditPrompt }
+        ];
+
+        // Add recent conversation context (last 6 messages for context)
+        const recentMessages = conversationHistory.slice(-6);
+        if (recentMessages.length > 0) {
+            const contextMessage = `Recent conversation context:\n${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
+            auditMessages.push({ role: 'user', content: contextMessage });
+        }
+
+        const auditCompletion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: auditMessages,
+            max_tokens: 300,
+            temperature: 0.3
+        });
+
+        const auditResponse = auditCompletion.choices[0].message.content;
+        
+        // Clean the response to handle markdown code blocks
+        let cleanedResponse = auditResponse.trim();
+        
+        // Remove markdown code blocks if present
+        if (cleanedResponse.startsWith('```json')) {
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleanedResponse.startsWith('```')) {
+            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        }
+        
+        // Parse the JSON response
+        try {
+            const auditResult = JSON.parse(cleanedResponse);
+            // Filter followUpQuestions to remove any that contain audit reasoning
+            if (auditResult && Array.isArray(auditResult.followUpQuestions)) {
+                auditResult.followUpQuestions = auditResult.followUpQuestions
+                    .filter(q => {
+                        if (!q || typeof q !== 'string') return false;
+                        
+                        // Remove questions that contain audit reasoning patterns
+                        const reasoningPatterns = [
+                            /^User (has|provided|not yet provided)/i,
+                            /^The user (has|provided|not yet provided)/i,
+                            /need more follow-up questions/i,
+                            /should proceed/i,
+                            /confidence:/i,
+                            /reason:/i,
+                            /brief explanation/i,
+                            /minimal information/i,
+                            /detailed response/i,
+                            /topic sufficiently explored/i,
+                            /follow-up conversation/i,
+                            /conversation ready/i,
+                            /adequately addressed/i,
+                            /thoroughly addressed/i,
+                            /audit decision/i,
+                            /evaluation criteria/i,
+                            /decision guidelines/i
+                        ];
+                        
+                        // Check if the question contains any reasoning patterns
+                        const hasReasoningPattern = reasoningPatterns.some(pattern => pattern.test(q));
+                        if (hasReasoningPattern) return false;
+                        
+                        // Sanity check: avoid long reasoning text
+                        if (q.length > 200) return false;
+                        
+                        // Must contain question words or end with question mark
+                        const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
+                        const endsWithQuestionMark = /\?$/;
+                        
+                        return questionWords.test(q) || endsWithQuestionMark.test(q);
+                    })
+                    .map(q => {
+                        // Extract the actual question using regex for common question words
+                        const match = q.match(/\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b.*/i);
+                        if (match) {
+                            return match[0].trim();
+                        }
+                        return q.trim();
+                    })
+                    .filter(q => q && q.length > 0); // Remove empty questions after processing
+            }
+            console.log(`Audit LLM Result: ${JSON.stringify(auditResult)}`);
+            return auditResult;
+        } catch (parseError) {
+            console.error('Failed to parse audit LLM response:', parseError);
+            console.log('Raw audit response:', auditResponse);
+            console.log('Cleaned response:', cleanedResponse);
+            return { shouldProceed: false, reason: 'Failed to parse audit response', confidence: 0.0 };
+        }
+
+    } catch (error) {
+        console.error('Audit LLM error:', error);
+        return { shouldProceed: false, reason: 'Audit LLM error: ' + error.message, confidence: 0.0 };
+    }
+}
 
 // AI-based privacy detection function with conversation context
 async function detectPrivacyWithAI(userMessage, conversationContext = null) {
@@ -453,7 +829,8 @@ async function detectPrivacyWithAI(userMessage, conversationContext = null) {
             }
         }
 
-        const privacyPrompt = `You are an expert in cybersecurity and data privacy. You are now
+        // Step 1: Detection LLM - Identify PII and create numbered placeholders
+        const detectionPrompt = `You are an expert in cybersecurity and data privacy. You are now
 tasked to detect PII from the given text, using the following taxonomy only:
 
 ADDRESS
@@ -469,102 +846,262 @@ ID_NUMBER
 NAME
 USERNAME
 KEYS: Passwords, passkeys, API keys, encryption keys, and any
-other form of security keys.GEOLOCATION: Places and locations, such as cities, provinces,
+other form of security keys.
+GEOLOCATION: Places and locations, such as cities, provinces,
 countries, international regions, or named infrastructures
 (e.g., bus stops, bridges, etc.).
-
 AFFILIATION: Names of organizations, such as public and private companies, schools, universities, public institutions,
-prisons, healthcare institutions, non-governmental organizations, churches, etc.DEMOGRAPHIC_ATTRIBUTE: Demographic attributes of a
+prisons, healthcare institutions, non-governmental organizations, churches, etc.
+DEMOGRAPHIC_ATTRIBUTE: Demographic attributes of a
 person, such as native language, descent, heritage, ethnicity,
 nationality, religious or political group, birthmarks, ages,
-sexual orientation, gender, and sex.TIME: Description of a specific date, time, or duration.HEALTH_INFORMATION: Details concerning an individual's
+sexual orientation, gender, and sex.
+TIME: Description of a specific date, time, or duration.
+HEALTH_INFORMATION: Details concerning an individual's
 health status, medical conditions, treatment records, and
-health insurance information.FINANCIAL_INFORMATION: Financial details such as bank account numbers, credit card numbers, investment records,
-salary information, and other financial statuses or activities.EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, and certifications.
+health insurance information.
+FINANCIAL_INFORMATION: Financial details such as bank account numbers, credit card numbers, investment records,
+salary information, and other financial statuses or activities.
+EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, and certifications.
 
-For the given message that a user sends to a chatbot, identify all the personally identifiable information using the above taxonomy only, and the entity_type should be selected from the all-caps categories.
+For the given message that a user sends to a chatbot, identify all the personally identifiable information using the above taxonomy only.
 Note that the information should be related to a real person not in a public context, but okay if not uniquely identifiable.
 Result should be in its minimum possible unit.
-Rewrite the text to abstract the protected information, without changing other parts.
+
+IMPORTANT: For each detected PII, assign a numbered placeholder (e.g., NAME1, NAME2, EMAIL1, etc.) that counts across the entire conversation history. The numbering should be sequential across all conversations, not just within a single message. For example, if NAME1 was used in a previous message, the next name should be NAME2.
 
 Use this exact format:
-{"privacy_issue": true/false, "type": "issue_category", "suggestion": "Before: \"<original>\"\nAfter: \"<safer>\"", "explanation": "brief_reason", "affected_text": "specific_text_that_poses_risk", "sensitive_text": "specific_text_that_poses_risk"}
-If no privacy issues found, respond with: {"privacy_issue": false, "type": null, "suggestion": null, "explanation": null, "affected_text": null, "sensitive_text": null}
+{
+  "privacy_issue": true/false,
+  "detected_pii": [
+    {
+      "type": "PII_CATEGORY",
+      "original_text": "exact_text_found",
+      "placeholder": "CATEGORY1",
+      "explanation": "brief_reason"
+    }
+  ],
+  "text_with_placeholders": "original_text_with_PII_replaced_by_placeholders",
+  "affected_text": "comma_separated_list_of_all_detected_texts"
+}
 
-For example:
-Input: <Text>I graduated from CMU, and I earn a six-figure
-salary. Today in the office...</Text><ProtectedInformation>CMU,Today</ProtectedInformation>
-Output JSON: {"privacy_issue": true, "type": "EDUCATIONAL_RECORD", "suggestion": "Before: \"I graduated from CMU, and I earn a six-figure salary. Today in the office...\"\nAfter: \"I graduated from [University], and I earn a six-figure salary. Today in the office...\"", "explanation": "The user's educational background and salary information are protected.", "affected_text": "CMU,Today", "sensitive_text": "CMU,Today"}
+If no privacy issues found, respond with:
+{
+  "privacy_issue": false,
+  "detected_pii": [],
+  "text_with_placeholders": "original_text_unchanged",
+  "affected_text": null
+}
 
 Current user message: "${userMessage}"${contextInfo}`;
 
-        const completion = await openaiClient.chat.completions.create({
+        // Step 1: Detection LLM - Identify PII and create numbered placeholders
+        const detectionCompletion = await openaiClient.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues considering conversation context and respond with ONLY valid JSON." },
-                { role: "user", content: privacyPrompt }
+                { role: "user", content: detectionPrompt }
             ],
             max_tokens: 800,
             temperature: 0.1
         });
-        const responseText = completion.choices[0].message.content;
+        const detectionResponseText = detectionCompletion.choices[0].message.content;
         
-        // Clean the response text to extract JSON (remove markdown formatting)
-        let cleanedResponse = responseText.trim();
+        // Clean the detection response text to extract JSON
+        let cleanedDetectionResponse = detectionResponseText.trim();
         
         // Remove markdown code blocks if present
-        if (cleanedResponse.startsWith('```json')) {
-            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        } else if (cleanedResponse.startsWith('```')) {
-            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        if (cleanedDetectionResponse.startsWith('```json')) {
+            cleanedDetectionResponse = cleanedDetectionResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleanedDetectionResponse.startsWith('```')) {
+            cleanedDetectionResponse = cleanedDetectionResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
         
-        // Try to parse JSON response
+        // Parse detection response
+        let detectionData;
         try {
-            const privacyData = JSON.parse(cleanedResponse);
+            detectionData = JSON.parse(cleanedDetectionResponse);
+        } catch (parseError) {
+            console.error('Failed to parse AI detection response:', parseError);
+            console.error('Original response:', detectionResponseText);
+            console.error('Cleaned response:', cleanedDetectionResponse);
+            throw new Error('Invalid JSON response from detection AI');
+        }
+        
+        // If no privacy issues detected, return early
+        if (!detectionData.privacy_issue || !detectionData.detected_pii || detectionData.detected_pii.length === 0) {
+            return {
+                privacy_issue: false,
+                type: null,
+                suggestion: null,
+                explanation: null,
+                affected_text: null,
+                sensitive_text: null
+            };
+        }
+        
+        // Update placeholders with conversation-wide numbering
+        let updatedTextWithPlaceholders = detectionData.text_with_placeholders;
+        const updatedDetectedPii = [];
+        
+        for (const pii of detectionData.detected_pii) {
+            const nextNumber = getNextPlaceholderNumber(pii.type);
+            const newPlaceholder = `${pii.type}${nextNumber}`;
             
-            // Handle both single object and array responses
-            let processedData;
+            // Update the placeholder in the detected PII
+            const updatedPii = {
+                ...pii,
+                placeholder: newPlaceholder
+            };
+            updatedDetectedPii.push(updatedPii);
             
-            if (Array.isArray(privacyData)) {
-                console.log(`AI returned array with ${privacyData.length} privacy issues, using the first one`);
-                // If AI returns an array of privacy issues, take the first one
-                if (privacyData.length > 0) {
-                    processedData = privacyData[0];
+            // Replace the placeholder in the text
+            const oldPlaceholder = pii.placeholder;
+            if (oldPlaceholder && oldPlaceholder !== newPlaceholder) {
+                const regex = new RegExp(`\\b${oldPlaceholder}\\b`, 'g');
+                updatedTextWithPlaceholders = updatedTextWithPlaceholders.replace(regex, newPlaceholder);
+            }
+        }
+        
+        // Update the detection data with conversation-wide numbering
+        detectionData.detected_pii = updatedDetectedPii;
+        detectionData.text_with_placeholders = updatedTextWithPlaceholders;
+        
+        // Step 2: Abstraction LLM - Create abstracted text with placeholders
+        const abstractionPrompt = `Rewrite the text to abstract the protected information, without changing other parts.
+
+For example:
+Input: <Text>I graduated from CMU, and I earn a six-figure salary. Today in the office...</Text><ProtectedInformation>CMU,Today</ProtectedInformation>
+Output JSON: {"results": [{"protected": "CMU", "abstracted": "MIT"}, {"protected": "Today", "abstracted": "Yesterday"}]}
+
+Current input:
+<Text>${detectionData.text_with_placeholders}</Text>
+<ProtectedInformation>${detectionData.affected_text}</ProtectedInformation>
+
+Create abstracted text by replacing the protected information with realistic but fake data (not generic terms). Use "results" as the main key in the JSON object with an array of objects containing "protected" and "abstracted" fields.
+
+For example:
+- Names: Replace with fake names like "Brian Johnson", "Sarah Williams"
+- Emails: Replace with fake emails like "brian.johnson@example.com"
+- Phone numbers: Replace with fake numbers like "(555) 123-4567"
+- Addresses: Replace with fake addresses like "123 Oak Street, Springfield, IL 62701"
+- Universities: Replace with fake universities like "MIT", "Stanford"
+- Companies: Replace with fake companies like "TechCorp", "InnovateInc"
+
+Use this exact format:
+{"results": [{"protected": "specific_text", "abstracted": "fake_realistic_data"}, {"protected": "another_text", "abstracted": "another_fake_data"}]}`;
+
+        const abstractionCompletion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: "You are a privacy abstraction expert. Create abstracted versions of text with PII replaced by generic terms. Respond with ONLY valid JSON." },
+                { role: "user", content: abstractionPrompt }
+            ],
+            max_tokens: 800,
+            temperature: 0.1
+        });
+        const abstractionResponseText = abstractionCompletion.choices[0].message.content;
+        
+        // Clean the abstraction response text
+        let cleanedAbstractionResponse = abstractionResponseText.trim();
+        
+        // Remove markdown code blocks if present
+        if (cleanedAbstractionResponse.startsWith('```json')) {
+            cleanedAbstractionResponse = cleanedAbstractionResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleanedAbstractionResponse.startsWith('```')) {
+            cleanedAbstractionResponse = cleanedAbstractionResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        }
+        
+        // Parse abstraction response
+        try {
+            const abstractionData = JSON.parse(cleanedAbstractionResponse);
+            
+            // Handle new results array format
+            if (abstractionData.results && Array.isArray(abstractionData.results)) {
+                const results = abstractionData.results;
+                if (results.length > 0) {
+                    // Convert results array to the expected format
+                    const protectedTexts = results.map(r => r.protected).join(',');
+                    const abstractedTexts = results.map(r => r.abstracted).join(',');
+                    
+                    // Create before/after suggestion
+                    let originalText = detectionData.text_with_placeholders;
+                    let abstractedText = originalText;
+                    
+                    // Replace each protected text with its abstracted version
+                    results.forEach(result => {
+                        const regex = new RegExp(result.protected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                        abstractedText = abstractedText.replace(regex, result.abstracted);
+                    });
+                    
+                    return {
+                        privacy_issue: true,
+                        type: detectionData.detected_pii[0]?.type || 'PII_DETECTED',
+                        suggestion: `Before: "${originalText}"\nAfter: "${abstractedText}"`,
+                        explanation: `Protected information abstracted: ${protectedTexts}`,
+                        affected_text: protectedTexts,
+                        sensitive_text: protectedTexts,
+                        safer_versions: {
+                            replacing: detectionData.text_with_placeholders,
+                            abstraction: abstractedText
+                        }
+                    };
                 } else {
-                    // Empty array means no privacy issues
-                    processedData = {
+                    // No results found
+                    return {
                         privacy_issue: false,
-                        type: null,
-                        suggestion: null,
-                        explanation: null,
-                        affected_text: null,
-                        contextual_risk: null
+                        type: 'NONE',
+                        suggestion: 'No PII detected',
+                        explanation: 'No sensitive information found',
+                        affected_text: '',
+                        sensitive_text: '',
+                        safer_versions: {
+                            replacing: detectionData.text_with_placeholders,
+                            abstraction: detectionData.text_with_placeholders
+                        }
+                    };
+                }
+            }
+            // Fallback to old format for backward compatibility
+            else if (typeof abstractionData.privacy_issue === 'boolean') {
+                if (abstractionData.privacy_issue === true) {
+                    return {
+                        privacy_issue: true,
+                        type: abstractionData.type || detectionData.detected_pii[0].type,
+                        suggestion: abstractionData.suggestion || null,
+                        explanation: abstractionData.explanation || detectionData.detected_pii[0].explanation,
+                        affected_text: abstractionData.affected_text || detectionData.affected_text,
+                        sensitive_text: abstractionData.sensitive_text || detectionData.affected_text,
+                        safer_versions: {
+                            replacing: detectionData.text_with_placeholders,
+                            abstraction: abstractionData.suggestion ? 
+                                abstractionData.suggestion.split('\nAfter: "')[1]?.replace(/"/, '') || detectionData.text_with_placeholders :
+                                detectionData.text_with_placeholders
+                        }
+                    };
+                } else {
+                    // No privacy issues detected
+                    return {
+                        privacy_issue: false,
+                        type: abstractionData.type || 'NONE',
+                        suggestion: abstractionData.suggestion || 'No PII detected',
+                        explanation: abstractionData.explanation || 'No sensitive information found',
+                        affected_text: abstractionData.affected_text || '',
+                        sensitive_text: abstractionData.sensitive_text || '',
+                        safer_versions: {
+                            replacing: detectionData.text_with_placeholders,
+                            abstraction: detectionData.text_with_placeholders
+                        }
                     };
                 }
             } else {
-                // Single object response
-                processedData = privacyData;
-            }
-            
-            // Validate the response format
-            if (typeof processedData.privacy_issue === 'boolean') {
-                return {
-                    privacy_issue: processedData.privacy_issue,
-                    type: processedData.type || null,
-                    suggestion: processedData.suggestion || null,
-                    explanation: processedData.explanation || null,
-                    affected_text: processedData.affected_text || userMessage,
-                    sensitive_text: processedData.sensitive_text || null
-                };
-            } else {
-                throw new Error('Invalid privacy_issue field');
+                throw new Error('Invalid abstraction response format');
             }
         } catch (parseError) {
-            console.error('Failed to parse AI privacy response:', parseError);
-            console.error('Original response:', responseText);
-            console.error('Cleaned response:', cleanedResponse);
-            throw new Error('Invalid JSON response from AI');
+            console.error('Failed to parse AI abstraction response:', parseError);
+            console.error('Original response:', abstractionResponseText);
+            console.error('Cleaned response:', cleanedAbstractionResponse);
+            throw new Error('Invalid JSON response from abstraction AI');
         }
     } catch (error) {
         console.error('AI privacy detection error:', error);
@@ -589,7 +1126,7 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
             explanation: 'Credit card number detected'
         },
         { 
-            pattern: /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, 
+            pattern: /\(\d{3}\)\s?\d{3}[-\s]?\d{4}/, 
             type: 'Phone Number',
             replacement: '[Phone Number]',
             explanation: 'Phone number detected'
@@ -626,6 +1163,8 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
     let explanation = null;
     let affectedText = userMessage;
     let sensitiveText = null;
+    let replacingMessage = userMessage;
+    let abstractionMessage = userMessage;
 
     // Find the first matching pattern and create a complete modified message
     for (const { pattern, type, replacement, explanation: patternExplanation } of sensitivePatterns) {
@@ -638,23 +1177,47 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
             // For better privacy, try to create more natural replacements
             let modifiedMessage = userMessage;
             
-            // Handle specific patterns with more natural replacements
+            // Handle specific patterns with conversation-wide numbered placeholders for replacing and fake data for abstraction
+            
             if (type === 'Full Address') {
-                // Replace full address with a more natural description
-                modifiedMessage = userMessage.replace(pattern, 'a location in the area');
+                // Replace full address with conversation-wide numbered placeholder and fake address
+                const addressNumber = getNextPlaceholderNumber('ADDRESS');
+                replacingMessage = userMessage.replace(pattern, `[Address${addressNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, '123 Oak Street, Springfield, IL 62701');
             } else if (type === 'Full Name') {
-                // Replace full name with a more natural description
-                modifiedMessage = userMessage.replace(pattern, 'someone');
+                // Replace full name with conversation-wide numbered placeholder and fake name
+                const nameNumber = getNextPlaceholderNumber('NAME');
+                replacingMessage = userMessage.replace(pattern, `[Name${nameNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, 'Brian Johnson');
             } else if (type === 'Phone Number') {
-                // Replace phone number with a generic placeholder
-                modifiedMessage = userMessage.replace(pattern, '[Phone Number]');
+                // Replace phone number with conversation-wide numbered placeholder and fake number
+                const phoneNumber = getNextPlaceholderNumber('PHONE_NUMBER');
+                replacingMessage = userMessage.replace(pattern, `[Phone${phoneNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, '(555) 123-4567');
             } else if (type === 'Email Address') {
-                // Replace email with a generic placeholder
-                modifiedMessage = userMessage.replace(pattern, '[Email]');
+                // Replace email with conversation-wide numbered placeholder and fake email
+                const emailNumber = getNextPlaceholderNumber('EMAIL');
+                replacingMessage = userMessage.replace(pattern, `[Email${emailNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, 'brian.johnson@example.com');
+            } else if (type === 'Social Security Number') {
+                const ssnNumber = getNextPlaceholderNumber('SSN');
+                replacingMessage = userMessage.replace(pattern, `[SSN${ssnNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, '123-45-6789');
+            } else if (type === 'Credit Card Number') {
+                const creditCardNumber = getNextPlaceholderNumber('FINANCIAL_INFORMATION');
+                replacingMessage = userMessage.replace(pattern, `[CreditCard${creditCardNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, '4111-1111-1111-1111');
+            } else if (type === 'Date of Birth') {
+                const dateNumber = getNextPlaceholderNumber('TIME');
+                replacingMessage = userMessage.replace(pattern, `[Date${dateNumber}]`);
+                abstractionMessage = userMessage.replace(pattern, '01/15/1985');
             } else {
                 // Use the default replacement for other patterns
-                modifiedMessage = userMessage.replace(pattern, replacement);
+                replacingMessage = userMessage.replace(pattern, replacement);
+                abstractionMessage = userMessage.replace(pattern, replacement);
             }
+            
+            modifiedMessage = replacingMessage; // Keep original behavior for suggestion
             
             suggestion = `Before: "${userMessage}"\nAfter: "${modifiedMessage}"`;
             
@@ -674,7 +1237,11 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
         suggestion: suggestion,
         explanation: explanation,
         affected_text: affectedText,
-        sensitive_text: sensitiveText
+        sensitive_text: sensitiveText,
+        safer_versions: {
+            replacing: hasIssues ? replacingMessage : userMessage,
+            abstraction: hasIssues ? abstractionMessage : userMessage
+        }
     };
 }
 
@@ -952,6 +1519,11 @@ app.post('/api/reset', (req, res) => {
         uploadedReturnLog = [];
         currentMode = 'chat';
         activeChatSession = null; // Reset the chat session to clear context
+        
+        // Reset global PII counters for conversation-wide numbering
+        Object.keys(globalPiiCounters).forEach(key => {
+            globalPiiCounters[key] = 0;
+        });
         
         res.json({
             success: true,

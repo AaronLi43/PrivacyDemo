@@ -1,0 +1,41 @@
+{
+  "startTime": "2025-08-04T20:52:15.069Z",
+  "tests": [
+    {
+      "testName": "API Connection Test",
+      "passed": false,
+      "message": "API connection failed: ",
+      "timestamp": "2025-08-04T20:52:15.087Z"
+    },
+    {
+      "testName": "Background Questions Flow Test",
+      "passed": false,
+      "message": "Background questions test failed: ",
+      "timestamp": "2025-08-04T20:52:15.089Z"
+    },
+    {
+      "testName": "Main Questions Flow Test (First 8 Questions)",
+      "passed": false,
+      "message": "Main questions test failed: ",
+      "timestamp": "2025-08-04T20:52:15.093Z"
+    },
+    {
+      "testName": "Privacy Analysis Test",
+      "passed": false,
+      "message": "Privacy analysis test failed: ",
+      "timestamp": "2025-08-04T20:52:15.095Z"
+    },
+    {
+      "testName": "Complete Conversation Flow Test",
+      "passed": false,
+      "message": "Complete conversation test failed: ",
+      "timestamp": "2025-08-04T20:52:15.096Z"
+    }
+  ],
+  "summary": {
+    "totalTests": 5,
+    "passed": 0,
+    "failed": 5,
+    "errors": []
+  }
+}
