@@ -1837,6 +1837,7 @@ textarea.copy-paste-disabled:focus {
 .privacy-revert-highlight {
     animation: privacyRevertPulse 3s ease-in-out;
 }
+.privacy-correction-highlight {
     background-color: #d4edda !important;
     border-color: #28a745 !important;
     box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
