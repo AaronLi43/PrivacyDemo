@@ -1,3 +1,6 @@
+// Import Vercel Speed Insights
+import { injectSpeedInsights } from '@vercel/speed-insights';
+
 // Main Application Class
 class PrivacyDemoApp {
     constructor() {
@@ -4210,6 +4213,9 @@ function closeFreeEditPopup() {
 
 // Initialize the application
 const app = new PrivacyDemoApp();
+
+// Initialize Vercel Speed Insights
+injectSpeedInsights();
 
 // Expose test functions globally for debugging
 window.testSurveyQuestions = () => app.testSurveyQuestions();
