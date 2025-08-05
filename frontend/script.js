@@ -1314,13 +1314,25 @@ class PrivacyDemoApp {
                         console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
                     }
                     
-                    // Handle follow-up questions from audit LLM
+                    // Handle follow-up questions from audit LLM (but not for background questions)
                     if (response.follow_up_questions && response.follow_up_questions.length > 0) {
-                        console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
-                        this.state.followUpQuestions = response.follow_up_questions;
-                        this.state.currentFollowUpQuestionIndex = 0;
-                        this.state.inFollowUpMode = true;
-                        console.log('Entered follow-up question mode');
+                        // Check if current question is a background question
+                        const backgroundQuestions = [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work - what do you do for a living?",
+                            "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+                        ];
+                        const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+                        
+                        if (!isBackgroundQuestion) {
+                            console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
+                            this.state.followUpQuestions = response.follow_up_questions;
+                            this.state.currentFollowUpQuestionIndex = 0;
+                            this.state.inFollowUpMode = true;
+                            console.log('Entered follow-up question mode');
+                        } else {
+                            console.log('Background question - ignoring follow-up questions and proceeding to next question');
+                        }
                     }
                     
                     console.log(`Question completion check - Backend: ${response.question_completed}, NEXT_QUESTION signal: ${hasNextQuestionSignal}, Ending pattern: ${hasEndingPattern}`);
@@ -1333,7 +1345,23 @@ class PrivacyDemoApp {
                         this.state.currentFollowUpQuestionIndex = 0;
                     }
                     
-                    if (response && (response.question_completed || hasNextQuestionSignal || hasEndingPattern)) {
+                    // Check if current question is a background question
+                    const backgroundQuestions = [
+                        "Tell me about your educational background - what did you study in college or university?",
+                        "I'd love to hear about your current work - what do you do for a living?",
+                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+                    ];
+                    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+                    
+                    // For background questions, be more lenient about completion
+                    const shouldCompleteQuestion = response && (
+                        response.question_completed || 
+                        hasNextQuestionSignal || 
+                        hasEndingPattern ||
+                        (isBackgroundQuestion && this.state.conversationLog.length > 1) // Complete background questions after at least one exchange
+                    );
+                    
+                    if (shouldCompleteQuestion) {
                         // Mark the current question as completed
                         if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
                             this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
