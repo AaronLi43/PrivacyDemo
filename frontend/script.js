@@ -1,5 +1,12 @@
-// Import Vercel Speed Insights
-import { injectSpeedInsights } from '@vercel/speed-insights';
+// Vercel Speed Insights (only in Vercel environment)
+let injectSpeedInsights = null;
+if (window.location.hostname.includes('vercel.app')) {
+  // In Vercel environment, the speed insights will be injected by Vercel
+  // We'll just provide a placeholder function
+  injectSpeedInsights = () => {
+    console.log('Speed Insights would be injected here in Vercel environment');
+  };
+}
 
 // Main Application Class
 class PrivacyDemoApp {
@@ -4214,8 +4221,10 @@ function closeFreeEditPopup() {
 // Initialize the application
 const app = new PrivacyDemoApp();
 
-// Initialize Vercel Speed Insights
-injectSpeedInsights();
+// Initialize Vercel Speed Insights (only if available)
+if (injectSpeedInsights) {
+    injectSpeedInsights();
+}
 
 // Expose test functions globally for debugging
 window.testSurveyQuestions = () => app.testSurveyQuestions();
