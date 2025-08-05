@@ -9,6 +9,9 @@ require('dotenv').config();
 // OpenAI API
 const OpenAI = require('openai');
 
+// AWS SDK
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
 // Initialize OpenAI
 let openaiClient;
 try {
@@ -22,6 +25,25 @@ try {
     }
 } catch (error) {
     console.log('⚠️  Failed to initialize OpenAI, using fallback responses:', error.message);
+}
+
+// Initialize AWS S3 Client
+let s3Client;
+try {
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        s3Client = new S3Client({
+            region: 'us-east-2',
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+        });
+        console.log('✅ AWS S3 client initialized successfully');
+    } else {
+        console.log('⚠️  AWS credentials not found, S3 uploads will be disabled');
+    }
+} catch (error) {
+    console.log('⚠️  Failed to initialize AWS S3 client:', error.message);
 }
 
 const app = express();
@@ -1807,6 +1829,62 @@ app.post('/api/export', (req, res) => {
     } catch (error) {
         console.error('Export error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// S3 Upload API
+app.post('/api/upload-to-s3', async (req, res) => {
+    try {
+        const { exportData, prolificId } = req.body;
+        
+        if (!exportData) {
+            return res.status(400).json({ error: 'Export data is required' });
+        }
+
+        if (!s3Client) {
+            return res.status(500).json({ error: 'S3 client not configured' });
+        }
+
+        // Generate unique filename with prolific ID and timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = prolificId ? 
+            `${prolificId}_conversation_${timestamp}.json` : 
+            `conversation_${timestamp}.json`;
+
+        // Prepare the data for upload
+        const jsonData = JSON.stringify(exportData, null, 2);
+        
+        // Upload to S3
+        const uploadParams = {
+            Bucket: 'prolificjson',
+            Key: filename,
+            Body: jsonData,
+            ContentType: 'application/json',
+            Metadata: {
+                'prolific-id': prolificId || 'unknown',
+                'upload-timestamp': new Date().toISOString(),
+                'conversation-length': exportData.conversation ? exportData.conversation.length.toString() : '0'
+            }
+        };
+
+        const command = new PutObjectCommand(uploadParams);
+        await s3Client.send(command);
+
+        console.log(`✅ Successfully uploaded ${filename} to S3`);
+
+        res.json({
+            success: true,
+            message: 'File uploaded to S3 successfully',
+            filename: filename,
+            s3_url: `s3://prolificjson/${filename}`
+        });
+
+    } catch (error) {
+        console.error('S3 upload error:', error);
+        res.status(500).json({ 
+            error: 'Failed to upload to S3',
+            details: error.message 
+        });
     }
 });
 

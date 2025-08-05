@@ -43,7 +43,9 @@ class PrivacyDemoApp {
             currentFollowUpQuestionIndex: 0,
             inFollowUpMode: false,
             // Background mode property
-            backgroundMode: false
+            backgroundMode: false,
+            // Prolific ID from URL
+            prolificId: null
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -53,6 +55,7 @@ class PrivacyDemoApp {
 
     // Initialize the application
     init() {
+        this.extractProlificId();
         this.bindEvents();
         this.updateUI();
         this.updateSidebarToggle();
@@ -62,6 +65,18 @@ class PrivacyDemoApp {
         
         // Initialize multi-step interface
         this.initializeMultiStepInterface();
+    }
+
+    // Extract PROLIFIC_PID from URL parameters
+    extractProlificId() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const prolificId = urlParams.get('PROLIFIC_PID');
+        if (prolificId) {
+            this.state.prolificId = prolificId;
+            console.log('Extracted Prolific ID:', prolificId);
+        } else {
+            console.log('No PROLIFIC_PID found in URL parameters');
+        }
     }
 
     // Initialize multi-step interface
@@ -1552,10 +1567,24 @@ class PrivacyDemoApp {
             }
 
             console.log('Export data generated:', exportData);
-            const filename = `conversation_log_${this.state.currentStep}.json`;
-            console.log('Downloading file:', filename);
-            API.downloadFile(JSON.stringify(exportData, null, 2), filename);
-            this.showNotification('📥 Export completed', 'success');
+            
+            // Upload to S3 instead of downloading locally
+            try {
+                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                if (response.success) {
+                    console.log('Successfully uploaded to S3:', response.filename);
+                    this.showNotification('📤 Data uploaded to S3 successfully', 'success');
+                } else {
+                    throw new Error(response.error || 'Upload failed');
+                }
+            } catch (uploadError) {
+                console.error('S3 upload error:', uploadError);
+                // Fallback to local download if S3 upload fails
+                const filename = `conversation_log_${this.state.currentStep}.json`;
+                console.log('Falling back to local download:', filename);
+                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                this.showNotification('📥 Export completed (local download)', 'success');
+            }
         } catch (error) {
             console.error('Export error:', error);
             this.showNotification('❌ Export failed', 'error');
@@ -1599,20 +1628,32 @@ class PrivacyDemoApp {
             }
 
             console.log('Export data generated:', exportData);
-            const filename = `conversation_log_${this.state.currentStep}.json`;
-            console.log('Downloading file:', filename);
             
-            // Ensure the download happens
+            // Upload to S3 instead of downloading locally
             try {
-                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
-                console.log('Download initiated successfully');
-                this.showNotification('📁 Data downloaded successfully!', 'success');
-            } catch (downloadError) {
-                console.error('Download error:', downloadError);
-                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                if (response.success) {
+                    console.log('Successfully uploaded to S3:', response.filename);
+                    this.showNotification('📤 Data uploaded to S3 successfully!', 'success');
+                } else {
+                    throw new Error(response.error || 'Upload failed');
+                }
+            } catch (uploadError) {
+                console.error('S3 upload error:', uploadError);
+                // Fallback to local download if S3 upload fails
+                const filename = `conversation_log_${this.state.currentStep}.json`;
+                console.log('Falling back to local download:', filename);
+                try {
+                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    console.log('Download initiated successfully');
+                    this.showNotification('📁 Data downloaded successfully!', 'success');
+                } catch (downloadError) {
+                    console.error('Download error:', downloadError);
+                    this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                }
             }
             
-            // Wait a moment for the download to start, then redirect
+            // Wait a moment for the upload/download to start, then redirect
             setTimeout(() => {
                 console.log('Redirecting to thanks page...');
                 this.redirectToThanksPage();
@@ -1849,17 +1890,28 @@ class PrivacyDemoApp {
             const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
             this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! Exporting data...`, 'success');
             
-            // Export the data
-            const filename = `conversation_analysis_${this.state.currentStep}.json`;
-            
-            // Ensure the download happens
+            // Upload to S3 instead of downloading locally
             try {
-                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
-                console.log('Analysis download initiated successfully');
-                this.showNotification(`📁 Analysis data downloaded successfully! Found ${totalIssues} privacy issues.`, 'success');
-            } catch (downloadError) {
-                console.error('Analysis download error:', downloadError);
-                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                if (response.success) {
+                    console.log('Successfully uploaded analysis to S3:', response.filename);
+                    this.showNotification(`📤 Analysis data uploaded to S3 successfully! Found ${totalIssues} privacy issues.`, 'success');
+                } else {
+                    throw new Error(response.error || 'Upload failed');
+                }
+            } catch (uploadError) {
+                console.error('S3 upload error:', uploadError);
+                // Fallback to local download if S3 upload fails
+                const filename = `conversation_analysis_${this.state.currentStep}.json`;
+                console.log('Falling back to local download:', filename);
+                try {
+                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    console.log('Analysis download initiated successfully');
+                    this.showNotification(`📁 Analysis data downloaded successfully! Found ${totalIssues} privacy issues.`, 'success');
+                } catch (downloadError) {
+                    console.error('Analysis download error:', downloadError);
+                    this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                }
             }
             
             this.showLoading(false);
@@ -1904,25 +1956,37 @@ class PrivacyDemoApp {
     async exportComprehensiveAndRedirect() {
         try {
             console.log('Starting exportComprehensiveAndRedirect...');
-            const filename = `conversation_log_comprehensive_${this.state.currentStep}.json`;
             
             // Create comprehensive export data that includes everything
             const exportData = this.generateComprehensiveExportData();
             
             console.log('Comprehensive export data generated:', exportData);
-            console.log('Downloading file:', filename);
             
-            // Ensure the download happens
+            // Upload to S3 instead of downloading locally
             try {
-                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
-                console.log('Comprehensive download initiated successfully');
-                this.showNotification('📁 Comprehensive data downloaded successfully!', 'success');
-            } catch (downloadError) {
-                console.error('Comprehensive download error:', downloadError);
-                this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                if (response.success) {
+                    console.log('Successfully uploaded comprehensive data to S3:', response.filename);
+                    this.showNotification('📤 Comprehensive data uploaded to S3 successfully!', 'success');
+                } else {
+                    throw new Error(response.error || 'Upload failed');
+                }
+            } catch (uploadError) {
+                console.error('S3 upload error:', uploadError);
+                // Fallback to local download if S3 upload fails
+                const filename = `conversation_log_comprehensive_${this.state.currentStep}.json`;
+                console.log('Falling back to local download:', filename);
+                try {
+                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    console.log('Comprehensive download initiated successfully');
+                    this.showNotification('📁 Comprehensive data downloaded successfully!', 'success');
+                } catch (downloadError) {
+                    console.error('Comprehensive download error:', downloadError);
+                    this.showNotification('⚠️ Download failed, but continuing...', 'warning');
+                }
             }
             
-            // Wait a moment for the download to start, then redirect
+            // Wait a moment for the upload/download to start, then redirect
             setTimeout(() => {
                 console.log('Redirecting to thanks page...');
                 this.redirectToThanksPage();

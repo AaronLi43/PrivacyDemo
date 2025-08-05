@@ -10,7 +10,8 @@ const API_ENDPOINTS = {
     TEST_API: '/api/test_connection',
     SET_MODE: '/api/set_mode',
     RESET: '/api/reset',
-    EXPORT: '/api/export'
+    EXPORT: '/api/export',
+    UPLOAD_TO_S3: '/api/upload-to-s3'
 };
 
 // API Utility Functions
@@ -152,6 +153,17 @@ class API {
             body: JSON.stringify({
                 export_type: exportType,
                 data: data
+            })
+        });
+    }
+
+    // Upload to S3
+    static async uploadToS3(exportData, prolificId) {
+        return this.request(API_ENDPOINTS.UPLOAD_TO_S3, {
+            method: 'POST',
+            body: JSON.stringify({
+                exportData: exportData,
+                prolificId: prolificId
             })
         });
     }
