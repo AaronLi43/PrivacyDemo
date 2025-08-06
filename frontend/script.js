@@ -1292,16 +1292,34 @@ class PrivacyDemoApp {
     }
 
     isQuestion(text) {
-        // Check for question patterns
+        // Check for question patterns - look for questions anywhere in the text, not just at the beginning
         const questionPatterns = [
             /\?$/, // Ends with question mark
-            /^(what|how|why|when|where|who|which|can you|could you|would you|do you|have you|are you|is there|are there)/i, // Question words
-            /^(tell me|describe|explain|share|what's|what is|how's|how is)/i, // Request patterns
-            /^(i'd love to hear|i'm curious about|i'm interested in|can you tell me)/i // Conversational questions
+            /\?/g, // Contains question mark anywhere
+            /\b(what|how|why|when|where|who|which|can you|could you|would you|do you|have you|are you|is there|are there)\b/i, // Question words
+            /\b(tell me|describe|explain|share|what's|what is|how's|how is)\b/i, // Request patterns
+            /\b(i'd love to hear|i'm curious about|i'm interested in|can you tell me)\b/i // Conversational questions
         ];
         
         const trimmedText = text.trim();
-        const isQuestion = questionPatterns.some(pattern => pattern.test(trimmedText));
+        
+        // Check if the text contains a question mark
+        if (trimmedText.includes('?')) {
+            console.log('User Agent: isQuestion check for:', trimmedText, 'Result: true (contains ?)');
+            return true;
+        }
+        
+        // Check for question patterns anywhere in the text
+        const isQuestion = questionPatterns.some(pattern => {
+            if (pattern.global) {
+                // For global patterns, test if they exist anywhere in the text
+                return pattern.test(trimmedText);
+            } else {
+                // For non-global patterns, test if they match anywhere in the text
+                return trimmedText.match(pattern);
+            }
+        });
+        
         console.log('User Agent: isQuestion check for:', trimmedText, 'Result:', isQuestion);
         return isQuestion;
     }
