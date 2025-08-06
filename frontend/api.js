@@ -130,7 +130,8 @@ class API {
             body: JSON.stringify({
                 message_index: messageIndex,
                 original_text: originalText,
-                corrected_text: correctedText
+                corrected_text: correctedText,
+                sessionId: getSessionId()
             })
         });
     }
@@ -192,7 +193,8 @@ class API {
             method: 'POST',
             body: JSON.stringify({
                 export_type: exportType,
-                data: data
+                data: data,
+                sessionId: getSessionId()
             })
         });
     }

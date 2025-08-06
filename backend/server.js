@@ -1668,23 +1668,27 @@ app.post('/api/analyze_log', async (req, res) => {
 // Apply Privacy Correction API
 app.post('/api/apply_privacy_correction', (req, res) => {
     try {
-        const { message_index, original_text, corrected_text } = req.body;
+        const { message_index, original_text, corrected_text, sessionId } = req.body;
         
         if (message_index === undefined || !original_text || !corrected_text) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
+        // Get session
+        const currentSessionId = sessionId || generateSessionId();
+        const session = getSession(currentSessionId);
+
         // Update the conversation history with the corrected text
-        if (conversationHistory[message_index]) {
-            conversationHistory[message_index].content = corrected_text;
-            conversationHistory[message_index].corrected = true;
-            conversationHistory[message_index].original_text = original_text;
+        if (session.conversationHistory[message_index]) {
+            session.conversationHistory[message_index].content = corrected_text;
+            session.conversationHistory[message_index].corrected = true;
+            session.conversationHistory[message_index].original_text = original_text;
         }
 
         res.json({
             success: true,
             message: 'Correction applied successfully',
-            updated_conversation: conversationHistory
+            updated_conversation: session.conversationHistory
         });
     } catch (error) {
         console.error('Apply correction error:', error);
@@ -1828,10 +1832,17 @@ app.post('/api/conversation_privacy_analysis', async (req, res) => {
 // Export API
 app.post('/api/export', (req, res) => {
     try {
-        const { export_type, data } = req.body;
+        const { export_type, data, sessionId } = req.body;
         
         if (!export_type) {
             return res.status(400).json({ error: 'Export type is required' });
+        }
+
+        // Get session for conversation export
+        let session = null;
+        if (export_type === 'conversation') {
+            const currentSessionId = sessionId || generateSessionId();
+            session = getSession(currentSessionId);
         }
 
         let exportData = {};
@@ -1839,7 +1850,7 @@ app.post('/api/export', (req, res) => {
         switch (export_type) {
             case 'conversation':
                 exportData = {
-                    conversation_history: conversationHistory,
+                    conversation_history: session ? session.conversationHistory : [],
                     export_timestamp: new Date().toISOString()
                 };
                 break;
