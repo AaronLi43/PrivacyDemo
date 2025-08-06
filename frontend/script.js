@@ -56,33 +56,9 @@ class PrivacyDemoApp {
             backgroundMode: false,
             // Prolific ID from URL
             prolificId: null,
-            // Session ID for API calls
-            sessionId: null,
-            // User Agent Simulation properties
-            userAgentSimulation: {
-                isActive: false,
-                isResponding: false,
-                persona: {
-                    name: 'Alex Chen',
-                    background: 'Computer Science graduate from UC Berkeley',
-                    experience: 'Software engineer with 3 years of experience',
-                    aiExperience: 'Used ChatGPT and other AI tools for interview preparation',
-                    personality: 'Friendly, open to sharing experiences, somewhat tech-savvy'
-                },
-                responses: {
-                    background: {
-                        education: "I studied Computer Science at UC Berkeley, graduating in 2021. I really enjoyed the algorithms and data structures courses, and I was part of the ACM programming team.",
-                        job: "I'm currently a software engineer at a mid-sized tech company. I work on backend systems and APIs, mostly using Python and Java. I've been there for about 3 years now.",
-                        aiExperience: "I've used AI tools quite a bit for interview prep! ChatGPT has been really helpful for practicing coding problems and explaining concepts. I also used it to help draft some of my cover letters and prepare for behavioral questions."
-                    },
-                    main: {
-                        aiInterview: "I actually used ChatGPT to help me prepare for my current job interview. I practiced coding problems with it and asked it to explain solutions I didn't understand. It was really helpful for learning new algorithms.",
-                        privacyConcerns: "I was a bit worried about sharing my interview prep with AI, but I figured it was just practice problems and general advice. I didn't share any personal company information or specific interview questions.",
-                        effectiveness: "I think AI helped me perform better in the interview. I was more confident and had practiced more scenarios. But I also made sure to understand the concepts myself, not just memorize answers.",
-                        futureUse: "I'd definitely use AI again for interview prep, but I'd be more careful about what I share. I'd stick to general questions and avoid sharing specific company details or proprietary information."
-                    }
-                }
-            }
+            // User agent properties
+            userAgentEnabled: false,
+            userAgentResponding: false
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -97,269 +73,11 @@ class PrivacyDemoApp {
         this.updateUI();
         this.updateSidebarToggle();
         this.updateCopyPasteToggle();
-        this.updateUserAgentButton();
         this.checkAPIStatus();
         this.loadFromLocalStorage();
         
         // Initialize multi-step interface
         this.initializeMultiStepInterface();
-    }
-
-    // User Agent Simulation Methods
-    startUserAgentSimulation() {
-        if (this.state.userAgentSimulation.isActive) {
-            this.showNotification('User agent simulation is already running', 'warning');
-            return;
-        }
-
-        this.state.userAgentSimulation.isActive = true;
-        this.updateUserAgentButton();
-        this.showNotification('User agent simulation started. The agent will respond to all chatbot questions until the conversation ends.', 'success');
-        
-        // Start the conversation if not already started
-        if (this.state.conversationLog.length === 0) {
-            this.startQuestionConversation();
-        } else {
-            // If conversation already exists, start the continuous response loop
-            setTimeout(() => {
-                this.processNextChatbotMessage();
-            }, 2000);
-        }
-    }
-
-    stopUserAgentSimulation() {
-        this.state.userAgentSimulation.isActive = false;
-        this.state.userAgentSimulation.isResponding = false;
-        this.updateUserAgentButton();
-        this.showNotification('User agent simulation stopped', 'info');
-    }
-
-    updateUserAgentButton() {
-        const button = document.getElementById('user-agent-btn');
-        if (button) {
-            if (this.state.userAgentSimulation.isActive) {
-                button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
-                button.className = 'btn btn-danger';
-            } else {
-                button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
-                button.className = 'btn btn-success';
-            }
-        }
-    }
-
-    async processNextChatbotMessage() {
-        if (!this.state.userAgentSimulation.isActive || this.state.userAgentSimulation.isResponding) {
-            return;
-        }
-
-        // Find the last chatbot message
-        const lastChatbotMessage = this.state.conversationLog
-            .slice()
-            .reverse()
-            .find(msg => msg.bot && msg.bot.trim());
-
-        if (!lastChatbotMessage) {
-            // If no chatbot message found, wait a bit and try again
-            setTimeout(() => {
-                if (this.state.userAgentSimulation.isActive) {
-                    this.processNextChatbotMessage();
-                }
-            }, 2000);
-            return;
-        }
-
-        // Check if the last chatbot message indicates the conversation is ending
-        if (this.isConversationEnding(lastChatbotMessage.bot.toLowerCase())) {
-            this.stopUserAgentSimulation();
-            this.showNotification('User agent simulation completed! Chatbot has concluded the conversation.', 'success');
-            return;
-        }
-
-        // Wait a bit to simulate thinking time
-        await this.delay(2000 + Math.random() * 3000);
-
-        // Generate user agent response
-        const response = this.generateUserAgentResponse(lastChatbotMessage.bot);
-        
-        // Add user agent response to conversation
-        this.addUserAgentMessage(response);
-        
-        // Send the response to the chatbot
-        await this.sendUserAgentMessage(response);
-    }
-
-    generateUserAgentResponse(chatbotMessage) {
-        const message = chatbotMessage.toLowerCase();
-        const persona = this.state.userAgentSimulation.persona;
-        const responses = this.state.userAgentSimulation.responses;
-
-        // Check for background questions
-        if (message.includes('major') || message.includes('field of study') || message.includes('college') || message.includes('university')) {
-            return responses.background.education;
-        }
-        
-        if (message.includes('job') || message.includes('work') || message.includes('experience') || message.includes('career')) {
-            return responses.background.job;
-        }
-        
-        if (message.includes('ai') && (message.includes('experience') || message.includes('used') || message.includes('tools'))) {
-            return responses.background.aiExperience;
-        }
-
-        // Check for main questions
-        if (message.includes('interview') && message.includes('ai')) {
-            return responses.main.aiInterview;
-        }
-        
-        if (message.includes('privacy') || message.includes('concern') || message.includes('worried')) {
-            return responses.main.privacyConcerns;
-        }
-        
-        if (message.includes('effective') || message.includes('help') || message.includes('better')) {
-            return responses.main.effectiveness;
-        }
-        
-        if (message.includes('future') || message.includes('again') || message.includes('next time')) {
-            return responses.main.futureUse;
-        }
-
-        // Generic responses for other questions
-        const genericResponses = [
-            "That's an interesting question! I'd say it really depends on the situation. For me, I try to be thoughtful about what I share.",
-            "I think it's important to find the right balance between being helpful and protecting your privacy.",
-            "From my experience, being honest but selective about what you share usually works best.",
-            "I've learned that it's okay to share some personal experiences, but you should always think about the context first.",
-            "That's something I've thought about a lot. I believe in being authentic while also being smart about privacy."
-        ];
-
-        return genericResponses[Math.floor(Math.random() * genericResponses.length)];
-    }
-
-    addUserAgentMessage(content) {
-        const userMessage = {
-            user: content,
-            bot: '',
-            timestamp: new Date().toISOString(),
-            step: this.state.currentStep,
-            isUserAgent: true
-        };
-
-        this.state.conversationLog.push(userMessage);
-        this.state.currentStep++;
-        this.updateConversationDisplay();
-        this.scrollToBottom();
-    }
-
-    async sendUserAgentMessage(content) {
-        this.state.userAgentSimulation.isResponding = true;
-        
-        try {
-            // Simulate typing delay
-            await this.delay(1000 + Math.random() * 2000);
-            
-            // Use the existing API structure
-            const response = await API.sendMessage(content, this.state.currentStep, {
-                questionMode: this.state.questionMode,
-                currentQuestion: this.getCurrentQuestion(),
-                predefinedQuestions: this.state.predefinedQuestions[this.state.mode],
-                isFinalQuestion: this.isFinalQuestion(),
-                followUpMode: this.state.inFollowUpMode
-            });
-
-            if (response && response.bot_response) {
-                // Add chatbot response to conversation using the old format for compatibility
-                this.state.conversationLog.push({
-                    user: '',
-                    bot: response.bot_response,
-                    timestamp: new Date().toISOString(),
-                    step: this.state.currentStep
-                });
-                
-                this.state.currentStep++;
-                this.updateConversationDisplay();
-                this.scrollToBottom();
-
-                // Check if conversation is complete - stop user agent when chatbot finishes
-                if (response.conversation_complete || response.question_completed || response.isFinalQuestion) {
-                    this.stopUserAgentSimulation();
-                    this.showNotification('User agent simulation completed! Chatbot has finished all questions.', 'success');
-                    return;
-                }
-
-                // Also check if the chatbot message indicates the conversation is ending
-                const botMessage = response.bot_response.toLowerCase();
-                if (this.isConversationEnding(botMessage)) {
-                    this.stopUserAgentSimulation();
-                    this.showNotification('User agent simulation completed! Chatbot has concluded the conversation.', 'success');
-                    return;
-                }
-
-                // Continue the conversation after a delay - keep going until stopped
-                setTimeout(() => {
-                    this.state.userAgentSimulation.isResponding = false;
-                    if (this.state.userAgentSimulation.isActive) {
-                        this.processNextChatbotMessage();
-                    }
-                }, 3000 + Math.random() * 2000);
-            }
-
-        } catch (error) {
-            console.error('Error sending user agent message:', error);
-            this.state.userAgentSimulation.isResponding = false;
-            this.showNotification('Error in user agent simulation', 'error');
-            
-            // Even if there's an error, continue if still active
-            if (this.state.userAgentSimulation.isActive) {
-                setTimeout(() => {
-                    this.processNextChatbotMessage();
-                }, 5000);
-            }
-        }
-    }
-
-    getCurrentQuestion() {
-        const questions = this.state.predefinedQuestions[this.state.mode];
-        if (questions && questions.length > 0 && this.state.currentQuestionIndex < questions.length) {
-            return questions[this.state.currentQuestionIndex];
-        }
-        return null;
-    }
-
-    isFinalQuestion() {
-        const questions = this.state.predefinedQuestions[this.state.mode];
-        return questions && this.state.currentQuestionIndex >= questions.length - 1;
-    }
-
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // Check if the chatbot message indicates the conversation is ending
-    isConversationEnding(botMessage) {
-        const endingPhrases = [
-            'thank you for your time',
-            'thank you for participating',
-            'this concludes our conversation',
-            'this concludes the interview',
-            'thank you for sharing',
-            'thank you for your responses',
-            'this ends our conversation',
-            'thank you for your participation',
-            'we have completed',
-            'that concludes',
-            'thank you so much for',
-            'this concludes our discussion',
-            'thank you for your insights',
-            'this brings our conversation to an end',
-            'thank you for your valuable input',
-            'this completes our interview',
-            'thank you for your thoughtful responses',
-            'this wraps up our conversation',
-            'thank you for your cooperation',
-            'this finishes our discussion'
-        ];
-
-        return endingPhrases.some(phrase => botMessage.includes(phrase));
     }
 
     // Extract PROLIFIC_PID from URL parameters
@@ -750,6 +468,14 @@ class PrivacyDemoApp {
             });
         }
 
+        // User agent button
+        const userAgentBtn = document.getElementById('user-agent-btn');
+        if (userAgentBtn) {
+            userAgentBtn.addEventListener('click', () => {
+                this.toggleUserAgent();
+            });
+        }
+
         // Copy/paste toggle
         const copyPasteToggle = document.getElementById('copy-paste-toggle');
         if (copyPasteToggle) {
@@ -883,18 +609,6 @@ class PrivacyDemoApp {
         if (toggleSidebarBtn) {
             toggleSidebarBtn.addEventListener('click', () => {
                 this.toggleSidebar();
-            });
-        }
-
-        // User Agent Simulation
-        const userAgentBtn = document.getElementById('user-agent-btn');
-        if (userAgentBtn) {
-            userAgentBtn.addEventListener('click', () => {
-                if (this.state.userAgentSimulation.isActive) {
-                    this.stopUserAgentSimulation();
-                } else {
-                    this.startUserAgentSimulation();
-                }
             });
         }
 
@@ -1290,13 +1004,6 @@ class PrivacyDemoApp {
             this.scrollToBottom();
             this.showLoading(false);
             
-            // If user agent is active, start the continuous response loop
-            if (this.state.userAgentSimulation.isActive) {
-                setTimeout(() => {
-                    this.processNextChatbotMessage();
-                }, 3000);
-            }
-            
         } catch (error) {
             console.error('❌ Error starting question conversation:', error);
             console.error('❌ Error details:', error.message);
@@ -1531,6 +1238,190 @@ class PrivacyDemoApp {
         }
     }
 
+    // User Agent functionality
+    toggleUserAgent() {
+        this.state.userAgentEnabled = !this.state.userAgentEnabled;
+        this.updateUserAgentButton();
+        
+        if (this.state.userAgentEnabled) {
+            this.showNotification('🤖 User Agent activated! The agent will now automatically respond to chatbot questions.', 'success');
+            // Start monitoring for questions immediately
+            this.monitorForQuestions();
+        } else {
+            this.showNotification('👤 User Agent deactivated. Manual responses only.', 'info');
+        }
+    }
+
+    updateUserAgentButton() {
+        const userAgentBtn = document.getElementById('user-agent-btn');
+        if (userAgentBtn) {
+            if (this.state.userAgentEnabled) {
+                userAgentBtn.innerHTML = '<i class="fas fa-user-slash"></i> Stop User Agent';
+                userAgentBtn.className = 'btn btn-warning';
+            } else {
+                userAgentBtn.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
+                userAgentBtn.className = 'btn btn-info';
+            }
+        }
+    }
+
+    monitorForQuestions() {
+        if (!this.state.userAgentEnabled) return;
+        
+        // Check the last bot message for questions
+        const conversationLog = this.state.conversationLog;
+        if (conversationLog.length === 0) return;
+        
+        const lastMessage = conversationLog[conversationLog.length - 1];
+        if (lastMessage.bot && !lastMessage.user) {
+            // This is a bot message, check if it contains a question
+            if (this.isQuestion(lastMessage.bot)) {
+                this.generateUserAgentResponse(lastMessage.bot);
+            }
+        }
+    }
+
+    isQuestion(text) {
+        // Check for question patterns
+        const questionPatterns = [
+            /\?$/, // Ends with question mark
+            /^(what|how|why|when|where|who|which|can you|could you|would you|do you|have you|are you|is there|are there)/i, // Question words
+            /^(tell me|describe|explain|share|what's|what is|how's|how is)/i, // Request patterns
+            /^(i'd love to hear|i'm curious about|i'm interested in|can you tell me)/i // Conversational questions
+        ];
+        
+        return questionPatterns.some(pattern => pattern.test(text.trim()));
+    }
+
+    isFinalQuestion(text) {
+        // Check for final question patterns
+        const finalQuestionPatterns = [
+            /thank you.*sharing.*with me/i,
+            /thank you.*participation/i,
+            /concludes our conversation/i,
+            /conversation.*complete/i,
+            /enjoyed learning about you/i,
+            /thank you.*time/i
+        ];
+        
+        return finalQuestionPatterns.some(pattern => pattern.test(text));
+    }
+
+    async generateUserAgentResponse(botMessage) {
+        if (!this.state.userAgentEnabled || this.state.userAgentResponding) return;
+        if (this.isFinalQuestion(botMessage)) {
+            console.log('User Agent: Detected final question, not responding');
+            return;
+        }
+        
+        this.state.userAgentResponding = true;
+        
+        try {
+            // Generate a personal experience response based on the question
+            const response = this.generatePersonalResponse(botMessage);
+            
+            // Add a small delay to make it feel more natural
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+            
+            // Add the response to the conversation
+            this.state.conversationLog.push({
+                user: response,
+                bot: '',
+                timestamp: new Date().toISOString()
+            });
+            
+            this.state.currentStep++;
+            this.updateUI();
+            this.scrollToBottom();
+            
+            // Send the response to the chatbot
+            await this.sendUserAgentMessage(response);
+            
+        } catch (error) {
+            console.error('Error generating user agent response:', error);
+        } finally {
+            this.state.userAgentResponding = false;
+        }
+    }
+
+    generatePersonalResponse(botMessage) {
+        // Generate contextual personal responses based on the question
+        const responses = {
+            education: [
+                "I studied Computer Science at MIT. It was really challenging but I loved the problem-solving aspects. I focused on artificial intelligence and machine learning, which is why I'm so interested in this topic.",
+                "I majored in Psychology at Stanford. I was fascinated by how people think and make decisions, especially in social contexts. My research focused on human-computer interaction.",
+                "I went to UC Berkeley for Business Administration. I was always interested in how technology could transform traditional business models, which led me to explore AI tools."
+            ],
+            work: [
+                "I work as a software engineer at Google. I've been there for about 3 years now, working on machine learning infrastructure. It's been amazing to see how AI has evolved in that time.",
+                "I'm a product manager at a startup called TechFlow. We're building AI-powered tools for small businesses. It's exciting but also challenging to stay ahead of the competition.",
+                "I'm a consultant specializing in digital transformation. I help companies integrate AI into their workflows, which is why I'm so passionate about this topic."
+            ],
+            ai_experience: [
+                "I've been using AI tools for about 2 years now. Started with ChatGPT when it first came out, then branched into other tools like Claude and Midjourney. It's been incredible to see how quickly the technology has advanced.",
+                "My first experience with AI was actually through my job - we started using GitHub Copilot for coding. That opened my eyes to how AI could enhance productivity in real ways.",
+                "I'm relatively new to AI - maybe 6 months or so. I was skeptical at first, but after trying ChatGPT for some writing tasks, I became really interested in exploring more applications."
+            ],
+            interview_preparation: [
+                "I used ChatGPT to help me prepare for my last job interview. I practiced common questions and even had it help me structure my responses. It was surprisingly helpful for organizing my thoughts.",
+                "For my most recent interview, I used AI to research the company and understand their culture better. I also practiced technical questions with it, which really boosted my confidence.",
+                "I haven't used AI for interviews yet, but I'm definitely considering it for my next one. I've heard great things about how it can help with preparation and practice."
+            ],
+            ai_concerns: [
+                "I do worry about privacy when using AI tools. I try to be careful about what I share, especially personal information. But I also see the benefits, so it's a balancing act.",
+                "My main concern is that AI might replace human jobs. I work in tech, so I see both the potential and the risks. It's important to adapt and learn new skills.",
+                "I'm concerned about the accuracy of AI responses. Sometimes they sound convincing but are actually wrong. I always fact-check important information."
+            ],
+            ai_benefits: [
+                "The biggest benefit I've seen is time savings. AI can help with routine tasks, leaving more time for creative and strategic thinking. It's like having a really smart assistant.",
+                "I love how AI can help with learning. I've used it to explain complex concepts in different ways, which has been really helpful for my professional development.",
+                "The creativity aspect is amazing. I've used AI to brainstorm ideas and explore possibilities I wouldn't have thought of on my own."
+            ]
+        };
+        
+        // Determine the category of the question
+        let category = 'general';
+        const lowerMessage = botMessage.toLowerCase();
+        
+        if (lowerMessage.includes('education') || lowerMessage.includes('study') || lowerMessage.includes('college') || lowerMessage.includes('university')) {
+            category = 'education';
+        } else if (lowerMessage.includes('work') || lowerMessage.includes('job') || lowerMessage.includes('occupation') || lowerMessage.includes('career')) {
+            category = 'work';
+        } else if (lowerMessage.includes('ai') || lowerMessage.includes('chatgpt') || lowerMessage.includes('claude') || lowerMessage.includes('experience')) {
+            category = 'ai_experience';
+        } else if (lowerMessage.includes('interview') || lowerMessage.includes('prepare')) {
+            category = 'interview_preparation';
+        } else if (lowerMessage.includes('concern') || lowerMessage.includes('worry') || lowerMessage.includes('risk')) {
+            category = 'ai_concerns';
+        } else if (lowerMessage.includes('benefit') || lowerMessage.includes('advantage') || lowerMessage.includes('helpful')) {
+            category = 'ai_benefits';
+        }
+        
+        // Get a random response from the appropriate category
+        const categoryResponses = responses[category] || responses['general'];
+        const randomResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
+        
+        return randomResponse;
+    }
+
+    async sendUserAgentMessage(message) {
+        try {
+            // Use the existing sendMessage logic but bypass the input field
+            const input = document.getElementById('chat-input');
+            const originalValue = input.value;
+            input.value = message;
+            
+            // Call the existing sendMessage method
+            await this.sendMessage();
+            
+            // Restore the original input value
+            input.value = originalValue;
+            
+        } catch (error) {
+            console.error('Error sending user agent message:', error);
+        }
+    }
+
     // Handle questions file upload
     // async handleQuestionsUpload(file) {
     //     if (!file) return;
@@ -1713,6 +1604,9 @@ class PrivacyDemoApp {
                     this.updateUI();
                     this.scrollToBottom();
                     this.showLoading(false);
+                    
+                    // Monitor for questions after bot response (for user agent)
+                    this.monitorForQuestions();
                     
                 } catch (error) {
                     console.error('Error in follow-up mode:', error);
@@ -1984,6 +1878,9 @@ class PrivacyDemoApp {
                     this.scrollToBottom();
                     this.showLoading(false);
                     
+                    // Monitor for questions after bot response (for user agent)
+                    this.monitorForQuestions();
+                    
                     // Check if all predefined questions are completed
                     const currentModeQuestions = this.state.predefinedQuestions[this.state.mode];
                     if (currentModeQuestions && currentModeQuestions.length > 0 && 
@@ -2025,6 +1922,9 @@ class PrivacyDemoApp {
                 this.saveToLocalStorage();
                 this.scrollToBottom();
                 this.showLoading(false);
+                
+                // Monitor for questions after bot response (for user agent)
+                this.monitorForQuestions();
             } catch (apiError) {
                 const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
                 lastMessage.bot = `❌ Error: ${apiError.message}`;
@@ -2957,6 +2857,7 @@ class PrivacyDemoApp {
             this.updateExportButtons();
             this.updateModeInfo();
             this.updateEditModeUI();
+            this.updateUserAgentButton();
         }
         
         // Update multi-step interface state
@@ -3086,15 +2987,10 @@ class PrivacyDemoApp {
                 }
                 html += `<div class="message-pair editable" data-index="${i}">`;
                 
-                // Handle both old format (turn.user/turn.bot) and new format (turn.role/turn.content)
-                const userMessage = turn.user || (turn.role === 'user' ? turn.content : '');
-                const botMessage = turn.bot || (turn.role === 'assistant' ? turn.content : '');
-                const isUserAgent = turn.isUserAgent || false;
-                
                 // Only show user message if it exists
-                if (userMessage && userMessage.trim()) {
+                if (turn.user && turn.user.trim()) {
                     // Check if there's a privacy suggestion for this message and user's choice
-                    let displayText = userMessage;
+                    let displayText = turn.user;
                     let privacyIndicator = '';
                     const userChoice = this.state.privacyChoices[i]?.user;
                     
@@ -3138,15 +3034,10 @@ class PrivacyDemoApp {
                         }
                     }
                     
-                    const userLabel = isUserAgent ? 'User Agent' : 'You';
-                    const userIcon = isUserAgent ? 'fas fa-robot' : 'fas fa-user';
-                    const userAgentIndicator = isUserAgent ? '<span class="user-agent-indicator" title="Automated User Agent">🤖</span>' : '';
-                    
                     html += `<div class="message message-user" id="log-entry-user-${i}">
                         <div class="message-header">
-                            <i class="${userIcon}"></i>
-                            <span>${userLabel}</span>
-                            ${userAgentIndicator}
+                            <i class="fas fa-user"></i>
+                            <span>You</span>
                             ${userWarning}
                             ${privacyIndicator}
                         </div>
@@ -3156,9 +3047,9 @@ class PrivacyDemoApp {
                 }
                 
                 // Only show bot message if it exists
-                if (botMessage && botMessage.trim()) {
+                if (turn.bot && turn.bot.trim()) {
                     // Check if there's a privacy suggestion for this message and user's choice
-                    let displayText = botMessage;
+                    let displayText = turn.bot;
                     let privacyIndicator = '';
                     const botChoice = this.state.privacyChoices[i]?.bot;
                     
@@ -3218,37 +3109,27 @@ class PrivacyDemoApp {
             } else {
                 html += `<div class="message-pair" data-index="${i}">`;
                 
-                // Handle both old format (turn.user/turn.bot) and new format (turn.role/turn.content)
-                const userMessage = turn.user || (turn.role === 'user' ? turn.content : '');
-                const botMessage = turn.bot || (turn.role === 'assistant' ? turn.content : '');
-                const isUserAgent = turn.isUserAgent || false;
-                
                 // Only show user message if it exists
-                if (userMessage && userMessage.trim()) {
-                    const userLabel = isUserAgent ? 'User Agent' : 'You';
-                    const userIcon = isUserAgent ? 'fas fa-robot' : 'fas fa-user';
-                    const userAgentIndicator = isUserAgent ? '<span class="user-agent-indicator" title="Automated User Agent">🤖</span>' : '';
-                    
+                if (turn.user && turn.user.trim()) {
                     html += `<div class="message message-user" id="log-entry-user-${i}">
                         <div class="message-header">
-                            <i class="${userIcon}"></i>
-                            <span>${userLabel}</span>
-                            ${userAgentIndicator}
+                            <i class="fas fa-user"></i>
+                            <span>You</span>
                         </div>
-                        <div class="message-content">${this.escapeHtml(userMessage)}</div>
+                        <div class="message-content">${this.escapeHtml(turn.user)}</div>
                     </div>`;
                 }
                 
                 // Show bot message if it exists, or show loading state
-                if (botMessage && botMessage.trim()) {
+                if (turn.bot && turn.bot.trim()) {
                     html += `<div class="message message-bot" id="log-entry-bot-${i}">
                         <div class="message-header">
                             <i class="fas fa-robot"></i>
                             <span>Chatbot</span>
                         </div>
-                        <div class="message-content">${this.escapeHtml(botMessage)}</div>
+                        <div class="message-content">${this.escapeHtml(turn.bot)}</div>
                     </div>`;
-                } else if (userMessage && userMessage.trim()) {
+                } else if (turn.user && turn.user.trim()) {
                     // Show loading state for bot response
                     html += `<div class="message message-bot" id="log-entry-bot-${i}">
                         <div class="message-header">
@@ -4059,11 +3940,13 @@ class PrivacyDemoApp {
                     this.updateSidebarToggle();
                     this.updateCopyPasteToggle();
                     this.applyCopyPasteSettings();
+                    this.updateUserAgentButton();
                 } else {
                     this.updateUI();
                     this.updateSidebarToggle();
                     this.updateCopyPasteToggle();
                     this.applyCopyPasteSettings();
+                    this.updateUserAgentButton();
                 }
             }
         } catch (error) {
