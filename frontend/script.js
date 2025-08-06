@@ -343,14 +343,39 @@ class PrivacyDemoApp {
     validateQualification() {
         // Update visual feedback for individual questions
         this.updateQualificationVisualFeedback();
+        // Update button state based on whether all questions are answered
+        this.updateQualificationButton();
     }
 
-    // Check if user qualifies
+    // Check if all qualification questions are answered
+    areAllQualificationQuestionsAnswered() {
+        const answers = this.state.qualificationAnswers;
+        return answers.qual1 && answers.qual2 && answers.qual3;
+    }
+
+    // Check if user qualifies (all answers are "yes")
     isQualified() {
         const answers = this.state.qualificationAnswers;
         return answers.qual1 === 'yes' && 
                answers.qual2 === 'yes' && 
                answers.qual3 === 'yes';
+    }
+
+    // Update qualification button state
+    updateQualificationButton() {
+        // Check for both possible button IDs (multi-step vs individual mode pages)
+        const proceedToChatBtn = document.getElementById('proceed-to-chat-btn');
+        const qualificationBtn = document.getElementById('qualification-btn');
+        
+        const allAnswered = this.areAllQualificationQuestionsAnswered();
+        
+        if (proceedToChatBtn) {
+            proceedToChatBtn.disabled = !allAnswered;
+        }
+        
+        if (qualificationBtn) {
+            qualificationBtn.disabled = !allAnswered;
+        }
     }
 
     // Update visual feedback for qualification questions
