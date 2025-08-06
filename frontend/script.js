@@ -1859,6 +1859,13 @@ class PrivacyDemoApp {
                         console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
                     }
                     
+                    console.log('Current question details:');
+                    console.log('- Current question index:', this.state.currentQuestionIndex);
+                    console.log('- Current question text:', currentQuestion);
+                    console.log('- Is background question:', isBackgroundQuestion);
+                    console.log('- Response object keys:', Object.keys(response || {}));
+                    console.log('- Full response:', response);
+                    
                     // Handle follow-up questions from audit LLM (but not for background questions)
                     if (response.follow_up_questions && response.follow_up_questions.length > 0) {
                         // Check if current question is a background question
@@ -1905,6 +1912,14 @@ class PrivacyDemoApp {
                         hasEndingPattern ||
                         (isBackgroundQuestion && this.state.conversationLog.length > 1) // Complete background questions after at least one exchange
                     );
+                    
+                    console.log('Question completion check:');
+                    console.log('- response.question_completed:', response?.question_completed);
+                    console.log('- hasNextQuestionSignal:', hasNextQuestionSignal);
+                    console.log('- hasEndingPattern:', hasEndingPattern);
+                    console.log('- isBackgroundQuestion:', isBackgroundQuestion);
+                    console.log('- conversationLog.length:', this.state.conversationLog.length);
+                    console.log('- shouldCompleteQuestion:', shouldCompleteQuestion);
                     
                     if (shouldCompleteQuestion) {
                         // Mark the current question as completed
