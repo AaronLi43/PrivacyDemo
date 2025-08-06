@@ -776,11 +776,23 @@
         window.app.state.mode = 'neutral';
         window.app.updateUI();
         
-        // Ensure conversation is initiated after mode is set
+        // Load questions and then initiate conversation
         setTimeout(async () => {
           if (window.app.state.conversationLog.length === 0) {
-            console.log('Neutral mode: Initiating chatbot conversation...');
-            await window.app.startQuestionConversation();
+            console.log('Neutral mode: Loading questions and initiating conversation...');
+            
+            // First load the questions
+            const questionsLoaded = await window.app.loadPredefinedQuestions('neutral');
+            
+            // Verify questions are loaded
+            if (questionsLoaded) {
+              const questions = window.app.state.predefinedQuestions['neutral'];
+              console.log('✅ Questions loaded for neutral mode:', questions.length);
+              await window.app.startQuestionConversation();
+            } else {
+              console.error('❌ Failed to load questions for neutral mode');
+              window.app.showNotification('Failed to load questions. Please refresh the page.', 'error');
+            }
           }
         }, 1000);
       }

@@ -803,8 +803,15 @@ class PrivacyDemoApp {
         // Load predefined questions from server
         await this.loadPredefinedQuestions(mode);
         
-        // Add a small delay to ensure questions are fully loaded
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Verify questions are loaded before proceeding
+        const questions = this.state.predefinedQuestions[mode];
+        if (!questions || !Array.isArray(questions) || questions.length === 0) {
+            console.error('❌ Questions not loaded for mode:', mode);
+            this.showNotification('Failed to load questions. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log(`✅ Questions loaded successfully for ${mode} mode:`, questions.length, 'questions');
         
         // Start the conversation with the first question from LLM
         await this.startQuestionConversation();
@@ -818,7 +825,7 @@ class PrivacyDemoApp {
     // Load predefined questions from server
     async loadPredefinedQuestions(mode) {
         try {
-            console.log(`Loading predefined questions for mode: ${mode}`);
+            console.log(`🔄 Loading predefined questions for mode: ${mode}`);
             const response = await fetch(`https://privacydemo.onrender.com/api/predefined_questions/${mode}`);
             
             if (!response.ok) {
@@ -827,17 +834,20 @@ class PrivacyDemoApp {
             
             const data = await response.json();
             
-            if (data.success) {
+            if (data.success && data.questions && Array.isArray(data.questions)) {
                 this.state.predefinedQuestions[mode] = data.questions;
-                console.log(`✅ Loaded ${data.questions.length} questions for mode: ${mode}`);
-                console.log('Questions:', data.questions);
+                console.log(`✅ Successfully loaded ${data.questions.length} questions for mode: ${mode}`);
+                console.log('📋 Questions loaded:', data.questions);
+                return true;
             } else {
-                console.error('❌ Failed to load predefined questions:', data.error);
-                this.showNotification('Failed to load questions', 'error');
+                console.error('❌ Failed to load predefined questions:', data.error || 'Invalid response format');
+                this.showNotification('Failed to load questions: Invalid response from server', 'error');
+                return false;
             }
         } catch (error) {
             console.error('❌ Error loading predefined questions:', error);
             this.showNotification(`Error loading questions: ${error.message}`, 'error');
+            return false;
         }
     }
 

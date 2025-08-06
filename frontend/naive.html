@@ -776,11 +776,23 @@
         window.app.state.mode = 'naive';
         window.app.updateUI();
         
-        // Ensure conversation is initiated after mode is set
+        // Load questions and then initiate conversation
         setTimeout(async () => {
           if (window.app.state.conversationLog.length === 0) {
-            console.log('Naive mode: Initiating chatbot conversation...');
-            await window.app.startQuestionConversation();
+            console.log('Naive mode: Loading questions and initiating conversation...');
+            
+            // First load the questions
+            const questionsLoaded = await window.app.loadPredefinedQuestions('naive');
+            
+            // Verify questions are loaded
+            if (questionsLoaded) {
+              const questions = window.app.state.predefinedQuestions['naive'];
+              console.log('✅ Questions loaded for naive mode:', questions.length);
+              await window.app.startQuestionConversation();
+            } else {
+              console.error('❌ Failed to load questions for naive mode');
+              window.app.showNotification('Failed to load questions. Please refresh the page.', 'error');
+            }
           }
         }, 1000);
       }
