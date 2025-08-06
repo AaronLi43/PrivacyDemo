@@ -82,10 +82,25 @@ class API {
             ...additionalParams
         };
         
-        return this.request(API_ENDPOINTS.CHAT, {
-            method: 'POST',
-            body: JSON.stringify(requestBody)
+        console.log('📤 Sending message to API:', {
+            message: message,
+            step: step,
+            sessionId: getSessionId(),
+            additionalParams: additionalParams
         });
+        
+        try {
+            const response = await this.request(API_ENDPOINTS.CHAT, {
+                method: 'POST',
+                body: JSON.stringify(requestBody)
+            });
+            
+            console.log('📥 API response received:', response);
+            return response;
+        } catch (error) {
+            console.error('❌ API sendMessage error:', error);
+            throw error;
+        }
     }
 
     // Privacy Detection API

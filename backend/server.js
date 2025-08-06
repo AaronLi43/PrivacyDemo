@@ -499,7 +499,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                 ];
 
                 // Add conversation history
-                conversationHistory.forEach(msg => {
+                session.conversationHistory.forEach(msg => {
                     messages.push({
                         role: msg.role,
                         content: msg.content
@@ -642,6 +642,8 @@ Remember to be conversational and ask follow-up questions based on what the user
                 
             } catch (aiError) {
                 console.error('AI API error:', aiError);
+                console.error('AI API error details:', aiError.message);
+                console.error('AI API error stack:', aiError.stack);
                 aiResponse = `I apologize, but I'm having trouble processing your request right now. Please try again later. (Error: ${aiError.message})`;
             }
         } else {
@@ -698,7 +700,13 @@ Remember to be conversational and ask follow-up questions based on what the user
         });
     } catch (error) {
         console.error('Chat API error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            details: error.message,
+            timestamp: new Date().toISOString()
+        });
     }
 });
 

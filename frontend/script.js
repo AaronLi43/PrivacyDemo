@@ -934,6 +934,7 @@ class PrivacyDemoApp {
     // Start question conversation with LLM
     async startQuestionConversation() {
         try {
+            console.log('🔄 Starting question conversation for mode:', this.state.mode);
             this.showLoading(true, '🤖 Starting main interview questions...');
             
             // Check if questions are loaded
@@ -945,6 +946,8 @@ class PrivacyDemoApp {
                 return;
             }
             
+            console.log('✅ Questions loaded:', questions.length, 'questions');
+            
             const currentQuestion = questions[this.state.currentQuestionIndex];
             const predefinedQuestions = questions;
             
@@ -955,6 +958,9 @@ class PrivacyDemoApp {
                 return;
             }
             
+            console.log('📋 Current question:', currentQuestion);
+            console.log('📋 Sending initial message to API...');
+            
             // Send initial message to start the conversation
             const response = await API.sendMessage("Hello, I'm ready to answer your questions.", this.state.currentStep, {
                 questionMode: true,
@@ -962,16 +968,25 @@ class PrivacyDemoApp {
                 predefinedQuestions: predefinedQuestions
             });
             
+            console.log('📋 API response received:', response);
+            
             if (response && response.bot_response) {
                 // Remove any NEXT_QUESTION prefix that might be present
                 let botResponse = response.bot_response;
                 botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
+                
+                console.log('📋 Bot response:', botResponse);
                 
                 this.state.conversationLog.push({
                     user: '',
                     bot: botResponse,
                     timestamp: new Date().toISOString()
                 });
+                
+                console.log('✅ Conversation started successfully');
+            } else {
+                console.error('❌ No bot response received from API');
+                this.showNotification('Failed to start conversation. Please try again.', 'error');
             }
             
             this.updateUI();
@@ -979,7 +994,10 @@ class PrivacyDemoApp {
             this.showLoading(false);
             
         } catch (error) {
-            console.error('Error starting question conversation:', error);
+            console.error('❌ Error starting question conversation:', error);
+            console.error('❌ Error details:', error.message);
+            console.error('❌ Error stack:', error.stack);
+            this.showNotification(`Error starting conversation: ${error.message}`, 'error');
             this.showLoading(false);
         }
     }
