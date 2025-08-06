@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Agent Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>User Agent Test</h2>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be displayed here -->
+            </div>
+            
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type your message..." maxlength="1000">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Controls</h3>
+                <div class="button-group">
+                    <button id="user-agent-btn" class="btn btn-info">
+                        <i class="fas fa-user"></i> Start User Agent
+                    </button>
+                    <button id="test-question-btn" class="btn btn-success">
+                        <i class="fas fa-question"></i> Test Question
+                    </button>
+                    <button id="clear-btn" class="btn btn-warning">
+                        <i class="fas fa-trash"></i> Clear Chat
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Status</h3>
+                <div id="status-display">
+                    <p>User Agent: <span id="user-agent-status">Disabled</span></p>
+                    <p>Messages: <span id="message-count">0</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class UserAgentTest {
+            constructor() {
+                this.state = {
+                    userAgentEnabled: false,
+                    userAgentResponding: false,
+                    conversationLog: []
+                };
+                
+                this.init();
+            }
+            
+            init() {
+                this.bindEvents();
+                this.updateUI();
+            }
+            
+            bindEvents() {
+                // User agent button
+                const userAgentBtn = document.getElementById('user-agent-btn');
+                if (userAgentBtn) {
+                    userAgentBtn.addEventListener('click', () => {
+                        this.toggleUserAgent();
+                    });
+                }
+                
+                // Test question button
+                const testQuestionBtn = document.getElementById('test-question-btn');
+                if (testQuestionBtn) {
+                    testQuestionBtn.addEventListener('click', () => {
+                        this.addTestQuestion();
+                    });
+                }
+                
+                // Clear button
+                const clearBtn = document.getElementById('clear-btn');
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', () => {
+                        this.clearChat();
+                    });
+                }
+                
+                // Send button
+                const sendBtn = document.getElementById('send-btn');
+                if (sendBtn) {
+                    sendBtn.addEventListener('click', () => {
+                        this.sendMessage();
+                    });
+                }
+                
+                // Enter key in input
+                const input = document.getElementById('chat-input');
+                if (input) {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            this.sendMessage();
+                        }
+                    });
+                }
+            }
+            
+            toggleUserAgent() {
+                this.state.userAgentEnabled = !this.state.userAgentEnabled;
+                this.updateUserAgentButton();
+                this.updateUI();
+                
+                if (this.state.userAgentEnabled) {
+                    this.showNotification('🤖 User Agent activated!', 'success');
+                    this.monitorForQuestions();
+                } else {
+                    this.showNotification('👤 User Agent deactivated.', 'info');
+                }
+            }
+            
+            updateUserAgentButton() {
+                const userAgentBtn = document.getElementById('user-agent-btn');
+                if (userAgentBtn) {
+                    if (this.state.userAgentEnabled) {
+                        userAgentBtn.innerHTML = '<i class="fas fa-user-slash"></i> Stop User Agent';
+                        userAgentBtn.className = 'btn btn-warning';
+                    } else {
+                        userAgentBtn.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
+                        userAgentBtn.className = 'btn btn-info';
+                    }
+                }
+            }
+            
+            addTestQuestion() {
+                const testQuestions = [
+                    "What is your educational background?",
+                    "Can you tell me about your work experience?",
+                    "How long have you been using AI tools?",
+                    "What concerns do you have about AI?",
+                    "What benefits have you seen from using AI?"
+                ];
+                
+                const randomQuestion = testQuestions[Math.floor(Math.random() * testQuestions.length)];
+                this.addBotMessage(randomQuestion);
+            }
+            
+            sendMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                
+                if (!message) return;
+                
+                this.addUserMessage(message);
+                input.value = '';
+            }
+            
+            addUserMessage(message) {
+                this.state.conversationLog.push({
+                    user: message,
+                    bot: '',
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.updateUI();
+                this.monitorForQuestions();
+            }
+            
+            addBotMessage(message) {
+                this.state.conversationLog.push({
+                    user: '',
+                    bot: message,
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.updateUI();
+                this.monitorForQuestions();
+            }
+            
+            monitorForQuestions() {
+                if (!this.state.userAgentEnabled) return;
+                
+                const conversationLog = this.state.conversationLog;
+                if (conversationLog.length === 0) return;
+                
+                const lastMessage = conversationLog[conversationLog.length - 1];
+                if (lastMessage.bot && !lastMessage.user) {
+                    if (this.isQuestion(lastMessage.bot)) {
+                        console.log('User Agent: Detected question, generating response...');
+                        this.generateUserAgentResponse(lastMessage.bot);
+                    }
+                }
+            }
+            
+            isQuestion(text) {
+                const questionPatterns = [
+                    /\?$/,
+                    /^(what|how|why|when|where|who|which|can you|could you|would you|do you|have you|are you|is there|are there)/i,
+                    /^(tell me|describe|explain|share|what's|what is|how's|how is)/i,
+                    /^(i'd love to hear|i'm curious about|i'm interested in|can you tell me)/i
+                ];
+                
+                return questionPatterns.some(pattern => pattern.test(text.trim()));
+            }
+            
+            async generateUserAgentResponse(botMessage) {
+                if (!this.state.userAgentEnabled || this.state.userAgentResponding) return;
+                
+                this.state.userAgentResponding = true;
+                
+                try {
+                    const response = this.generatePersonalResponse(botMessage);
+                    
+                    // Add delay to make it feel natural
+                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+                    
+                    this.addUserMessage(response);
+                    
+                } catch (error) {
+                    console.error('Error generating user agent response:', error);
+                } finally {
+                    this.state.userAgentResponding = false;
+                }
+            }
+            
+            generatePersonalResponse(botMessage) {
+                const responses = {
+                    education: [
+                        "I studied Computer Science at MIT. It was really challenging but I loved the problem-solving aspects.",
+                        "I majored in Psychology at Stanford. I was fascinated by how people think and make decisions.",
+                        "I went to UC Berkeley for Business Administration. I was always interested in how technology could transform business."
+                    ],
+                    work: [
+                        "I work as a software engineer at Google. I've been there for about 3 years now.",
+                        "I'm a product manager at a startup called TechFlow. We're building AI-powered tools.",
+                        "I'm a consultant specializing in digital transformation."
+                    ],
+                    ai_experience: [
+                        "I've been using AI tools for about 2 years now. Started with ChatGPT when it first came out.",
+                        "My first experience with AI was through my job - we started using GitHub Copilot for coding.",
+                        "I'm relatively new to AI - maybe 6 months or so. I was skeptical at first."
+                    ],
+                    ai_concerns: [
+                        "I do worry about privacy when using AI tools. I try to be careful about what I share.",
+                        "My main concern is that AI might replace human jobs. I work in tech, so I see both potential and risks.",
+                        "I'm concerned about the accuracy of AI responses. Sometimes they sound convincing but are actually wrong."
+                    ],
+                    ai_benefits: [
+                        "The biggest benefit I've seen is time savings. AI can help with routine tasks.",
+                        "I love how AI can help with learning. I've used it to explain complex concepts.",
+                        "The creativity aspect is amazing. I've used AI to brainstorm ideas."
+                    ]
+                };
+                
+                let category = 'general';
+                const lowerMessage = botMessage.toLowerCase();
+                
+                if (lowerMessage.includes('education') || lowerMessage.includes('study') || lowerMessage.includes('college')) {
+                    category = 'education';
+                } else if (lowerMessage.includes('work') || lowerMessage.includes('job') || lowerMessage.includes('occupation')) {
+                    category = 'work';
+                } else if (lowerMessage.includes('ai') || lowerMessage.includes('chatgpt') || lowerMessage.includes('experience')) {
+                    category = 'ai_experience';
+                } else if (lowerMessage.includes('concern') || lowerMessage.includes('worry') || lowerMessage.includes('risk')) {
+                    category = 'ai_concerns';
+                } else if (lowerMessage.includes('benefit') || lowerMessage.includes('advantage') || lowerMessage.includes('helpful')) {
+                    category = 'ai_benefits';
+                }
+                
+                const categoryResponses = responses[category] || responses['education'];
+                return categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
+            }
+            
+            clearChat() {
+                this.state.conversationLog = [];
+                this.updateUI();
+            }
+            
+            updateUI() {
+                this.updateMessages();
+                this.updateStatus();
+            }
+            
+            updateMessages() {
+                const messagesContainer = document.getElementById('chat-messages');
+                if (!messagesContainer) return;
+                
+                messagesContainer.innerHTML = '';
+                
+                this.state.conversationLog.forEach((entry, index) => {
+                    if (entry.user) {
+                        const userDiv = document.createElement('div');
+                        userDiv.className = 'message user-message';
+                        userDiv.innerHTML = `<div class="message-content">${this.escapeHtml(entry.user)}</div>`;
+                        messagesContainer.appendChild(userDiv);
+                    }
+                    
+                    if (entry.bot) {
+                        const botDiv = document.createElement('div');
+                        botDiv.className = 'message bot-message';
+                        botDiv.innerHTML = `<div class="message-content">${this.escapeHtml(entry.bot)}</div>`;
+                        messagesContainer.appendChild(botDiv);
+                    }
+                });
+                
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            updateStatus() {
+                const userAgentStatus = document.getElementById('user-agent-status');
+                const messageCount = document.getElementById('message-count');
+                
+                if (userAgentStatus) {
+                    userAgentStatus.textContent = this.state.userAgentEnabled ? 'Enabled' : 'Disabled';
+                    userAgentStatus.className = this.state.userAgentEnabled ? 'enabled' : 'disabled';
+                }
+                
+                if (messageCount) {
+                    messageCount.textContent = this.state.conversationLog.length;
+                }
+            }
+            
+            showNotification(message, type = 'info') {
+                console.log(`[${type.toUpperCase()}] ${message}`);
+                
+                // Create a simple notification
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                notification.textContent = message;
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 10px 15px;
+                    border-radius: 5px;
+                    color: white;
+                    font-weight: bold;
+                    z-index: 1000;
+                    background-color: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
+                `;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 3000);
+            }
+            
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+        
+        // Initialize the test when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new UserAgentTest();
+        });
+    </script>
+    
+    <style>
+        .enabled {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .disabled {
+            color: #6c757d;
+        }
+        
+        .notification {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</body>
+</html>
