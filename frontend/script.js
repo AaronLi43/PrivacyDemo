@@ -1371,17 +1371,22 @@ class PrivacyDemoApp {
     }
 
     isFinalQuestion(text) {
-        // Check for final question patterns
+        // Check for final question patterns - only detect actual conversation endings
         const finalQuestionPatterns = [
-            /thank you.*sharing.*with me/i,
-            /thank you.*participation/i,
-            /concludes our conversation/i,
-            /conversation.*complete/i,
-            /enjoyed learning about you/i,
-            /thank you.*time/i
+            /thank you.*sharing.*with me.*concludes our conversation/i,
+            /thank you.*participation.*conversation.*complete/i,
+            /enjoyed learning about you.*concludes our conversation/i,
+            /thank you.*time.*conversation.*complete/i,
+            /this concludes our conversation/i,
+            /conversation is complete/i,
+            /thank you.*concludes our conversation/i,
+            /thank you.*conversation.*complete/i
         ];
         
-        return finalQuestionPatterns.some(pattern => pattern.test(text));
+        const trimmedText = text.trim();
+        const isFinal = finalQuestionPatterns.some(pattern => pattern.test(trimmedText));
+        console.log('User Agent: isFinalQuestion check for:', trimmedText, 'Result:', isFinal);
+        return isFinal;
     }
 
     async generateUserAgentResponse(botMessage) {
@@ -1392,11 +1397,8 @@ class PrivacyDemoApp {
             console.log('User Agent: Skipping response - enabled:', this.state.userAgentEnabled, 'responding:', this.state.userAgentResponding);
             return;
         }
-        if (this.isFinalQuestion(botMessage)) {
-            console.log('User Agent: Detected final question, not responding');
-            return;
-        }
         
+        // Let the audit LLM decide which is the final question - user agent responds to all questions
         console.log('User Agent: Starting to generate response...');
         this.state.userAgentResponding = true;
         
