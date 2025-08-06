@@ -65,6 +65,47 @@
     </div>
 
     <script>
+        // Function to reset all stored data
+        function resetAllData() {
+            try {
+                // Clear localStorage data
+                localStorage.removeItem('privacyDemoState');
+                
+                // Clear any other potential storage
+                sessionStorage.clear();
+                
+                // Reset session ID if the function exists
+                if (typeof resetSessionId === 'function') {
+                    resetSessionId();
+                }
+                
+                console.log('✅ All stored data cleared successfully');
+            } catch (error) {
+                console.error('Error clearing stored data:', error);
+            }
+        }
+
+        // Function to call backend reset API
+        async function resetBackendSession() {
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                if (response.ok) {
+                    console.log('✅ Backend session reset successfully');
+                } else {
+                    console.warn('⚠️ Backend reset failed, but continuing...');
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not reach backend for reset, but continuing...', error);
+            }
+        }
+
         // Define the three modes with subtle identifiers
         const modes = [
             {
@@ -111,7 +152,14 @@
         }
 
         // Main execution
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Reset all data first
+            resetAllData();
+            
+            // Try to reset backend session (non-blocking)
+            resetBackendSession();
+            
+            // Select mode and redirect
             const selectedMode = getRandomMode();
             redirectToMode(selectedMode);
         });
