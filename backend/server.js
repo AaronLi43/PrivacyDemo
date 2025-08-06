@@ -53,6 +53,9 @@ const PORT = process.env.PORT || 3000;
 const ENABLE_AUDIT_LLM = process.env.ENABLE_AUDIT_LLM === 'true';
 console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 
+// Global mode configuration
+let currentMode = 'chat';
+
 // Middleware
 app.use(cors({
     origin: true, // Allow all origins
