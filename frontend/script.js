@@ -114,17 +114,19 @@ class PrivacyDemoApp {
 
         this.state.userAgentSimulation.isActive = true;
         this.updateUserAgentButton();
-        this.showNotification('User agent simulation started. The agent will automatically respond to chatbot questions.', 'success');
+        this.showNotification('User agent simulation started. The agent will take over the entire conversation until completion.', 'success');
         
-        // Start the conversation if not already started
-        if (this.state.conversationLog.length === 0) {
-            this.startQuestionConversation();
-        } else {
-            // If conversation already exists, start responding to the next message
-            setTimeout(() => {
-                this.processNextChatbotMessage();
-            }, 2000);
-        }
+        // Always start fresh conversation when user agent is activated
+        this.state.conversationLog = [];
+        this.state.currentStep = 0;
+        this.state.currentQuestionIndex = 0;
+        this.state.predefinedQuestionsCompleted = 0;
+        this.state.questionsCompleted = false;
+        this.state.completedQuestionIndices = [];
+        this.state.justCompletedQuestion = false;
+        
+        // Start the conversation with the first question
+        this.startQuestionConversation();
     }
 
     stopUserAgentSimulation() {
@@ -145,10 +147,37 @@ class PrivacyDemoApp {
                 button.className = 'btn btn-success';
             }
         }
+        
+        // Disable/enable chat input based on user agent status
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        
+        if (chatInput && sendBtn) {
+            if (this.state.userAgentSimulation.isActive) {
+                chatInput.disabled = true;
+                chatInput.placeholder = 'User agent is active - conversation will be automated';
+                sendBtn.disabled = true;
+                chatInput.style.opacity = '0.6';
+                sendBtn.style.opacity = '0.6';
+            } else {
+                chatInput.disabled = false;
+                chatInput.placeholder = 'Type your message here...';
+                sendBtn.disabled = false;
+                chatInput.style.opacity = '1';
+                sendBtn.style.opacity = '1';
+            }
+        }
     }
 
     async processNextChatbotMessage() {
         if (!this.state.userAgentSimulation.isActive || this.state.userAgentSimulation.isResponding) {
+            return;
+        }
+
+        // Check if conversation is already completed
+        if (this.state.questionsCompleted) {
+            this.stopUserAgentSimulation();
+            this.showNotification('User agent simulation completed! All questions have been answered.', 'success');
             return;
         }
 
@@ -159,11 +188,15 @@ class PrivacyDemoApp {
             .find(msg => msg.bot && msg.bot.trim());
 
         if (!lastChatbotMessage) {
+            // If no chatbot message found, wait a bit and try again
+            setTimeout(() => {
+                this.processNextChatbotMessage();
+            }, 1000);
             return;
         }
 
         // Wait a bit to simulate thinking time
-        await this.delay(2000 + Math.random() * 3000);
+        await this.delay(1500 + Math.random() * 2000);
 
         // Generate user agent response
         const response = this.generateUserAgentResponse(lastChatbotMessage.bot);
@@ -270,14 +303,21 @@ class PrivacyDemoApp {
                 if (response.conversation_complete || response.question_completed) {
                     this.stopUserAgentSimulation();
                     this.showNotification('User agent simulation completed! All questions have been answered.', 'success');
+                    
+                    // Show congratulation popup if questions are completed
+                    if (response.question_completed) {
+                        this.state.questionsCompleted = true;
+                        this.state.questionMode = false;
+                        this.showCongratulationPopup();
+                    }
                     return;
                 }
 
-                // Continue the conversation after a delay
+                // Continue the conversation automatically after a delay
                 setTimeout(() => {
                     this.state.userAgentSimulation.isResponding = false;
                     this.processNextChatbotMessage();
-                }, 3000 + Math.random() * 2000);
+                }, 2000 + Math.random() * 1000);
             }
 
         } catch (error) {
@@ -1232,6 +1272,13 @@ class PrivacyDemoApp {
             this.scrollToBottom();
             this.showLoading(false);
             
+            // If user agent is active, automatically respond to the chatbot's first message
+            if (this.state.userAgentSimulation.isActive) {
+                setTimeout(() => {
+                    this.processNextChatbotMessage();
+                }, 2000);
+            }
+            
         } catch (error) {
             console.error('❌ Error starting question conversation:', error);
             console.error('❌ Error details:', error.message);
@@ -1576,12 +1623,16 @@ class PrivacyDemoApp {
 
     // Send message
     async sendMessage() {
-
-
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
         
         if (!message) return;
+
+        // Prevent manual messages when user agent is active
+        if (this.state.userAgentSimulation.isActive) {
+            this.showNotification('User agent is currently active. Please wait for the conversation to complete or stop the user agent first.', 'warning');
+            return;
+        }
 
         // Clear real-time detection when sending message
         this.clearRealTimeDetection();

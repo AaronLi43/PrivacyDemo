@@ -107,15 +107,20 @@
                 });
             }
 
-            startUserAgent() {
-                this.userAgentActive = true;
-                this.updateUserAgentButton();
-                this.updateStats();
-                this.showNotification('User agent simulation started!', 'success');
-                
-                // Start the conversation
-                this.simulateConversation();
-            }
+                         startUserAgent() {
+                 this.userAgentActive = true;
+                 this.updateUserAgentButton();
+                 this.updateStats();
+                 this.showNotification('User agent simulation started! The agent will take over the entire conversation.', 'success');
+                 
+                 // Clear conversation and start fresh
+                 this.conversationLog = [];
+                 this.currentStep = 0;
+                 this.updateConversationDisplay();
+                 
+                 // Start the conversation
+                 this.simulateConversation();
+             }
 
             stopUserAgent() {
                 this.userAgentActive = false;
@@ -124,16 +129,36 @@
                 this.showNotification('User agent simulation stopped.', 'info');
             }
 
-            updateUserAgentButton() {
-                const button = document.getElementById('user-agent-btn');
-                if (this.userAgentActive) {
-                    button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
-                    button.className = 'btn btn-danger';
-                } else {
-                    button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
-                    button.className = 'btn btn-success';
-                }
-            }
+                         updateUserAgentButton() {
+                 const button = document.getElementById('user-agent-btn');
+                 if (this.userAgentActive) {
+                     button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
+                     button.className = 'btn btn-danger';
+                 } else {
+                     button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
+                     button.className = 'btn btn-success';
+                 }
+                 
+                 // Disable/enable chat input based on user agent status
+                 const chatInput = document.getElementById('chat-input');
+                 const sendBtn = document.getElementById('send-btn');
+                 
+                 if (chatInput && sendBtn) {
+                     if (this.userAgentActive) {
+                         chatInput.disabled = true;
+                         chatInput.placeholder = 'User agent is active - conversation will be automated';
+                         sendBtn.disabled = true;
+                         chatInput.style.opacity = '0.6';
+                         sendBtn.style.opacity = '0.6';
+                     } else {
+                         chatInput.disabled = false;
+                         chatInput.placeholder = 'Type your message here...';
+                         sendBtn.disabled = false;
+                         chatInput.style.opacity = '1';
+                         sendBtn.style.opacity = '1';
+                     }
+                 }
+             }
 
             updateStats() {
                 document.getElementById('stat-messages').textContent = this.conversationLog.length;
@@ -259,20 +284,26 @@
                 container.scrollTop = container.scrollHeight;
             }
 
-            sendMessage() {
-                const input = document.getElementById('chat-input');
-                const message = input.value.trim();
-                
-                if (!message) return;
-                
-                this.addMessage('user', message);
-                input.value = '';
-                
-                // Simulate chatbot response
-                setTimeout(() => {
-                    this.addMessage('assistant', 'Thank you for your response! This is a test environment.');
-                }, 1000);
-            }
+                         sendMessage() {
+                 const input = document.getElementById('chat-input');
+                 const message = input.value.trim();
+                 
+                 if (!message) return;
+                 
+                 // Prevent manual messages when user agent is active
+                 if (this.userAgentActive) {
+                     this.showNotification('User agent is currently active. Please wait for the conversation to complete or stop the user agent first.', 'warning');
+                     return;
+                 }
+                 
+                 this.addMessage('user', message);
+                 input.value = '';
+                 
+                 // Simulate chatbot response
+                 setTimeout(() => {
+                     this.addMessage('assistant', 'Thank you for your response! This is a test environment.');
+                 }, 1000);
+             }
 
             resetConversation() {
                 this.conversationLog = [];
