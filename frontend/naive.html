@@ -219,409 +219,555 @@
     </div>
   </div>
 
-  <!-- Step 4: Chat Interface -->
+  <!-- Step 4: Main Chat Interface (Current Interface) -->
   <div id="chat-page" class="step-page">
-    <div class="step-container">
-      <div class="step-header">
-        <h1><i class="fas fa-comments"></i> Chat with AI</h1>
-        <div class="step-indicator">
-          <span class="step-number">4</span>
-          <span class="step-label">Conversation</span>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 id="main-header-title"><i class="fas fa-lock"></i>Privacy Demo Study</h1>
+          </div>
+          <div class="header-right">
+          </div>
         </div>
-      </div>
-      
-      <div class="step-content">
-        <div class="chat-interface">
-          <!-- Header -->
-          <header class="chat-header">
-            <div class="chat-title">
-              <h2><i class="fas fa-robot"></i> AI Interview Assistant</h2>
-              <p>You're in <strong>😊 Naive Mode</strong> - You can edit your conversation log before exporting!</p>
-            </div>
-            <button id="sidebar-toggle" class="btn btn-secondary">
-              <i class="fas fa-bars"></i>
-            </button>
-          </header>
+      </header>
 
-          <!-- Sidebar -->
-          <aside class="sidebar">
-            <div class="sidebar-section">
-              <h3><i class="fas fa-cog"></i> Configuration</h3>
-              
-              <!-- Mode Info (Fixed for Naive Mode) -->
-              <div id="mode-info" class="info-box">
-                <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
-              </div>
-
-              <!-- Copy/Paste Toggle -->
-              <div class="form-group">
-                <label for="copy-paste-toggle">Copy & Paste:</label>
-                <button id="copy-paste-toggle" class="btn btn-secondary">
-                  <i class="fas fa-lock"></i> Disabled
-                </button>
-              </div>
-
-              <!-- Action Buttons -->
-              <div class="button-group">
-                <button id="reset-btn" class="btn btn-secondary">
-                  <i class="fas fa-redo"></i> Reset Conversation
-                </button>
-                <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
-                  <i class="fas fa-times"></i> Exit Edit Mode
-                </button>
-                <button id="show-congratulation-btn" class="btn btn-success">
-                  <i class="fas fa-trophy"></i> Show Congratulations
-                </button>
-              </div>
-            </div>
-
-            <!-- Statistics -->
-            <div class="sidebar-section">
-              <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <span class="stat-label">Mode:</span>
-                  <span id="stat-mode" class="stat-value">😊 Naive</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Messages:</span>
-                  <span id="stat-messages" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Step:</span>
-                  <span id="stat-step" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Privacy Issues:</span>
-                  <span id="stat-privacy" class="stat-value">0</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- API Status -->
-            <div class="sidebar-section">
-              <h3><i class="fas fa-key"></i> API Status</h3>
-              <div id="api-status" class="status-indicator">
-                <span class="status-dot"></span>
-                <span class="status-text">Checking...</span>
-              </div>
-              <button id="test-api-btn" class="btn btn-sm btn-secondary">
-                <i class="fas fa-vial"></i> Test Connection
-              </button>
-              
-              <!-- Audit LLM Status -->
-              <div id="audit-llm-status" class="status-indicator" style="margin-top: 0.5rem;">
-                <span class="status-dot"></span>
-                <span class="status-text">🔍 Audit LLM: Checking...</span>
-              </div>
-            </div>
-          </aside>
-
-          <!-- Main Content -->
-          <main class="main-content">
-            <!-- Two Column Layout for Privacy Analysis & Export Stage -->
-            <div id="two-column-layout" class="two-column-layout" style="display:none;">
-              <div class="left-column">
-                <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
-                  <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-edit"></i> <strong>Privacy Analysis Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
-                </div>
-                <div id="analysis-conversation-container" class="conversation-container">
-                  <div class="empty-state">
-                    <i class="fas fa-comment-dots"></i>
-                    <p>Start a conversation by typing a message below!</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="right-column">
-                <div class="privacy-analysis-panel">
-                  <div class="panel-header">
-                    <h3><i class="fas fa-shield-alt"></i> Privacy Analysis</h3>
-                    <button id="close-privacy-analysis" class="btn btn-sm btn-secondary">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                  <div id="privacy-analysis-content">
-                    <div class="empty-privacy-analysis">
-                      <i class="fas fa-search"></i>
-                      <p>Privacy analysis will appear here after conversation analysis.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Single Column Layout for Chat Stage -->
-            <div id="single-column-layout" class="single-column-layout">
-              <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
-                <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-info-circle"></i> <strong>Edit Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
-              </div>
-              <div id="conversation-container" class="conversation-container">
-                <div class="empty-state">
-                  <i class="fas fa-comment-dots"></i>
-                  <p>Start a conversation by typing a message below!</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Input Area -->
-            <div class="input-area">
-              <div class="input-container">
-                <textarea id="message-input" placeholder="Type your message here..." rows="1"></textarea>
-                <button id="send-btn" class="btn btn-primary">
-                  <i class="fas fa-paper-plane"></i>
-                </button>
-              </div>
-              <div class="input-actions">
-                <button id="enter-edit-mode-btn" class="btn btn-secondary" style="display: none;">
-                  <i class="fas fa-edit"></i> Enter Edit Mode
-                </button>
-                <button id="export-direct-btn" class="btn btn-success" style="display: none;">
-                  <i class="fas fa-download"></i> Export Direct
-                </button>
-                <button id="export-direct-redirect-btn" class="btn btn-success" style="display: none;">
-                  <i class="fas fa-download"></i> Export & Redirect
-                </button>
-                <button id="analyze-export-btn" class="btn btn-info" style="display: none;">
-                  <i class="fas fa-search"></i> Analyze & Export
-                </button>
-                <button id="analyze-export-redirect-btn" class="btn btn-info" style="display: none;">
-                  <i class="fas fa-search"></i> Analyze & Redirect
-                </button>
-                <button id="export-comprehensive-btn" class="btn btn-warning" style="display: none;">
-                  <i class="fas fa-file-alt"></i> Comprehensive Export
-                </button>
-                <button id="export-comprehensive-redirect-btn" class="btn btn-warning" style="display: none;">
-                  <i class="fas fa-file-alt"></i> Comprehensive & Redirect
-                </button>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Step 5: Survey Page -->
-  <div id="survey-page" class="step-page">
-    <div class="step-container">
-      <div class="step-header">
-        <h1><i class="fas fa-clipboard-list"></i> Post-Study Survey</h1>
-        <div class="step-indicator">
-          <span class="step-number">5</span>
-          <span class="step-label">Survey</span>
-        </div>
-      </div>
-      
-      <div class="step-content">
-        <div class="survey-content">
-          <p>Please complete this brief survey about your experience with the AI chatbot.</p>
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h3><i class="fas fa-cog"></i> Configuration</h3>
           
-          <div class="survey-questions">
-            <!-- General Questions -->
-            <div class="survey-section">
-              <h3>General Experience</h3>
-              
-              <div class="form-group">
-                <label for="survey1">How comfortable were you sharing information with the AI chatbot?</label>
-                <select id="survey1" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="1">1 - Very Uncomfortable</option>
-                  <option value="2">2 - Uncomfortable</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - Comfortable</option>
-                  <option value="5">5 - Very Comfortable</option>
-                </select>
-              </div>
+          <!-- Mode Info (Fixed for Naive Mode) -->
+          <div id="mode-info" class="info-box">
+            <p><strong>💡 Naive Mode:</strong> You can edit your conversation log before exporting!</p>
+          </div>
 
-              <div class="form-group">
-                <label for="survey2">How natural did the conversation feel?</label>
-                <select id="survey2" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="1">1 - Very Unnatural</option>
-                  <option value="2">2 - Unnatural</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - Natural</option>
-                  <option value="5">5 - Very Natural</option>
-                </select>
-              </div>
+          <!-- Copy/Paste Toggle -->
+          <div class="form-group">
+            <label for="copy-paste-toggle">Copy & Paste:</label>
+            <button id="copy-paste-toggle" class="btn btn-secondary">
+              <i class="fas fa-lock"></i> Disabled
+            </button>
+          </div>
 
-              <div class="form-group">
-                <label for="survey3">How satisfied were you with the overall experience?</label>
-                <select id="survey3" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="1">1 - Very Dissatisfied</option>
-                  <option value="2">2 - Dissatisfied</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - Satisfied</option>
-                  <option value="5">5 - Very Satisfied</option>
-                </select>
+          <!-- Action Buttons -->
+          <div class="button-group">
+            <button id="reset-btn" class="btn btn-secondary">
+              <i class="fas fa-redo"></i> Reset Conversation
+            </button>
+            <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
+              <i class="fas fa-times"></i> Exit Edit Mode
+            </button>
+            <button id="show-congratulation-btn" class="btn btn-success">
+              <i class="fas fa-trophy"></i> Show Congratulations
+            </button>
+          </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="sidebar-section">
+          <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">Mode:</span>
+              <span id="stat-mode" class="stat-value">😊 Naive</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Messages:</span>
+              <span id="stat-messages" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Step:</span>
+              <span id="stat-step" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Privacy Issues:</span>
+              <span id="stat-privacy" class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Status -->
+        <div class="sidebar-section">
+          <h3><i class="fas fa-key"></i> API Status</h3>
+          <div id="api-status" class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">Checking...</span>
+          </div>
+          <button id="test-api-btn" class="btn btn-sm btn-secondary">
+            <i class="fas fa-vial"></i> Test Connection
+          </button>
+          
+          <!-- Audit LLM Status -->
+          <div id="audit-llm-status" class="status-indicator" style="margin-top: 0.5rem;">
+            <span class="status-dot"></span>
+            <span class="status-text">🔍 Audit LLM: Checking...</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Two Column Layout for Privacy Analysis & Export Stage -->
+        <div id="two-column-layout" class="two-column-layout" style="display:none;">
+          <div class="left-column">
+            <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+              <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-edit"></i> <strong>Privacy Analysis Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
+            </div>
+            <div id="analysis-conversation-container" class="conversation-container">
+              <div class="empty-state">
+                <i class="fas fa-comment-dots"></i>
+                <p>Start a conversation by typing a message below!</p>
               </div>
             </div>
-
-            <!-- Naive Mode Specific Questions -->
-            <div id="naive-specific-questions" class="mode-specific-questions">
-              <h3>Naive Mode Experience</h3>
-              
-              <div class="form-group">
-                <label for="naive1">How useful was the ability to edit your conversation before exporting?</label>
-                <select id="naive1" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="1">1 - Not Useful</option>
-                  <option value="2">2 - Slightly Useful</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - Useful</option>
-                  <option value="5">5 - Very Useful</option>
-                </select>
+          </div>
+          <div class="right-column">
+            <div id="privacy-analysis" class="privacy-analysis" style="display: none;">
+              <div class="privacy-analysis-header">
+                <h3><i class="fas fa-search"></i> Privacy Analysis Results</h3>
               </div>
-
-              <div class="form-group">
-                <label for="naive2">Did you edit any messages in your conversation?</label>
-                <select id="naive2" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="naive3">How much did the editing feature affect your willingness to share information?</label>
-                <select id="naive3" class="form-control">
-                  <option value="">Select an answer...</option>
-                  <option value="1">1 - No Effect</option>
-                  <option value="2">2 - Slight Effect</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - Moderate Effect</option>
-                  <option value="5">5 - Strong Effect</option>
-                </select>
+              <div class="privacy-analysis-content">
+                <div class="analysis-header">
+                  <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
+                  <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
+                    <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
+                  </label>
+                </div>
+                <div class="analysis-stats">
+                  <div class="stat-card">
+                    <span class="stat-number" id="total-messages">0</span>
+                    <span class="stat-label">Total Messages</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-number" id="privacy-issues">0</span>
+                    <span class="stat-label">Privacy Issues</span>
+                  </div>
+                </div>
+                <div id="privacy-choices" class="privacy-choices">
+                  <!-- Privacy choice buttons will be generated here -->
+                </div>
+                <div class="export-options">
+                  <button id="export-comprehensive" class="btn btn-success">
+                    <i class="fas fa-download"></i> Export Comprehensive Data
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+        <!-- Chat Interface (shown when not in analysis stage) -->
+        <div class="chat-container">
+          <div class="chat-header">
+            <h2 id="chat-header-title"><i class="fas fa-comments"></i> Chat Interface</h2>
+          </div>
+          <div id="edit-instructions-chat" class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #007bff; display: none;">
+            <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-info-circle"></i> <strong>Edit Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
+          </div>
+          <div id="conversation-container" class="conversation-container">
+            <div class="empty-state">
+              <i class="fas fa-comment-dots"></i>
+              <p>Start a conversation by typing a message below!</p>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <div class="input-group" id="chat-input-group">
+              <input type="text" id="chat-input" placeholder="Type your message here..." class="form-control">
+              <button id="send-btn" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i> Send
+              </button>
+            </div>
+            <div id="edit-export-container" class="edit-export-container" style="display: none;">
+              <div class="edit-export-buttons">
+                <button id="edit-export-btn-main" class="btn btn-primary">
+                  <i class="fas fa-edit"></i> Edit & Export
+                </button>
+                <button id="export-direct-btn-main" class="btn btn-success">
+                  <i class="fas fa-download"></i> Export Direct
+                </button>
+                <button id="analyze-export-btn-main" class="btn btn-warning">
+                  <i class="fas fa-search"></i> Analyze & Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
 
-      <div class="step-actions">
-        <button id="survey-submit-btn" class="btn btn-primary" disabled>
-          <i class="fas fa-check"></i> Submit Survey
+    <!-- Action Buttons Panel - Fixed Position -->
+    <div class="action-buttons-panel">
+      <!-- Config Button -->
+      <div class="config-button-container">
+        <button id="toggle-sidebar-btn" class="btn btn-secondary toggle-sidebar-btn">
+          <i class="fas fa-bars"></i> Hide Config
         </button>
       </div>
+
+      <!-- Export Buttons -->
+      <div id="export-buttons" class="export-buttons-container" style="display: none;">
+        <button id="edit-export-btn" class="btn btn-primary" style="display: none;">
+          <i class="fas fa-edit"></i> Edit & Export
+        </button>
+        <button id="export-direct-btn" class="btn btn-success">
+          <i class="fas fa-download"></i> Export Direct
+        </button>
+        <button id="analyze-export-btn" class="btn btn-warning" style="display: none;">
+          <i class="fas fa-search"></i> Analyze & Export
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Privacy Popup Modal -->
+  <div id="privacy-popup" class="privacy-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closePrivacyPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4 id="popup-title"></h4>
+      <div id="popup-explanation"></div>
+      <div id="popup-suggestion" class="suggestion-box"></div>
+      <button id="popup-apply-btn" class="btn btn-success" style="display: none;">
+        <i class="fas fa-check"></i> Apply This Fix
+      </button>
+    </div>
+  </div>
+
+  <!-- Consent Popup Modal -->
+  <div id="consent-popup" class="consent-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closeConsentPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4><i class="fas fa-user-shield"></i> Research Data Sharing</h4>
+      <div class="consent-explanation">
+        <p>Would you like to share your original conversation for research purposes?</p>
+        
+        <div class="consent-section">
+          <h5><i class="fas fa-info-circle"></i> What this means:</h5>
+          <ul>
+            <li>Your conversation with the chatbot will be used for academic research</li>
+            <li>All data will be anonymized and kept confidential</li>
+            <li>Your participation helps improve AI privacy protection systems</li>
+          </ul>
+        </div>
+      </div>
+      <div class="consent-actions">
+        <button id="consent-agree-btn" class="btn btn-success">
+          <i class="fas fa-check"></i> Yes, I agree to share
+        </button>
+        <button id="consent-decline-btn" class="btn btn-secondary">
+          <i class="fas fa-times"></i> No, I decline
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post-Task Survey Modal -->
+  <div id="survey-popup" class="survey-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closeSurveyPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4><i class="fas fa-clipboard-list"></i> Post-Task Survey</h4>
+      <div class="survey-container">
+        <p class="survey-intro">Please complete this brief survey to help us understand your experience. Your responses will be included in the exported data.</p>
+        
+        <form id="survey-form">
+          <!-- Overall Experiences (For all three groups) -->
+          <div class="survey-question">
+            <label for="q1">Did you have any concerns about your privacy during or after the interview? If yes, please elaborate.</label>
+            <textarea id="q1" name="q1" class="form-control" rows="3" placeholder="Please describe any privacy concerns you had..."></textarea>
+          </div>
+
+          <div class="survey-question">
+            <label for="q2">Were there any points during the conversation where you hesitated to answer due to privacy concerns? If so, please elaborate.</label>
+            <textarea id="q2" name="q2" class="form-control" rows="3" placeholder="Please describe any moments where you hesitated..."></textarea>
+          </div>
+
+          <div class="survey-question">
+            <label for="q3">Did you ever feel the chatbot was collecting too much or irrelevant information? Why or why not?</label>
+            <textarea id="q3" name="q3" class="form-control" rows="3" placeholder="Please share your thoughts on the information collection..."></textarea>
+          </div>
+
+          <div class="survey-question">
+            <label for="q4">I felt comfortable sharing personal information with the chatbot.</label>
+            <select id="q4" name="q4" class="form-control">
+              <option value="">Select your level of agreement...</option>
+              <option value="1">1 - Strongly Disagree</option>
+              <option value="2">2 - Disagree</option>
+              <option value="3">3 - Neutral</option>
+              <option value="4">4 - Agree</option>
+              <option value="5">5 - Strongly Agree</option>
+            </select>
+          </div>
+
+          <div class="survey-question">
+            <label for="q5">I would use this system again for discussing sensitive topics.</label>
+            <select id="q5" name="q5" class="form-control">
+              <option value="">Select your level of agreement...</option>
+              <option value="1">1 - Strongly Disagree</option>
+              <option value="2">2 - Disagree</option>
+              <option value="3">3 - Neutral</option>
+              <option value="4">4 - Agree</option>
+              <option value="5">5 - Strongly Agree</option>
+            </select>
+          </div>
+
+          <!-- Naive Mode Specific Questions -->
+          <div id="naive-specific-questions" class="mode-specific-questions" style="display: none;">
+            <div class="survey-question">
+              <label for="q6">Did you remove or change any parts of the conversation for privacy reasons? If yes, please describe what changes you made and why.</label>
+              <textarea id="q6" name="q6" class="form-control" rows="3" placeholder="Please describe any changes you made for privacy reasons..."></textarea>
+            </div>
+
+            <div class="survey-question">
+              <label for="q7">Do you feel your final edited version better reflects what you were comfortable sharing? Please explain.</label>
+              <textarea id="q7" name="q7" class="form-control" rows="3" placeholder="Please explain how the editing affected your comfort level..."></textarea>
+            </div>
+
+            <div class="survey-question">
+              <label for="q8">The editing features improved my sense of privacy control.</label>
+              <select id="q8" name="q8" class="form-control">
+                <option value="">Select your level of agreement...</option>
+                <option value="1">1 - Strongly Disagree</option>
+                <option value="2">2 - Disagree</option>
+                <option value="3">3 - Neutral</option>
+                <option value="4">4 - Agree</option>
+                <option value="5">5 - Strongly Agree</option>
+              </select>
+            </div>
+
+            <div class="survey-question">
+              <label for="q9">I was able to clearly understand how to use the editing features to protect my privacy.</label>
+              <select id="q9" name="q9" class="form-control">
+                <option value="">Select your level of agreement...</option>
+                <option value="1">1 - Strongly Disagree</option>
+                <option value="2">2 - Disagree</option>
+                <option value="3">3 - Neutral</option>
+                <option value="4">4 - Agree</option>
+                <option value="5">5 - Strongly Agree</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Featured Mode Specific Questions -->
+          <div id="featured-specific-questions" class="mode-specific-questions" style="display: none;">
+            <div class="survey-question">
+              <label for="q10">Were there any AI-suggested edits that made you feel more exposed or more protected? Please explain.</label>
+              <textarea id="q10" name="q10" class="form-control" rows="3" placeholder="Please describe how AI suggestions affected your feelings..."></textarea>
+            </div>
+
+            <div class="survey-question">
+              <label for="q11">Did you accept or reject any AI-suggested edits because of privacy concerns? Please describe how those suggestions influenced your final version.</label>
+              <textarea id="q11" name="q11" class="form-control" rows="3" placeholder="Please describe your decisions about AI suggestions..."></textarea>
+            </div>
+
+            <div class="survey-question">
+              <label for="q12">The AI-assisted editing improved my sense of privacy control.</label>
+              <select id="q12" name="q12" class="form-control">
+                <option value="">Select your level of agreement...</option>
+                <option value="1">1 - Strongly Disagree</option>
+                <option value="2">2 - Disagree</option>
+                <option value="3">3 - Neutral</option>
+                <option value="4">4 - Agree</option>
+                <option value="5">5 - Strongly Agree</option>
+              </select>
+            </div>
+
+            <div class="survey-question">
+              <label for="q13">I was able to clearly understand how the AI suggestions helped me protect my privacy.</label>
+              <select id="q13" name="q13" class="form-control">
+                <option value="">Select your level of agreement...</option>
+                <option value="1">1 - Strongly Disagree</option>
+                <option value="2">2 - Disagree</option>
+                <option value="3">3 - Neutral</option>
+                <option value="4">4 - Agree</option>
+                <option value="5">5 - Strongly Agree</option>
+              </select>
+            </div>
+
+            <div class="survey-question">
+              <label for="q14">The AI-assisted editing made me more confident about what I shared.</label>
+              <select id="q14" name="q14" class="form-control">
+                <option value="">Select your level of agreement...</option>
+                <option value="1">1 - Strongly Disagree</option>
+                <option value="2">2 - Disagree</option>
+                <option value="3">3 - Neutral</option>
+                <option value="4">4 - Agree</option>
+                <option value="5">5 - Strongly Agree</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Demographic Questions (Unchanged) -->
+          <div class="survey-question">
+            <label for="q15">What is your age group?</label>
+            <select id="q15" name="q15" class="form-control">
+              <option value="">Select your age group...</option>
+              <option value="18-29">18-29</option>
+              <option value="30-39">30-39</option>
+              <option value="40-49">40-49</option>
+              <option value="50-59">50-59</option>
+              <option value=">=60">>=60</option>
+              <option value="Prefer not to disclose">Prefer not to disclose</option>
+            </select>
+          </div>
+
+          <div class="survey-question">
+            <label for="q16">What is your gender?</label>
+            <select id="q16" name="q16" class="form-control">
+              <option value="">Select your gender...</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Non-binary">Non-binary</option>
+              <option value="Prefer not to disclose">Prefer not to disclose</option>
+            </select>
+          </div>
+
+          <div class="survey-question">
+            <label for="q17">What is your race and ethnicity?</label>
+            <select id="q17" name="q17" class="form-control">
+              <option value="">Select your race and ethnicity...</option>
+              <option value="Black">Black</option>
+              <option value="White">White</option>
+              <option value="Asian">Asian</option>
+              <option value="Hispanic">Hispanic</option>
+              <option value="Native American">Native American</option>
+              <option value="Prefer not to disclose">Prefer not to disclose</option>
+            </select>
+          </div>
+
+          <div class="survey-question">
+            <label for="q18">What is your educational level?</label>
+            <select id="q18" name="q18" class="form-control">
+              <option value="">Select your educational level...</option>
+              <option value="No diploma or less than 12th grade">No diploma or less than 12th grade</option>
+              <option value="High school">High school</option>
+              <option value="College level">College level</option>
+              <option value="Associate's degree">Associate's degree</option>
+              <option value="Bachelor's degree">Bachelor's degree</option>
+              <option value="Graduate or professional degree">Graduate or professional degree</option>
+            </select>
+          </div>
+
+          <div class="survey-actions">
+            <button type="submit" id="survey-submit-btn" class="btn btn-success">
+              <i class="fas fa-check"></i> Complete Survey & Export
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Congratulation Popup Modal -->
+  <div id="congratulation-popup" class="congratulation-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closeCongratulationPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4 id="congratulation-title"><i class="fas fa-trophy"></i> 🎉 Questions Completed!</h4>
+      <div class="congratulation-message" id="congratulation-message">
+        Great job! You've completed all the questions. You can now proceed to the next stage.
+      </div>
+      <div class="congratulation-actions">
+        <button id="next-stage-btn" class="btn btn-success">
+          <i class="fas fa-arrow-right"></i> Next Stage
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Free Edit Reminder Popup Modal -->
+  <div id="free-edit-popup" class="free-edit-popup">
+    <div class="popup-content">
+      <button class="popup-close" onclick="closeFreeEditPopup()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h4>Free Edit Reminder</h4>
+      <div class="free-edit-message">
+        <p>You can <strong>edit your conversation freely </strong>after completing the interview.</p>
+        <div class="free-edit-details">
+          <div class="free-edit-feature">
+            <i class="fas fa-check-circle"></i>
+            <span>Click on any message to edit it</span>
+          </div>
+          <div class="free-edit-feature">
+            <i class="fas fa-check-circle"></i>
+            <span>Remove or modify content you don't want to share</span>
+          </div>
+          <div class="free-edit-feature">
+            <i class="fas fa-check-circle"></i>
+            <span>Your privacy is in your control</span>
+          </div>
+        </div>
+      </div>
+      <div class="free-edit-actions">
+        <button id="free-edit-understood-btn" class="btn btn-success">
+          <i class="fas fa-check"></i> I Understand
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy Tooltip Container -->
+  <div id="privacy-tooltip-container" class="privacy-tooltip">
+    <div class="tooltip-header">
+      <span class="tooltip-title" id="tooltip-title">Privacy Issue</span>
+    </div>
+    <div class="tooltip-content">
+      <div class="tooltip-explanation" id="tooltip-explanation">
+        This text contains potentially sensitive information.
+      </div>
+      <div class="tooltip-suggestion" id="tooltip-suggestion" style="display: none;">
+        <div class="safer-versions">
+          <div class="version-section">
+            <strong>Placeholder Version:</strong>
+            <span id="tooltip-replacing-text"></span>
+            <button class="tooltip-btn apply-replacing" id="tooltip-apply-replacing-btn">
+              <i class="fas fa-check"></i> Apply Placeholders
+            </button>
+          </div>
+          <div class="version-section">
+            <strong>Fake Data Version:</strong>
+            <span id="tooltip-abstraction-text"></span>
+            <button class="tooltip-btn apply-abstraction" id="tooltip-apply-abstraction-btn">
+              <i class="fas fa-check"></i> Apply Fake Data
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tooltip-actions">
+      <button class="tooltip-btn apply" id="tooltip-apply-btn" style="display: none;">
+        <i class="fas fa-check"></i> Apply
+      </button>
+      <button class="tooltip-btn close" id="tooltip-close-btn">
+        <i class="fas fa-times"></i> Close
+      </button>
     </div>
   </div>
 
   <!-- Loading Overlay -->
-  <div id="loading-overlay" class="loading-overlay" style="display: none;">
-    <div class="loading-content">
-      <div class="spinner"></div>
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner">
+      <i class="fas fa-spinner fa-spin"></i>
       <p id="loading-message">Processing...</p>
-    </div>
-  </div>
-
-  <!-- Privacy Popup -->
-  <div id="privacy-popup" class="popup-overlay" style="display: none;">
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3><i class="fas fa-shield-alt"></i> Privacy Warning</h3>
-        <button class="popup-close" onclick="closePrivacyPopup()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <p id="privacy-popup-message"></p>
-      </div>
-      <div class="popup-actions">
-        <button class="btn btn-secondary" onclick="closePrivacyPopup()">Continue</button>
+      <div id="loading-notifications" class="loading-notifications">
+        <!-- Progress notifications will be added here dynamically -->
       </div>
     </div>
   </div>
 
-  <!-- Consent Popup -->
-  <div id="consent-popup" class="popup-overlay" style="display: none;">
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3><i class="fas fa-user-shield"></i> Consent Required</h3>
-        <button class="popup-close" onclick="closeConsentPopup()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <p>You must provide consent to participate in this study.</p>
-      </div>
-      <div class="popup-actions">
-        <button class="btn btn-primary" onclick="closeConsentPopup()">OK</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Survey Popup -->
-  <div id="survey-popup" class="popup-overlay" style="display: none;">
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3><i class="fas fa-clipboard-list"></i> Survey Required</h3>
-        <button class="popup-close" onclick="closeSurveyPopup()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <p>Please complete the survey before proceeding.</p>
-      </div>
-      <div class="popup-actions">
-        <button class="btn btn-primary" onclick="closeSurveyPopup()">OK</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Congratulation Popup -->
-  <div id="congratulation-popup" class="popup-overlay" style="display: none;">
-    <div class="popup-content congratulation-popup">
-      <div class="popup-header">
-        <h3><i class="fas fa-trophy"></i> Congratulations!</h3>
-        <button class="popup-close" onclick="closeCongratulationPopup()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <div class="congratulation-content">
-          <div class="congratulation-icon">
-            <i class="fas fa-star"></i>
-          </div>
-          <h4>Great job completing the conversation!</h4>
-          <p>You've successfully completed the AI interview conversation. You can now:</p>
-          <ul>
-            <li>Review and edit your conversation</li>
-            <li>Export your data</li>
-            <li>Complete the survey</li>
-          </ul>
-        </div>
-      </div>
-      <div class="popup-actions">
-        <button class="btn btn-primary" onclick="closeCongratulationPopup()">Continue</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Free Edit Popup -->
-  <div id="free-edit-popup" class="popup-overlay" style="display: none;">
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3><i class="fas fa-edit"></i> Free Text Edit</h3>
-        <button class="popup-close" onclick="closeFreeEditPopup()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <div class="form-group">
-          <label for="free-edit-textarea">Edit your message:</label>
-          <textarea id="free-edit-textarea" rows="4" class="form-control"></textarea>
-        </div>
-      </div>
-      <div class="popup-actions">
-        <button class="btn btn-secondary" onclick="closeFreeEditPopup()">Cancel</button>
-        <button class="btn btn-primary" id="save-free-edit-btn">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
+  <!-- Scripts -->
+  <script src="api.js"></script>
+  <script type="module" src="script.js"></script>
   <script>
     // Override the default mode to be 'naive' for this page
     document.addEventListener('DOMContentLoaded', function() {
@@ -629,6 +775,12 @@
       if (window.app) {
         window.app.state.mode = 'naive';
         window.app.updateUI();
+      }
+      
+      // Show naive-specific questions in the survey
+      const naiveQuestions = document.getElementById('naive-specific-questions');
+      if (naiveQuestions) {
+        naiveQuestions.style.display = 'block';
       }
     });
   </script>
