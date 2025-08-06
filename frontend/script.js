@@ -224,9 +224,12 @@ class PrivacyDemoApp {
     // Bind multi-step navigation events
     bindMultiStepEvents() {
         // Introduction page events
-        document.getElementById('start-study-btn').addEventListener('click', () => {
-            this.showStepPage('qualification');
-        });
+        const startStudyBtn = document.getElementById('start-study-btn');
+        if (startStudyBtn) {
+            startStudyBtn.addEventListener('click', () => {
+                this.showStepPage('qualification');
+            });
+        }
 
         // Read more toggle functionality
         const readMoreToggle = document.getElementById('read-more-toggle');
@@ -239,48 +242,66 @@ class PrivacyDemoApp {
         }
 
         // Consent page events
-        document.getElementById('back-to-intro-btn').addEventListener('click', () => {
-            this.showStepPage('introduction');
-        });
+        const backToIntroBtn = document.getElementById('back-to-intro-btn');
+        if (backToIntroBtn) {
+            backToIntroBtn.addEventListener('click', () => {
+                this.showStepPage('introduction');
+            });
+        }
 
-        document.getElementById('consent-checkbox').addEventListener('change', (e) => {
-            this.state.consentChecked = e.target.checked;
-            this.updateConsentButton();
-            this.saveToLocalStorage();
-        });
-
-        document.getElementById('proceed-to-qualification-btn').addEventListener('click', () => {
-            if (this.state.consentChecked) {
-                this.showStepPage('qualification');
-                this.saveToLocalStorage();
-            }
-        });
-
-        // Qualification page events
-        document.getElementById('back-to-consent-btn').addEventListener('click', () => {
-            this.showStepPage('introduction');
-        });
-
-        // Bind qualification question events
-        for (let i = 1; i <= 3; i++) {
-            document.getElementById(`qual-${i}`).addEventListener('change', (e) => {
-                this.state.qualificationAnswers[`qual${i}`] = e.target.value;
-                this.validateQualification();
+        const consentCheckbox = document.getElementById('consent-checkbox');
+        if (consentCheckbox) {
+            consentCheckbox.addEventListener('change', (e) => {
+                this.state.consentChecked = e.target.checked;
+                this.updateConsentButton();
                 this.saveToLocalStorage();
             });
         }
 
-        document.getElementById('proceed-to-chat-btn').addEventListener('click', () => {
-            if (this.isQualified()) {
-                this.showFreeEditPopup();
-                this.showStepPage('chat');
-                this.startChatInterface();
-                this.saveToLocalStorage();
-            } else {
-                // Redirect to thank you page if not qualified
-                this.redirectToThanksPage();
+        const proceedToQualificationBtn = document.getElementById('proceed-to-qualification-btn');
+        if (proceedToQualificationBtn) {
+            proceedToQualificationBtn.addEventListener('click', () => {
+                if (this.state.consentChecked) {
+                    this.showStepPage('qualification');
+                    this.saveToLocalStorage();
+                }
+            });
+        }
+
+        // Qualification page events
+        const backToConsentBtn = document.getElementById('back-to-consent-btn');
+        if (backToConsentBtn) {
+            backToConsentBtn.addEventListener('click', () => {
+                this.showStepPage('introduction');
+            });
+        }
+
+        // Bind qualification question events
+        for (let i = 1; i <= 3; i++) {
+            const qualElement = document.getElementById(`qual-${i}`);
+            if (qualElement) {
+                qualElement.addEventListener('change', (e) => {
+                    this.state.qualificationAnswers[`qual${i}`] = e.target.value;
+                    this.validateQualification();
+                    this.saveToLocalStorage();
+                });
             }
-        });
+        }
+
+        const proceedToChatBtn = document.getElementById('proceed-to-chat-btn');
+        if (proceedToChatBtn) {
+            proceedToChatBtn.addEventListener('click', () => {
+                if (this.isQualified()) {
+                    this.showFreeEditPopup();
+                    this.showStepPage('chat');
+                    this.startChatInterface();
+                    this.saveToLocalStorage();
+                } else {
+                    // Redirect to thank you page if not qualified
+                    this.redirectToThanksPage();
+                }
+            });
+        }
     }
 
     // Show specific step page
@@ -374,36 +395,57 @@ class PrivacyDemoApp {
     // Bind all event listeners
     bindEvents() {
         // Mode selection
-        document.getElementById('mode-select').addEventListener('change', (e) => {
-            this.setMode(e.target.value);
-        });
+        const modeSelect = document.getElementById('mode-select');
+        if (modeSelect) {
+            modeSelect.addEventListener('change', (e) => {
+                this.setMode(e.target.value);
+            });
+        }
 
         // File uploads
-        // document.getElementById('questions-file').addEventListener('change', (e) => {
-        //     this.handleQuestionsUpload(e.target.files[0]);
-        // });
+        // const questionsFile = document.getElementById('questions-file');
+        // if (questionsFile) {
+        //     questionsFile.addEventListener('change', (e) => {
+        //         this.handleQuestionsUpload(e.target.files[0]);
+        //     });
+        // }
 
-        // document.getElementById('return-file').addEventListener('change', (e) => {
-        //     this.handleReturnUpload(e.target.files[0]);
-        // });
+        // const returnFile = document.getElementById('return-file');
+        // if (returnFile) {
+        //     returnFile.addEventListener('change', (e) => {
+        //         this.handleReturnUpload(e.target.files[0]);
+        //     });
+        // }
 
         // Action buttons
-        document.getElementById('reset-btn').addEventListener('click', () => {
-            this.resetConversation();
-        });
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.resetConversation();
+            });
+        }
 
-        document.getElementById('exit-edit-btn').addEventListener('click', () => {
-            this.exitEditMode();
-        });
+        const exitEditBtn = document.getElementById('exit-edit-btn');
+        if (exitEditBtn) {
+            exitEditBtn.addEventListener('click', () => {
+                this.exitEditMode();
+            });
+        }
 
-        document.getElementById('show-congratulation-btn').addEventListener('click', () => {
-            this.showCongratulationPopup();
-        });
+        const showCongratulationBtn = document.getElementById('show-congratulation-btn');
+        if (showCongratulationBtn) {
+            showCongratulationBtn.addEventListener('click', () => {
+                this.showCongratulationPopup();
+            });
+        }
 
         // Copy/paste toggle
-        document.getElementById('copy-paste-toggle').addEventListener('click', () => {
-            this.toggleCopyPaste();
-        });
+        const copyPasteToggle = document.getElementById('copy-paste-toggle');
+        if (copyPasteToggle) {
+            copyPasteToggle.addEventListener('click', () => {
+                this.toggleCopyPaste();
+            });
+        }
 
         // Test export button (for debugging)
         document.addEventListener('keydown', (e) => {
@@ -434,97 +476,138 @@ class PrivacyDemoApp {
         });
 
         // Main export buttons (in chat input area)
-        document.getElementById('edit-export-btn-main').addEventListener('click', () => {
-            if (this.state.editMode) {
-                // For naive mode: Export button → Data Collection consent → Post task survey
+        const editExportBtnMain = document.getElementById('edit-export-btn-main');
+        if (editExportBtnMain) {
+            editExportBtnMain.addEventListener('click', () => {
+                if (this.state.editMode) {
+                    // For naive mode: Export button → Data Collection consent → Post task survey
+                    this.showConsentPopup('exportDirect');
+                } else {
+                    this.enterEditMode();
+                }
+            });
+        }
+
+        const exportDirectBtnMain = document.getElementById('export-direct-btn-main');
+        if (exportDirectBtnMain) {
+            exportDirectBtnMain.addEventListener('click', () => {
+                // For neutral mode: Export button → Data Collection consent → Post task survey
                 this.showConsentPopup('exportDirect');
-            } else {
-                this.enterEditMode();
-            }
-        });
+            });
+        }
 
-        document.getElementById('export-direct-btn-main').addEventListener('click', () => {
-            // For neutral mode: Export button → Data Collection consent → Post task survey
-            this.showConsentPopup('exportDirect');
-        });
+        const analyzeExportBtnMain = document.getElementById('analyze-export-btn-main');
+        if (analyzeExportBtnMain) {
+            analyzeExportBtnMain.addEventListener('click', () => {
+                // For featured mode: Export button → Data Collection consent → Post task survey
+                this.showConsentPopup('exportComprehensive');
+            });
+        }
 
-        document.getElementById('analyze-export-btn-main').addEventListener('click', () => {
-            // For featured mode: Export button → Data Collection consent → Post task survey
-            this.showConsentPopup('exportComprehensive');
-        });
+        const editExportBtn = document.getElementById('edit-export-btn');
+        if (editExportBtn) {
+            editExportBtn.addEventListener('click', () => {
+                if (this.state.editMode) {
+                    // For naive mode: Export button → Data Collection consent → Post task survey
+                    this.showConsentPopup('exportDirect');
+                } else {
+                    this.enterEditMode();
+                }
+            });
+        }
 
-        document.getElementById('edit-export-btn').addEventListener('click', () => {
-            if (this.state.editMode) {
-                // For naive mode: Export button → Data Collection consent → Post task survey
+        const exportDirectBtn = document.getElementById('export-direct-btn');
+        if (exportDirectBtn) {
+            exportDirectBtn.addEventListener('click', () => {
+                // For neutral mode: Export button → Data Collection consent → Post task survey
                 this.showConsentPopup('exportDirect');
-            } else {
-                this.enterEditMode();
-            }
-        });
+            });
+        }
 
-        document.getElementById('export-direct-btn').addEventListener('click', () => {
-            // For neutral mode: Export button → Data Collection consent → Post task survey
-            this.showConsentPopup('exportDirect');
-        });
-
-        document.getElementById('analyze-export-btn').addEventListener('click', () => {
-            // For featured mode: Export button → Data Collection consent → Post task survey
-            this.showConsentPopup('exportComprehensive');
-        });
+        const analyzeExportBtn = document.getElementById('analyze-export-btn');
+        if (analyzeExportBtn) {
+            analyzeExportBtn.addEventListener('click', () => {
+                // For featured mode: Export button → Data Collection consent → Post task survey
+                this.showConsentPopup('exportComprehensive');
+            });
+        }
 
         // Chat input with real-time privacy detection
-        document.getElementById('send-btn').addEventListener('click', () => {
-            this.sendMessage();
-        });
+        const sendBtn = document.getElementById('send-btn');
+        if (sendBtn) {
+            sendBtn.addEventListener('click', () => {
+                this.sendMessage();
+            });
+        }
 
         const chatInput = document.getElementById('chat-input');
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.sendMessage();
-            }
-        });
+        if (chatInput) {
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendMessage();
+                }
+            });
 
-        // Real-time privacy detection for featured mode
-        chatInput.addEventListener('input', (e) => {
-            if (this.state.mode === 'featured') {
-                this.handleRealTimePrivacyDetection(e.target.value);
-            }
-        });
+            // Real-time privacy detection for featured mode
+            chatInput.addEventListener('input', (e) => {
+                if (this.state.mode === 'featured') {
+                    this.handleRealTimePrivacyDetection(e.target.value);
+                }
+            });
 
-        // Apply copy/paste settings to chat input
-        this.applyCopyPasteSettings();
+            // Apply copy/paste settings to chat input
+            this.applyCopyPasteSettings();
+        }
 
         // API test
-        document.getElementById('test-api-btn').addEventListener('click', () => {
-            this.testAPIConnection();
-        });
+        const testApiBtn = document.getElementById('test-api-btn');
+        if (testApiBtn) {
+            testApiBtn.addEventListener('click', () => {
+                this.testAPIConnection();
+            });
+        }
 
         // Sidebar toggle
-        document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
-            this.toggleSidebar();
-        });
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+        if (toggleSidebarBtn) {
+            toggleSidebarBtn.addEventListener('click', () => {
+                this.toggleSidebar();
+            });
+        }
 
         // Privacy analysis buttons
-        document.getElementById('export-comprehensive').addEventListener('click', () => {
-            // For featured mode: Export button → Data Collection consent → Post task survey
-            this.showConsentPopup('exportComprehensive');
-        });
+        const exportComprehensive = document.getElementById('export-comprehensive');
+        if (exportComprehensive) {
+            exportComprehensive.addEventListener('click', () => {
+                // For featured mode: Export button → Data Collection consent → Post task survey
+                this.showConsentPopup('exportComprehensive');
+            });
+        }
 
         // Privacy tooltip events
-        document.getElementById('tooltip-apply-replacing-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.applyTooltipSuggestion('replacing');
-        });
+        const tooltipApplyReplacingBtn = document.getElementById('tooltip-apply-replacing-btn');
+        if (tooltipApplyReplacingBtn) {
+            tooltipApplyReplacingBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.applyTooltipSuggestion('replacing');
+            });
+        }
 
-        document.getElementById('tooltip-apply-abstraction-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.applyTooltipSuggestion('abstraction');
-        });
+        const tooltipApplyAbstractionBtn = document.getElementById('tooltip-apply-abstraction-btn');
+        if (tooltipApplyAbstractionBtn) {
+            tooltipApplyAbstractionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.applyTooltipSuggestion('abstraction');
+            });
+        }
 
-        document.getElementById('tooltip-close-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.hidePrivacyTooltip();
-        });
+        const tooltipCloseBtn = document.getElementById('tooltip-close-btn');
+        if (tooltipCloseBtn) {
+            tooltipCloseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.hidePrivacyTooltip();
+            });
+        }
 
         // Privacy popup (legacy)
         document.addEventListener('click', (e) => {
@@ -543,13 +626,19 @@ class PrivacyDemoApp {
         });
 
         // Consent popup events
-        document.getElementById('consent-agree-btn').addEventListener('click', () => {
-            this.handleConsentResponse(true);
-        });
+        const consentAgreeBtn = document.getElementById('consent-agree-btn');
+        if (consentAgreeBtn) {
+            consentAgreeBtn.addEventListener('click', () => {
+                this.handleConsentResponse(true);
+            });
+        }
 
-        document.getElementById('consent-decline-btn').addEventListener('click', () => {
-            this.handleConsentResponse(false);
-        });
+        const consentDeclineBtn = document.getElementById('consent-decline-btn');
+        if (consentDeclineBtn) {
+            consentDeclineBtn.addEventListener('click', () => {
+                this.handleConsentResponse(false);
+            });
+        }
 
         // Close consent popup on outside click
         document.addEventListener('click', (e) => {
@@ -561,9 +650,12 @@ class PrivacyDemoApp {
 
 
         // Congratulation popup events
-        document.getElementById('next-stage-btn').addEventListener('click', () => {
-            this.handleNextStage();
-        });
+        const nextStageBtn = document.getElementById('next-stage-btn');
+        if (nextStageBtn) {
+            nextStageBtn.addEventListener('click', () => {
+                this.handleNextStage();
+            });
+        }
 
         // Close congratulation popup on outside click
         document.addEventListener('click', (e) => {
@@ -588,11 +680,14 @@ class PrivacyDemoApp {
         });
 
         // Survey popup events
-        document.getElementById('survey-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            console.log('Survey form submitted');
-            this.handleSurveySubmit();
-        });
+        const surveyForm = document.getElementById('survey-form');
+        if (surveyForm) {
+            surveyForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                console.log('Survey form submitted');
+                this.handleSurveySubmit();
+            });
+        }
 
         // Close survey popup on outside click
         document.addEventListener('click', (e) => {
@@ -1028,6 +1123,8 @@ class PrivacyDemoApp {
     updateSidebarToggle() {
         const container = document.querySelector('.container');
         const toggleBtn = document.getElementById('toggle-sidebar-btn');
+        
+        if (!toggleBtn) return;
         
         if (this.state.sidebarHidden) {
             container.classList.add('sidebar-hidden');
