@@ -775,6 +775,14 @@
       if (window.app) {
         window.app.state.mode = 'naive';
         window.app.updateUI();
+        
+        // Ensure conversation is initiated after mode is set
+        setTimeout(async () => {
+          if (window.app.state.conversationLog.length === 0) {
+            console.log('Naive mode: Initiating chatbot conversation...');
+            await window.app.startQuestionConversation();
+          }
+        }, 1000);
       }
       
       // Show naive-specific questions in the survey

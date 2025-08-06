@@ -50,7 +50,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Audit LLM configuration
-const ENABLE_AUDIT_LLM = process.env.ENABLE_AUDIT_LLM === 'true';
+const ENABLE_AUDIT_LLM = true; // Always enable audit LLM for all modes in the study
 console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 
 // Global mode configuration
@@ -300,10 +300,10 @@ app.get('/api/debug_context', (req, res) => {
 // Configuration API
 app.get('/api/config', (req, res) => {
     res.json({
-        audit_llm_enabled: ENABLE_AUDIT_LLM,
+        audit_llm_enabled: true, // Always enable audit LLM for the study
         openai_available: openaiClient !== null,
         features: {
-            audit_llm: ENABLE_AUDIT_LLM,
+            audit_llm: true, // Always enable audit LLM for the study
             privacy_detection: currentMode === 'featured',
             question_mode: true
         }

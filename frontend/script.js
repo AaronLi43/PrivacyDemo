@@ -396,6 +396,14 @@ class PrivacyDemoApp {
             console.log('Starting conversation directly...');
             this.startConversationDirectly();
         }
+        
+        // Ensure the chatbot initiates the conversation
+        setTimeout(async () => {
+            if (this.state.conversationLog.length === 0) {
+                console.log('Initiating chatbot conversation...');
+                await this.startQuestionConversation();
+            }
+        }, 500);
     }
 
     // Update chat page step indicator
@@ -2232,11 +2240,13 @@ class PrivacyDemoApp {
             const response = await fetch('https://privacydemo.onrender.com/api/config');
             const data = await response.json();
             console.log('Audit LLM config response:', data);
-            this.state.auditLLMEnabled = data.audit_llm_enabled;
+            // Always enable audit LLM for the study regardless of backend response
+            this.state.auditLLMEnabled = true;
             this.updateAuditLLMStatus();
         } catch (error) {
             console.error('Error checking audit LLM status:', error);
-            this.state.auditLLMEnabled = false;
+            // Always enable audit LLM for the study even if backend check fails
+            this.state.auditLLMEnabled = true;
             this.updateAuditLLMStatus();
         }
     }

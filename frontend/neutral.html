@@ -775,6 +775,14 @@
       if (window.app) {
         window.app.state.mode = 'neutral';
         window.app.updateUI();
+        
+        // Ensure conversation is initiated after mode is set
+        setTimeout(async () => {
+          if (window.app.state.conversationLog.length === 0) {
+            console.log('Neutral mode: Initiating chatbot conversation...');
+            await window.app.startQuestionConversation();
+          }
+        }, 1000);
       }
       
       // Note: Neutral mode doesn't have specific survey questions to show
