@@ -54,50 +54,32 @@
             line-height: 1.6;
             margin-bottom: 1rem;
         }
-        
-        .mode-info {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 1rem;
-            border-radius: 10px;
-            margin-top: 1rem;
-        }
-        
-        .mode-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
     </style>
 </head>
 <body>
     <div class="redirect-container">
         <div class="spinner"></div>
         <h1>🔒 Privacy Demo Study</h1>
-        <p>Assigning you to a study condition...</p>
-        <div class="mode-info" id="mode-info">
-            <div class="mode-icon" id="mode-icon">🎲</div>
-            <p id="mode-description">Randomly selecting your study mode...</p>
-        </div>
+        <p>Preparing your study session...</p>
+        <p>Please wait while we set up your interface.</p>
     </div>
 
     <script>
-        // Define the three modes
+        // Define the three modes with subtle identifiers
         const modes = [
             {
                 name: 'naive',
-                icon: '😊',
-                description: 'Naive Mode - You can edit your conversation log before exporting!',
+                identifier: '0',
                 file: 'naive.html'
             },
             {
                 name: 'neutral',
-                icon: '⚖️',
-                description: 'Neutral Mode - Standard conversation interface',
+                identifier: '1',
                 file: 'neutral.html'
             },
             {
                 name: 'featured',
-                icon: '🔒',
-                description: 'Featured Mode - Enhanced privacy features available',
+                identifier: '2',
                 file: 'featured.html'
             }
         ];
@@ -106,12 +88,6 @@
         function getRandomMode() {
             const randomIndex = Math.floor(Math.random() * modes.length);
             return modes[randomIndex];
-        }
-
-        // Function to update UI with selected mode
-        function updateModeDisplay(mode) {
-            document.getElementById('mode-icon').textContent = mode.icon;
-            document.getElementById('mode-description').textContent = mode.description;
         }
 
         // Function to redirect to selected mode
@@ -125,10 +101,10 @@
                 newUrl.searchParams.set(key, value);
             });
             
-            // Add mode parameter for tracking
-            newUrl.searchParams.set('assigned_mode', mode.name);
+            // Add subtle mode identifier for tracking
+            newUrl.searchParams.set('mode', mode.identifier);
             
-            // Redirect after a short delay to show the mode info
+            // Redirect after a short delay
             setTimeout(() => {
                 window.location.href = newUrl.toString();
             }, 2000);
@@ -137,7 +113,6 @@
         // Main execution
         document.addEventListener('DOMContentLoaded', function() {
             const selectedMode = getRandomMode();
-            updateModeDisplay(selectedMode);
             redirectToMode(selectedMode);
         });
     </script>
