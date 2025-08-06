@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Demo Study - Redirecting</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .redirect-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3rem;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 2rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        h1 {
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+        
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        
+        .mode-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+        }
+        
+        .mode-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="redirect-container">
+        <div class="spinner"></div>
+        <h1>🔒 Privacy Demo Study</h1>
+        <p>Assigning you to a study condition...</p>
+        <div class="mode-info" id="mode-info">
+            <div class="mode-icon" id="mode-icon">🎲</div>
+            <p id="mode-description">Randomly selecting your study mode...</p>
+        </div>
+    </div>
+
+    <script>
+        // Define the three modes
+        const modes = [
+            {
+                name: 'naive',
+                icon: '😊',
+                description: 'Naive Mode - You can edit your conversation log before exporting!',
+                file: 'naive.html'
+            },
+            {
+                name: 'neutral',
+                icon: '⚖️',
+                description: 'Neutral Mode - Standard conversation interface',
+                file: 'neutral.html'
+            },
+            {
+                name: 'featured',
+                icon: '🔒',
+                description: 'Featured Mode - Enhanced privacy features available',
+                file: 'featured.html'
+            }
+        ];
+
+        // Function to get random mode
+        function getRandomMode() {
+            const randomIndex = Math.floor(Math.random() * modes.length);
+            return modes[randomIndex];
+        }
+
+        // Function to update UI with selected mode
+        function updateModeDisplay(mode) {
+            document.getElementById('mode-icon').textContent = mode.icon;
+            document.getElementById('mode-description').textContent = mode.description;
+        }
+
+        // Function to redirect to selected mode
+        function redirectToMode(mode) {
+            // Preserve URL parameters (like PROLIFIC_PID)
+            const currentUrl = new URL(window.location.href);
+            const newUrl = new URL(mode.file, window.location.href);
+            
+            // Copy all search parameters
+            currentUrl.searchParams.forEach((value, key) => {
+                newUrl.searchParams.set(key, value);
+            });
+            
+            // Add mode parameter for tracking
+            newUrl.searchParams.set('assigned_mode', mode.name);
+            
+            // Redirect after a short delay to show the mode info
+            setTimeout(() => {
+                window.location.href = newUrl.toString();
+            }, 2000);
+        }
+
+        // Main execution
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedMode = getRandomMode();
+            updateModeDisplay(selectedMode);
+            redirectToMode(selectedMode);
+        });
+    </script>
+</body>
+</html> 

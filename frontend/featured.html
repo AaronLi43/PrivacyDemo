@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Demo Study - Featured Mode</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Step 1: Introduction Page -->
+  <div id="introduction-page" class="step-page active">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-graduation-cap"></i> Welcome to the Privacy Demo Study</h1>
+        <div class="step-indicator">
+          <span class="step-number">1</span>
+          <span class="step-label">Introduction</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="introduction-content">
+          <div class="welcome-section">
+            <h2>Study Overview</h2>
+            <p>Welcome to our research study on <strong>using AI in job interviews</strong>. This study explores how people interact with AI chatbots when discussing sensitive topics and making decisions about sharing personal information.</p>
+            <p>As AI becomes increasingly common in professional settings, including job interviews, we want to understand how people feel about sharing their experiences and opinions on this topic. You'll have a conversation with an AI chatbot about using AI during job interviews, and we'll explore how different privacy features affect your willingness to share information.</p>
+          </div>
+
+          <!-- Read More Section -->
+          <div class="read-more-section">
+            <button id="read-more-toggle" class="btn btn-secondary read-more-btn">
+              <i class="fas fa-chevron-down"></i> Read More About This Study
+            </button>
+            
+            <div id="read-more-content" class="read-more-content">
+              <div class="additional-study-details">
+                <h3><i class="fas fa-microscope"></i> Research Background</h3>
+                <p>This study is part of ongoing research at Northeastern University's Khoury College of Computer Science, investigating how people interact with AI systems in professional contexts. As AI becomes increasingly integrated into hiring processes, understanding user privacy concerns and information sharing behaviors is crucial for developing more privacy-aware AI systems.</p>
+                
+                <h3><i class="fas fa-users"></i> Study Objectives</h3>
+                <ul>
+                  <li>Understand how users perceive privacy risks when interacting with AI chatbots</li>
+                  <li>Evaluate the effectiveness of different privacy protection features</li>
+                  <li>Assess user comfort levels when sharing personal information with AI systems</li>
+                  <li>Identify factors that influence information sharing decisions</li>
+                </ul>
+
+                <h3><i class="fas fa-clipboard-list"></i> What We're Studying</h3>
+                <p>You will interact with an AI chatbot that simulates a job interview scenario. The chatbot will ask you questions about your background, experiences, and opinions. We're studying how different privacy features affect your willingness to share information and your overall experience.</p>
+
+                <h3><i class="fas fa-file-alt"></i> Official Study Documentation</h3>
+                <div class="irb-link-section">
+                  <p><strong>Institutional Review Board (IRB) Approval:</strong> This study has been reviewed and approved by Northeastern University's Institutional Review Board.</p>
+                  <a href="https://docs.google.com/document/d/1C7o9lxRrGxu7sKr9dof-nAI6t97ZtbL7JvA3B-9qYf0/edit?tab=t.0" target="_blank" class="btn btn-primary irb-link-btn">
+                    <i class="fas fa-external-link-alt"></i> View Original IRB Documentation
+                  </a>
+                  <p class="irb-note"><small><i class="fas fa-info-circle"></i> This link opens the official IRB approval document in a new tab.</small></p>
+                </div>
+
+                <h3><i class="fas fa-handshake"></i> Your Rights as a Participant</h3>
+                <ul>
+                  <li>You have the right to withdraw from the study at any time without penalty</li>
+                  <li>You can skip any questions you don't want to answer</li>
+                  <li>All data will be kept confidential and anonymized</li>
+                  <li>You will receive compensation upon completion</li>
+                  <li>You can contact the research team with any questions or concerns</li>
+                </ul>
+
+                <h3><i class="fas fa-envelope"></i> Contact Information</h3>
+                <p><strong>Principal Investigator:</strong> Prof. Tianshi Li<br>
+                <strong>Email:</strong> <a href="mailto:tia.li@northeastern.edu">tia.li@northeastern.edu</a></p>
+                
+                <p><strong>Research Assistant:</strong> Ziwen Li<br>
+                <strong>Email:</strong> <a href="mailto:li.ziw@northeastern.edu">li.ziw@northeastern.edu</a></p>
+                
+                <p><strong>IRB Office:</strong> Northeastern University Department of Human Research<br>
+                <strong>Phone:</strong> (773) 396-2327<br>
+                <strong>Email:</strong> <a href="mailto:IRBReview@northeastern.edu">IRBReview@northeastern.edu</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="start-study-btn" class="btn btn-primary">
+          <i class="fas fa-arrow-right"></i> Begin Study
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Consent Page -->
+  <div id="consent-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-user-shield"></i> Informed Consent</h1>
+        <div class="step-indicator">
+          <span class="step-number">2</span>
+          <span class="step-label">Consent</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="consent-content">
+          <div class="consent-section">
+            <h2>Study Information</h2>
+            <p><strong>Title:</strong> Privacy Perceptions in AI-Enhanced Job Interviews</p>
+            <p><strong>Principal Investigator:</strong> Prof. Tianshi Li, Northeastern University</p>
+            <p><strong>Study Duration:</strong> Approximately 15-20 minutes</p>
+            <p><strong>Compensation:</strong> $2.00 USD upon completion</p>
+          </div>
+
+          <div class="consent-section">
+            <h2>What You'll Do</h2>
+            <ul>
+              <li>Have a conversation with an AI chatbot about using AI in job interviews</li>
+              <li>Answer questions about your background and experiences</li>
+              <li>Complete a brief survey about your experience</li>
+              <li>Use enhanced privacy features to control your data</li>
+            </ul>
+          </div>
+
+          <div class="consent-section">
+            <h2>Privacy & Data Protection</h2>
+            <ul>
+              <li>All data will be anonymized and kept confidential</li>
+              <li>Your responses will be used for research purposes only</li>
+              <li>You can withdraw at any time without penalty</li>
+              <li>You can skip any questions you don't want to answer</li>
+              <li>Enhanced privacy features are available to protect your information</li>
+            </ul>
+          </div>
+
+          <div class="consent-section">
+            <h2>Your Rights</h2>
+            <ul>
+              <li>You have the right to withdraw from the study at any time</li>
+              <li>You can contact the research team with questions</li>
+              <li>You can contact the IRB office with concerns</li>
+            </ul>
+          </div>
+
+          <div class="consent-checkbox">
+            <label class="checkbox-container">
+              <input type="checkbox" id="consent-checkbox">
+              <span class="checkmark"></span>
+              I have read and understand the information above. I agree to participate in this study.
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="consent-btn" class="btn btn-primary" disabled>
+          <i class="fas fa-check"></i> I Consent to Participate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Qualification Page -->
+  <div id="qualification-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-clipboard-check"></i> Qualification Questions</h1>
+        <div class="step-indicator">
+          <span class="step-number">3</span>
+          <span class="step-label">Qualification</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="qualification-content">
+          <p>Please answer the following questions to help us understand your background and ensure you're eligible for this study.</p>
+          
+          <div class="qualification-questions">
+            <div class="form-group">
+              <label for="qual1">Have you ever participated in a job interview?</label>
+              <select id="qual1" class="form-control">
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="qual2">Are you comfortable having a conversation in English?</label>
+              <select id="qual2" class="form-control">
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="qual3">Are you at least 18 years old?</label>
+              <select id="qual3" class="form-control">
+                <option value="">Select an answer...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="qualification-btn" class="btn btn-primary" disabled>
+          <i class="fas fa-arrow-right"></i> Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Chat Interface -->
+  <div id="chat-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-comments"></i> Chat with AI</h1>
+        <div class="step-indicator">
+          <span class="step-number">4</span>
+          <span class="step-label">Conversation</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="chat-interface">
+          <!-- Header -->
+          <header class="chat-header">
+            <div class="chat-title">
+              <h2><i class="fas fa-robot"></i> AI Interview Assistant</h2>
+              <p>You're in <strong>🔒 Featured Mode</strong> - Enhanced privacy features available</p>
+            </div>
+            <button id="sidebar-toggle" class="btn btn-secondary">
+              <i class="fas fa-bars"></i>
+            </button>
+          </header>
+
+          <!-- Sidebar -->
+          <aside class="sidebar">
+            <div class="sidebar-section">
+              <h3><i class="fas fa-cog"></i> Configuration</h3>
+              
+              <!-- Mode Info (Fixed for Featured Mode) -->
+              <div id="mode-info" class="info-box">
+                <p><strong>🔒 Featured Mode:</strong> Enhanced privacy features available</p>
+              </div>
+
+              <!-- Copy/Paste Toggle -->
+              <div class="form-group">
+                <label for="copy-paste-toggle">Copy & Paste:</label>
+                <button id="copy-paste-toggle" class="btn btn-secondary">
+                  <i class="fas fa-lock"></i> Disabled
+                </button>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="button-group">
+                <button id="reset-btn" class="btn btn-secondary">
+                  <i class="fas fa-redo"></i> Reset Conversation
+                </button>
+                <button id="exit-edit-btn" class="btn btn-warning" style="display: none;">
+                  <i class="fas fa-times"></i> Exit Edit Mode
+                </button>
+                <button id="show-congratulation-btn" class="btn btn-success">
+                  <i class="fas fa-trophy"></i> Show Congratulations
+                </button>
+              </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="sidebar-section">
+              <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-label">Mode:</span>
+                  <span id="stat-mode" class="stat-value">🔒 Featured</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Messages:</span>
+                  <span id="stat-messages" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Step:</span>
+                  <span id="stat-step" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Privacy Issues:</span>
+                  <span id="stat-privacy" class="stat-value">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- API Status -->
+            <div class="sidebar-section">
+              <h3><i class="fas fa-key"></i> API Status</h3>
+              <div id="api-status" class="status-indicator">
+                <span class="status-dot"></span>
+                <span class="status-text">Checking...</span>
+              </div>
+              <button id="test-api-btn" class="btn btn-sm btn-secondary">
+                <i class="fas fa-vial"></i> Test Connection
+              </button>
+              
+              <!-- Audit LLM Status -->
+              <div id="audit-llm-status" class="status-indicator" style="margin-top: 0.5rem;">
+                <span class="status-dot"></span>
+                <span class="status-text">🔍 Audit LLM: Checking...</span>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Main Content -->
+          <main class="main-content">
+            <!-- Two Column Layout for Privacy Analysis & Export Stage -->
+            <div id="two-column-layout" class="two-column-layout" style="display:none;">
+              <div class="left-column">
+                <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+                  <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-edit"></i> <strong>Privacy Analysis Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
+                </div>
+                <div id="analysis-conversation-container" class="conversation-container">
+                  <div class="empty-state">
+                    <i class="fas fa-comment-dots"></i>
+                    <p>Start a conversation by typing a message below!</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="right-column">
+                <div class="privacy-analysis-panel">
+                  <div class="panel-header">
+                    <h3><i class="fas fa-shield-alt"></i> Privacy Analysis</h3>
+                    <button id="close-privacy-analysis" class="btn btn-sm btn-secondary">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                  <div id="privacy-analysis-content">
+                    <div class="empty-privacy-analysis">
+                      <i class="fas fa-search"></i>
+                      <p>Privacy analysis will appear here after conversation analysis.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Single Column Layout for Chat Stage -->
+            <div id="single-column-layout" class="single-column-layout">
+              <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+                <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-shield-alt"></i> <strong>Enhanced Privacy Mode:</strong> Advanced privacy features are available. You can edit messages, analyze privacy risks, and control your data sharing.</p>
+              </div>
+              <div id="conversation-container" class="conversation-container">
+                <div class="empty-state">
+                  <i class="fas fa-comment-dots"></i>
+                  <p>Start a conversation by typing a message below!</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+              <div class="input-container">
+                <textarea id="message-input" placeholder="Type your message here..." rows="1"></textarea>
+                <button id="send-btn" class="btn btn-primary">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+              <div class="input-actions">
+                <button id="enter-edit-mode-btn" class="btn btn-secondary" style="display: none;">
+                  <i class="fas fa-edit"></i> Enter Edit Mode
+                </button>
+                <button id="export-direct-btn" class="btn btn-success" style="display: none;">
+                  <i class="fas fa-download"></i> Export Direct
+                </button>
+                <button id="export-direct-redirect-btn" class="btn btn-success" style="display: none;">
+                  <i class="fas fa-download"></i> Export & Redirect
+                </button>
+                <button id="analyze-export-btn" class="btn btn-info" style="display: none;">
+                  <i class="fas fa-search"></i> Analyze & Export
+                </button>
+                <button id="analyze-export-redirect-btn" class="btn btn-info" style="display: none;">
+                  <i class="fas fa-search"></i> Analyze & Redirect
+                </button>
+                <button id="export-comprehensive-btn" class="btn btn-warning" style="display: none;">
+                  <i class="fas fa-file-alt"></i> Comprehensive Export
+                </button>
+                <button id="export-comprehensive-redirect-btn" class="btn btn-warning" style="display: none;">
+                  <i class="fas fa-file-alt"></i> Comprehensive & Redirect
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: Survey Page -->
+  <div id="survey-page" class="step-page">
+    <div class="step-container">
+      <div class="step-header">
+        <h1><i class="fas fa-clipboard-list"></i> Post-Study Survey</h1>
+        <div class="step-indicator">
+          <span class="step-number">5</span>
+          <span class="step-label">Survey</span>
+        </div>
+      </div>
+      
+      <div class="step-content">
+        <div class="survey-content">
+          <p>Please complete this brief survey about your experience with the AI chatbot.</p>
+          
+          <div class="survey-questions">
+            <!-- General Questions -->
+            <div class="survey-section">
+              <h3>General Experience</h3>
+              
+              <div class="form-group">
+                <label for="survey1">How comfortable were you sharing information with the AI chatbot?</label>
+                <select id="survey1" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Very Uncomfortable</option>
+                  <option value="2">2 - Uncomfortable</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Comfortable</option>
+                  <option value="5">5 - Very Comfortable</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="survey2">How natural did the conversation feel?</label>
+                <select id="survey2" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Very Unnatural</option>
+                  <option value="2">2 - Unnatural</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Natural</option>
+                  <option value="5">5 - Very Natural</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="survey3">How satisfied were you with the overall experience?</label>
+                <select id="survey3" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Very Dissatisfied</option>
+                  <option value="2">2 - Dissatisfied</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Satisfied</option>
+                  <option value="5">5 - Very Satisfied</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Featured Mode Specific Questions -->
+            <div id="featured-specific-questions" class="mode-specific-questions">
+              <h3>Featured Mode Experience</h3>
+              
+              <div class="form-group">
+                <label for="featured1">How useful were the enhanced privacy features?</label>
+                <select id="featured1" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Not Useful</option>
+                  <option value="2">2 - Slightly Useful</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Useful</option>
+                  <option value="5">5 - Very Useful</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="featured2">Did the privacy features make you feel more secure?</label>
+                <select id="featured2" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Not at All</option>
+                  <option value="2">2 - Slightly</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Moderately</option>
+                  <option value="5">5 - Very Much</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="featured3">How much did the privacy features affect your willingness to share information?</label>
+                <select id="featured3" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - No Effect</option>
+                  <option value="2">2 - Slight Effect</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Moderate Effect</option>
+                  <option value="5">5 - Strong Effect</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="featured4">Would you prefer to use enhanced privacy features in future AI interactions?</label>
+                <select id="featured4" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Definitely Not</option>
+                  <option value="2">2 - Probably Not</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Probably Yes</option>
+                  <option value="5">5 - Definitely Yes</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="featured5">How easy were the privacy features to understand and use?</label>
+                <select id="featured5" class="form-control">
+                  <option value="">Select an answer...</option>
+                  <option value="1">1 - Very Difficult</option>
+                  <option value="2">2 - Difficult</option>
+                  <option value="3">3 - Neutral</option>
+                  <option value="4">4 - Easy</option>
+                  <option value="5">5 - Very Easy</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button id="survey-submit-btn" class="btn btn-primary" disabled>
+          <i class="fas fa-check"></i> Submit Survey
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p id="loading-message">Processing...</p>
+    </div>
+  </div>
+
+  <!-- Privacy Popup -->
+  <div id="privacy-popup" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3><i class="fas fa-shield-alt"></i> Privacy Warning</h3>
+        <button class="popup-close" onclick="closePrivacyPopup()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <p id="privacy-popup-message"></p>
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-secondary" onclick="closePrivacyPopup()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Consent Popup -->
+  <div id="consent-popup" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3><i class="fas fa-user-shield"></i> Consent Required</h3>
+        <button class="popup-close" onclick="closeConsentPopup()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <p>You must provide consent to participate in this study.</p>
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-primary" onclick="closeConsentPopup()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Survey Popup -->
+  <div id="survey-popup" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3><i class="fas fa-clipboard-list"></i> Survey Required</h3>
+        <button class="popup-close" onclick="closeSurveyPopup()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <p>Please complete the survey before proceeding.</p>
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-primary" onclick="closeSurveyPopup()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Congratulation Popup -->
+  <div id="congratulation-popup" class="popup-overlay" style="display: none;">
+    <div class="popup-content congratulation-popup">
+      <div class="popup-header">
+        <h3><i class="fas fa-trophy"></i> Congratulations!</h3>
+        <button class="popup-close" onclick="closeCongratulationPopup()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <div class="congratulation-content">
+          <div class="congratulation-icon">
+            <i class="fas fa-star"></i>
+          </div>
+          <h4>Great job completing the conversation!</h4>
+          <p>You've successfully completed the AI interview conversation. You can now:</p>
+          <ul>
+            <li>Review and edit your conversation</li>
+            <li>Export your data</li>
+            <li>Complete the survey</li>
+          </ul>
+        </div>
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-primary" onclick="closeCongratulationPopup()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Free Edit Popup -->
+  <div id="free-edit-popup" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3><i class="fas fa-edit"></i> Free Text Edit</h3>
+        <button class="popup-close" onclick="closeFreeEditPopup()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <div class="form-group">
+          <label for="free-edit-textarea">Edit your message:</label>
+          <textarea id="free-edit-textarea" rows="4" class="form-control"></textarea>
+        </div>
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-secondary" onclick="closeFreeEditPopup()">Cancel</button>
+        <button class="btn btn-primary" id="save-free-edit-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Override the default mode to be 'featured' for this page
+    document.addEventListener('DOMContentLoaded', function() {
+      // Set the mode to featured when the app initializes
+      if (window.app) {
+        window.app.state.mode = 'featured';
+        window.app.updateUI();
+      }
+    });
+  </script>
+</body>
+</html> 

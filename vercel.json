@@ -16,6 +16,10 @@
       "dest": "/server.js"
     },
     {
+      "src": "/",
+      "dest": "/frontend/redirect.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }

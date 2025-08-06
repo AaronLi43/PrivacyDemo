@@ -8,6 +8,33 @@ This guide covers deploying the Privacy Demo application with AWS S3 integration
 2. **Vercel Account** for hosting
 3. **Node.js** (for local development)
 
+## Application Entry Point
+
+The application now uses a **random mode assignment system**:
+
+- **Main Entry Point**: `redirect.html` (or root URL `/`)
+- **Mode-Specific Files**: `naive.html`, `neutral.html`, `featured.html`
+- **Random Assignment**: Users are automatically assigned to one of three study modes
+
+### URL Configuration for Prolific
+
+Use one of these URLs in your Prolific study:
+
+**Option 1 (Recommended - Root URL):**
+```
+https://your-app.vercel.app/
+```
+
+**Option 2 (Direct to redirect.html):**
+```
+https://your-app.vercel.app/frontend/redirect.html
+```
+
+The application will automatically:
+1. Randomly assign users to one of three modes
+2. Preserve all URL parameters (like `PROLIFIC_PID`)
+3. Redirect to the appropriate mode-specific page
+
 ## AWS S3 Setup
 
 ### 1. Create S3 Bucket
