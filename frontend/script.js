@@ -2229,8 +2229,9 @@ class PrivacyDemoApp {
     // Check audit LLM status
     async checkAuditLLMStatus() {
         try {
-            const response = await fetch('/api/config');
+            const response = await fetch('https://privacydemo.onrender.com/api/config');
             const data = await response.json();
+            console.log('Audit LLM config response:', data);
             this.state.auditLLMEnabled = data.audit_llm_enabled;
             this.updateAuditLLMStatus();
         } catch (error) {
