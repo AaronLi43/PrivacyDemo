@@ -1240,12 +1240,15 @@ class PrivacyDemoApp {
 
     // User Agent functionality
     toggleUserAgent() {
+        console.log('User Agent: toggleUserAgent called. Current state:', this.state.userAgentEnabled);
         this.state.userAgentEnabled = !this.state.userAgentEnabled;
+        console.log('User Agent: New state:', this.state.userAgentEnabled);
         this.updateUserAgentButton();
         
         if (this.state.userAgentEnabled) {
             this.showNotification('🤖 User Agent activated! The agent will now automatically respond to chatbot questions.', 'success');
             // Start monitoring for questions immediately
+            console.log('User Agent: Starting to monitor for questions...');
             this.monitorForQuestions();
         } else {
             this.showNotification('👤 User Agent deactivated. Manual responses only.', 'info');
@@ -1273,11 +1276,18 @@ class PrivacyDemoApp {
         if (conversationLog.length === 0) return;
         
         const lastMessage = conversationLog[conversationLog.length - 1];
+        console.log('User Agent: Monitoring for questions. Last message:', lastMessage);
+        
         if (lastMessage.bot && !lastMessage.user) {
             // This is a bot message, check if it contains a question
             if (this.isQuestion(lastMessage.bot)) {
+                console.log('User Agent: Detected question in bot message:', lastMessage.bot);
                 this.generateUserAgentResponse(lastMessage.bot);
+            } else {
+                console.log('User Agent: Bot message is not a question:', lastMessage.bot);
             }
+        } else {
+            console.log('User Agent: Last message is not a bot question:', lastMessage);
         }
     }
 
@@ -1290,7 +1300,10 @@ class PrivacyDemoApp {
             /^(i'd love to hear|i'm curious about|i'm interested in|can you tell me)/i // Conversational questions
         ];
         
-        return questionPatterns.some(pattern => pattern.test(text.trim()));
+        const trimmedText = text.trim();
+        const isQuestion = questionPatterns.some(pattern => pattern.test(trimmedText));
+        console.log('User Agent: isQuestion check for:', trimmedText, 'Result:', isQuestion);
+        return isQuestion;
     }
 
     isFinalQuestion(text) {
@@ -1308,12 +1321,19 @@ class PrivacyDemoApp {
     }
 
     async generateUserAgentResponse(botMessage) {
-        if (!this.state.userAgentEnabled || this.state.userAgentResponding) return;
+        console.log('User Agent: generateUserAgentResponse called with:', botMessage);
+        console.log('User Agent: userAgentEnabled:', this.state.userAgentEnabled, 'userAgentResponding:', this.state.userAgentResponding);
+        
+        if (!this.state.userAgentEnabled || this.state.userAgentResponding) {
+            console.log('User Agent: Skipping response - enabled:', this.state.userAgentEnabled, 'responding:', this.state.userAgentResponding);
+            return;
+        }
         if (this.isFinalQuestion(botMessage)) {
             console.log('User Agent: Detected final question, not responding');
             return;
         }
         
+        console.log('User Agent: Starting to generate response...');
         this.state.userAgentResponding = true;
         
         try {
@@ -1405,14 +1425,17 @@ class PrivacyDemoApp {
     }
 
     async sendUserAgentMessage(message) {
+        console.log('User Agent: sendUserAgentMessage called with:', message);
         try {
             // Use the existing sendMessage logic but bypass the input field
             const input = document.getElementById('chat-input');
             const originalValue = input.value;
             input.value = message;
             
+            console.log('User Agent: About to call sendMessage()');
             // Call the existing sendMessage method
             await this.sendMessage();
+            console.log('User Agent: sendMessage() completed');
             
             // Restore the original input value
             input.value = originalValue;
