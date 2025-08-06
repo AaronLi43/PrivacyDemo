@@ -1300,41 +1300,56 @@ class PrivacyDemoApp {
         const conversationLog = this.state.conversationLog;
         if (conversationLog.length === 0) return;
         
+        console.log('User Agent: Full conversation log:', conversationLog);
         const lastMessage = conversationLog[conversationLog.length - 1];
         console.log('User Agent: Monitoring for questions. Last message:', lastMessage);
         
-        if (lastMessage.bot && !lastMessage.user) {
-            // This is a bot message, check if it contains a question
-            if (this.isQuestion(lastMessage.bot)) {
-                console.log('User Agent: Detected question in bot message:', lastMessage.bot);
-                this.generateUserAgentResponse(lastMessage.bot);
-            } else {
-                console.log('User Agent: Bot message is not a question:', lastMessage.bot);
-            }
-        } else {
-            console.log('User Agent: Last message is not a bot question:', lastMessage);
+        // Check if the last message has a bot question (even if it also has a user response)
+        if (lastMessage.bot && this.isQuestion(lastMessage.bot)) {
+            console.log('User Agent: Detected question in last message bot content:', lastMessage.bot);
+            this.generateUserAgentResponse(lastMessage.bot);
+            return;
         }
         
-        // Also check if there are any unresponded bot questions in the recent history
-        // Look at the last 3 messages to see if there's a bot question that hasn't been responded to
-        const recentMessages = conversationLog.slice(-3);
-        for (let i = recentMessages.length - 1; i >= 0; i--) {
-            const message = recentMessages[i];
-            if (message.bot && !message.user && this.isQuestion(message.bot)) {
-                // Check if this question has been responded to by looking at subsequent messages
-                const messageIndex = conversationLog.length - recentMessages.length + i;
-                const subsequentMessages = conversationLog.slice(messageIndex + 1);
+        // Check if the last message is a pure bot message (no user content)
+        if (lastMessage.bot && !lastMessage.user) {
+            if (this.isQuestion(lastMessage.bot)) {
+                console.log('User Agent: Detected question in pure bot message:', lastMessage.bot);
+                this.generateUserAgentResponse(lastMessage.bot);
+            } else {
+                console.log('User Agent: Pure bot message is not a question:', lastMessage.bot);
+            }
+            return;
+        }
+        
+        // Check if the last message is a user message, look for bot questions in recent history
+        if (lastMessage.user && !lastMessage.bot) {
+            console.log('User Agent: Last message is user response, checking recent history for bot questions...');
+            
+            // Look at the last 3 messages to see if there's a bot question that hasn't been responded to
+            const recentMessages = conversationLog.slice(-3);
+            for (let i = recentMessages.length - 1; i >= 0; i--) {
+                const message = recentMessages[i];
                 
-                // If there are no user messages after this bot question, it hasn't been responded to
-                const hasUserResponse = subsequentMessages.some(msg => msg.user && !msg.bot);
-                
-                if (!hasUserResponse) {
-                    console.log('User Agent: Found unresponded question in recent history:', message.bot);
-                    this.generateUserAgentResponse(message.bot);
-                    break;
+                // Check for bot questions in this message
+                if (message.bot && this.isQuestion(message.bot)) {
+                    // Check if this question has been responded to by looking at subsequent messages
+                    const messageIndex = conversationLog.length - recentMessages.length + i;
+                    const subsequentMessages = conversationLog.slice(messageIndex + 1);
+                    
+                    // If there are no user messages after this bot question, it hasn't been responded to
+                    const hasUserResponse = subsequentMessages.some(msg => msg.user && !msg.bot);
+                    
+                    if (!hasUserResponse) {
+                        console.log('User Agent: Found unresponded question in recent history:', message.bot);
+                        this.generateUserAgentResponse(message.bot);
+                        return;
+                    }
                 }
             }
         }
+        
+        console.log('User Agent: No questions found to respond to');
     }
 
     isQuestion(text) {
