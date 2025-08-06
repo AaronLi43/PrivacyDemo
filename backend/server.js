@@ -202,13 +202,14 @@ function manageConversationContext(sessionId) {
 }
 
 // Helper function to get the next uncompleted question index
-function getNextUncompletedQuestionIndex() {
+function getNextUncompletedQuestionIndex(sessionId) {
     // This is a simplified implementation for the server
     // In a real implementation, you would track completed questions in the conversation state
     // For now, we'll use a simple approach based on the current conversation step
     
+    const session = getSession(sessionId);
     // Get the current step from the conversation history
-    const currentStep = conversationHistory.length;
+    const currentStep = session.conversationHistory.length;
     
     // Assuming questions are processed sequentially, the next question index would be the current step
     // This is a basic implementation - in production you'd want more sophisticated tracking
@@ -254,9 +255,9 @@ app.get('/api/test_connection', (req, res) => {
         message: 'Backend server is running',
         timestamp: new Date().toISOString(),
         conversation_context: {
-            has_active_session: activeChatSession !== null,
-            message_count: conversationHistory.length,
-            current_mode: currentMode
+            has_active_session: false, // Simplified for now
+            message_count: 0, // Simplified for now
+            current_mode: 'chat'
         }
     });
 });
@@ -288,12 +289,12 @@ app.get('/api/predefined_questions/:mode', (req, res) => {
 // Debug API to show conversation context
 app.get('/api/debug_context', (req, res) => {
     res.json({
-        conversation_history: conversationHistory,
-        active_chat_session: activeChatSession !== null,
-        current_mode: currentMode,
-        uploaded_questions: uploadedQuestions,
-        uploaded_return_log: uploadedReturnLog,
-        global_pii_counters: globalPiiCounters
+        conversation_history: [], // Simplified for now
+        active_chat_session: false, // Simplified for now
+        current_mode: 'chat',
+        uploaded_questions: [],
+        uploaded_return_log: [],
+        global_pii_counters: {}
     });
 });
 
@@ -711,12 +712,12 @@ app.post('/api/privacy_detection', async (req, res) => {
         }
 
         // Enhanced AI-based privacy detection with conversation context and fallback to pattern matching
-        let privacyResult = await detectPrivacyWithAI(user_message, conversationHistory);
+        let privacyResult = await detectPrivacyWithAI(user_message, null);
         
         // If AI detection fails, fall back to pattern matching
         if (!privacyResult || privacyResult.error) {
             console.log('AI privacy detection failed, using pattern matching fallback');
-            privacyResult = detectPrivacyWithPatterns(user_message, conversationHistory);
+            privacyResult = detectPrivacyWithPatterns(user_message, null);
         }
         
         // For simple patterns (names, emails, phones), prefer pattern-based detection for consistency
@@ -731,7 +732,7 @@ app.post('/api/privacy_detection', async (req, res) => {
         const hasSimplePattern = simplePatterns.some(pattern => pattern.test(user_message));
         if (hasSimplePattern) {
             console.log('Simple pattern detected, using pattern-based detection for consistency');
-            privacyResult = detectPrivacyWithPatterns(user_message, conversationHistory);
+            privacyResult = detectPrivacyWithPatterns(user_message, null);
         }
         
 
@@ -740,7 +741,7 @@ app.post('/api/privacy_detection', async (req, res) => {
     } catch (error) {
         console.error('Privacy detection error:', error);
         // Final fallback to pattern matching
-        const fallbackResult = detectPrivacyWithPatterns(req.body.user_message, conversationHistory);
+        const fallbackResult = detectPrivacyWithPatterns(req.body.user_message, null);
         res.json(fallbackResult);
     }
 });
@@ -1691,7 +1692,7 @@ app.post('/api/upload_questions', upload.single('file'), (req, res) => {
         }
 
         const fileContent = fs.readFileSync(req.file.path, 'utf8');
-        uploadedQuestions = JSON.parse(fileContent);
+        const uploadedQuestions = JSON.parse(fileContent);
 
         // Clean up uploaded file
         fs.removeSync(req.file.path);
@@ -1715,7 +1716,7 @@ app.post('/api/upload_return', upload.single('file'), (req, res) => {
         }
 
         const fileContent = fs.readFileSync(req.file.path, 'utf8');
-        uploadedReturnLog = JSON.parse(fileContent);
+        const uploadedReturnLog = JSON.parse(fileContent);
 
         // Clean up uploaded file
         fs.removeSync(req.file.path);
