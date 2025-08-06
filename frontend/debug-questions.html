@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Questions Loading</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .debug-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .info {
+            color: blue;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .question-item {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Questions Loading</h1>
+    
+    <div class="debug-container">
+        <h2>Test Predefined Questions API</h2>
+        <p>This page tests the predefined questions loading functionality.</p>
+        
+        <button onclick="testQuestionsAPI('naive')">Test Naive Mode Questions</button>
+        <button onclick="testQuestionsAPI('neutral')">Test Neutral Mode Questions</button>
+        <button onclick="testQuestionsAPI('featured')">Test Featured Mode Questions</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'https://privacydemo.onrender.com';
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultElement = document.createElement('div');
+            resultElement.className = type;
+            resultElement.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            resultsDiv.appendChild(resultElement);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testQuestionsAPI(mode) {
+            addResult(`Testing ${mode} mode questions...`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/predefined_questions/${mode}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addResult(`✅ Successfully loaded ${data.questions.length} questions for ${mode} mode`, 'success');
+                    
+                    // Display the questions
+                    const questionsDiv = document.createElement('div');
+                    questionsDiv.innerHTML = `<h3>Questions for ${mode} mode:</h3>`;
+                    
+                    data.questions.forEach((question, index) => {
+                        const questionElement = document.createElement('div');
+                        questionElement.className = 'question-item';
+                        questionElement.innerHTML = `<strong>${index + 1}.</strong> ${question}`;
+                        questionsDiv.appendChild(questionElement);
+                    });
+                    
+                    document.getElementById('results').appendChild(questionsDiv);
+                    
+                    // Log additional info
+                    addResult(`Background questions: ${data.backgroundQuestions.length}`, 'info');
+                    addResult(`Main questions: ${data.mainQuestions.length}`, 'info');
+                    
+                } else {
+                    addResult(`❌ Failed to load questions: ${data.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error loading questions: ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            addResult('Page loaded. Ready to test questions loading.', 'info');
+        });
+    </script>
+</body>
+</html> 

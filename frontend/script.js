@@ -790,6 +790,9 @@ class PrivacyDemoApp {
         // Load predefined questions from server
         await this.loadPredefinedQuestions(mode);
         
+        // Add a small delay to ensure questions are fully loaded
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Start the conversation with the first question from LLM
         await this.startQuestionConversation();
 
@@ -802,19 +805,26 @@ class PrivacyDemoApp {
     // Load predefined questions from server
     async loadPredefinedQuestions(mode) {
         try {
-            const response = await fetch(`/api/predefined_questions/${mode}`);
+            console.log(`Loading predefined questions for mode: ${mode}`);
+            const response = await fetch(`https://privacydemo.onrender.com/api/predefined_questions/${mode}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
             if (data.success) {
                 this.state.predefinedQuestions[mode] = data.questions;
-                console.log(`Loaded ${data.questions.length} questions for mode: ${mode}`);
+                console.log(`✅ Loaded ${data.questions.length} questions for mode: ${mode}`);
+                console.log('Questions:', data.questions);
             } else {
-                console.error('Failed to load predefined questions:', data.error);
+                console.error('❌ Failed to load predefined questions:', data.error);
                 this.showNotification('Failed to load questions', 'error');
             }
         } catch (error) {
-            console.error('Error loading predefined questions:', error);
-            this.showNotification('Error loading questions', 'error');
+            console.error('❌ Error loading predefined questions:', error);
+            this.showNotification(`Error loading questions: ${error.message}`, 'error');
         }
     }
 
@@ -822,8 +832,15 @@ class PrivacyDemoApp {
 
     // Get the next uncompleted question index
     getNextUncompletedQuestionIndex() {
-        const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
+        const questions = this.state.predefinedQuestions[this.state.mode];
         
+        if (!questions || !Array.isArray(questions) || questions.length === 0) {
+            console.error('❌ No predefined questions available for mode:', this.state.mode);
+            console.error('Available modes:', Object.keys(this.state.predefinedQuestions));
+            return -1;
+        }
+        
+        const totalQuestions = questions.length;
         console.log(`Looking for next uncompleted question. Completed: [${this.state.completedQuestionIndices.join(', ')}], Total: ${totalQuestions}`);
         
         // Find the first question that hasn't been completed
@@ -896,8 +913,24 @@ class PrivacyDemoApp {
         try {
             this.showLoading(true, '🤖 Starting main interview questions...');
             
-            const currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
-            const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
+            // Check if questions are loaded
+            const questions = this.state.predefinedQuestions[this.state.mode];
+            if (!questions || !Array.isArray(questions) || questions.length === 0) {
+                console.error('❌ Questions not loaded yet for mode:', this.state.mode);
+                this.showNotification('Questions not loaded. Please try again.', 'error');
+                this.showLoading(false);
+                return;
+            }
+            
+            const currentQuestion = questions[this.state.currentQuestionIndex];
+            const predefinedQuestions = questions;
+            
+            if (!currentQuestion) {
+                console.error('❌ Current question is undefined!');
+                this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
+                this.showLoading(false);
+                return;
+            }
             
             // Send initial message to start the conversation
             const response = await API.sendMessage("Hello, I'm ready to answer your questions.", this.state.currentStep, {
@@ -1359,17 +1392,32 @@ class PrivacyDemoApp {
                     }
                     
                     // Ensure current question index is valid
-                    if (this.state.currentQuestionIndex < 0 || this.state.currentQuestionIndex >= this.state.predefinedQuestions[this.state.mode].length) {
-                        console.error(`Invalid current question index: ${this.state.currentQuestionIndex}`);
+                    const questions = this.state.predefinedQuestions[this.state.mode];
+                    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+                        console.error('❌ No questions available for mode:', this.state.mode);
+                        this.showNotification('No questions available. Please try refreshing the page.', 'error');
+                        return;
+                    }
+                    
+                    if (this.state.currentQuestionIndex < 0 || this.state.currentQuestionIndex >= questions.length) {
+                        console.error(`Invalid current question index: ${this.state.currentQuestionIndex}, resetting to 0`);
                         this.state.currentQuestionIndex = 0;
                     }
                     
-                    let currentQuestion = this.state.predefinedQuestions[this.state.mode][this.state.currentQuestionIndex];
-                    const predefinedQuestions = this.state.predefinedQuestions[this.state.mode];
+                    let currentQuestion = questions[this.state.currentQuestionIndex];
+                    const predefinedQuestions = questions;
+                    
+                    if (!currentQuestion) {
+                        console.error('❌ Current question is undefined!');
+                        console.error('Current question index:', this.state.currentQuestionIndex);
+                        console.error('Available questions:', questions);
+                        this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
+                        return;
+                    }
                     
                     // Check if this is the final question
-                    const isFinalQuestion = (this.state.currentQuestionIndex === this.state.predefinedQuestions[this.state.mode].length - 1);
-                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${this.state.predefinedQuestions[this.state.mode].length} - Is final: ${isFinalQuestion}`);
+                    const isFinalQuestion = (this.state.currentQuestionIndex === questions.length - 1);
+                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${questions.length} - Is final: ${isFinalQuestion}`);
                     console.log(`Question text: "${currentQuestion}"`);
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
@@ -1584,7 +1632,9 @@ class PrivacyDemoApp {
                     this.showLoading(false);
                     
                     // Check if all predefined questions are completed
-                    if (this.state.completedQuestionIndices.length >= this.state.predefinedQuestions[this.state.mode].length) {
+                    const currentModeQuestions = this.state.predefinedQuestions[this.state.mode];
+                    if (currentModeQuestions && currentModeQuestions.length > 0 && 
+                        this.state.completedQuestionIndices.length >= currentModeQuestions.length) {
                         console.log('All questions completed - ending conversation');
                         this.state.questionsCompleted = true;
                         this.state.questionMode = false;
