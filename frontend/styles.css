@@ -1901,6 +1901,26 @@ textarea.copy-paste-disabled:focus {
     opacity: 1;
 }
 
+/* User Agent Indicator */
+.user-agent-indicator {
+    color: var(--warning-color);
+    font-size: 0.9em;
+    margin-left: 0.5rem;
+    cursor: help;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    animation: userAgentPulse 2s infinite;
+}
+
+.user-agent-indicator:hover {
+    opacity: 1;
+}
+
+@keyframes userAgentPulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+}
+
 .privacy-issues-collapsible {
   margin-top: 0.5em;
   margin-bottom: 1em;

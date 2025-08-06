@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Agent Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3><i class="fas fa-cog"></i> Configuration</h3>
+                
+                <!-- Mode Info -->
+                <div id="mode-info" class="info-box">
+                    <p><strong>🧪 Test Mode:</strong> User Agent Simulation Test</p>
+                </div>
+
+                <!-- User Agent Button -->
+                <div class="button-group">
+                    <button id="user-agent-btn" class="btn btn-success">
+                        <i class="fas fa-user"></i> Start User Agent
+                    </button>
+                    <button id="reset-btn" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> Reset Conversation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="sidebar-section">
+                <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Messages:</span>
+                        <span id="stat-messages" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">User Agent:</span>
+                        <span id="stat-user-agent" class="stat-value">Inactive</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h2><i class="fas fa-robot"></i> User Agent Simulation Test</h2>
+                    <p>Test the automated user agent that responds to chatbot questions</p>
+                </div>
+
+                <div id="conversation-container" class="conversation-container">
+                    <div class="empty-state">
+                        <i class="fas fa-comment-dots"></i>
+                        <p>Click "Start User Agent" to begin the automated conversation!</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <div class="input-group">
+                        <textarea id="chat-input" class="form-control" placeholder="Type your message here..." rows="3"></textarea>
+                        <button id="send-btn" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        // Simple test implementation
+        class UserAgentTest {
+            constructor() {
+                this.conversationLog = [];
+                this.userAgentActive = false;
+                this.currentStep = 0;
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.updateStats();
+            }
+
+            bindEvents() {
+                document.getElementById('user-agent-btn').addEventListener('click', () => {
+                    if (this.userAgentActive) {
+                        this.stopUserAgent();
+                    } else {
+                        this.startUserAgent();
+                    }
+                });
+
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    this.resetConversation();
+                });
+
+                document.getElementById('send-btn').addEventListener('click', () => {
+                    this.sendMessage();
+                });
+            }
+
+            startUserAgent() {
+                this.userAgentActive = true;
+                this.updateUserAgentButton();
+                this.updateStats();
+                this.showNotification('User agent simulation started!', 'success');
+                
+                // Start the conversation
+                this.simulateConversation();
+            }
+
+            stopUserAgent() {
+                this.userAgentActive = false;
+                this.updateUserAgentButton();
+                this.updateStats();
+                this.showNotification('User agent simulation stopped.', 'info');
+            }
+
+            updateUserAgentButton() {
+                const button = document.getElementById('user-agent-btn');
+                if (this.userAgentActive) {
+                    button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
+                    button.className = 'btn btn-danger';
+                } else {
+                    button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
+                    button.className = 'btn btn-success';
+                }
+            }
+
+            updateStats() {
+                document.getElementById('stat-messages').textContent = this.conversationLog.length;
+                document.getElementById('stat-user-agent').textContent = this.userAgentActive ? 'Active' : 'Inactive';
+            }
+
+            async simulateConversation() {
+                if (!this.userAgentActive) return;
+
+                // Simulate chatbot asking a question
+                const chatbotMessage = "Hello! I'd like to ask you some questions about your experience with AI and job interviews. What was your major or field of study in college or university?";
+                
+                this.addMessage('assistant', chatbotMessage);
+                
+                // Wait a bit, then have user agent respond
+                setTimeout(() => {
+                    if (this.userAgentActive) {
+                        this.generateUserAgentResponse(chatbotMessage);
+                    }
+                }, 2000);
+            }
+
+            generateUserAgentResponse(chatbotMessage) {
+                const message = chatbotMessage.toLowerCase();
+                let response = '';
+
+                if (message.includes('major') || message.includes('field of study') || message.includes('college') || message.includes('university')) {
+                    response = "I studied Computer Science at UC Berkeley, graduating in 2021. I really enjoyed the algorithms and data structures courses, and I was part of the ACM programming team.";
+                } else if (message.includes('ai') && message.includes('experience')) {
+                    response = "I've used AI tools quite a bit for interview prep! ChatGPT has been really helpful for practicing coding problems and explaining concepts.";
+                } else {
+                    response = "That's an interesting question! I'd say it really depends on the situation. For me, I try to be thoughtful about what I share.";
+                }
+
+                this.addMessage('user', response, true);
+                
+                // Continue the conversation
+                setTimeout(() => {
+                    if (this.userAgentActive) {
+                        this.continueConversation();
+                    }
+                }, 3000);
+            }
+
+            continueConversation() {
+                const followUpQuestions = [
+                    "That's fascinating! Have you used AI tools for job interview preparation?",
+                    "What are your thoughts on privacy when sharing information with AI systems?",
+                    "Do you think AI helped you perform better in interviews?",
+                    "Would you use AI again for interview preparation in the future?"
+                ];
+
+                const randomQuestion = followUpQuestions[Math.floor(Math.random() * followUpQuestions.length)];
+                this.addMessage('assistant', randomQuestion);
+
+                setTimeout(() => {
+                    if (this.userAgentActive) {
+                        this.generateUserAgentResponse(randomQuestion);
+                    }
+                }, 2000);
+            }
+
+            addMessage(role, content, isUserAgent = false) {
+                const message = {
+                    user: role === 'user' ? content : '',
+                    bot: role === 'assistant' ? content : '',
+                    timestamp: new Date().toISOString(),
+                    step: this.currentStep++,
+                    isUserAgent: isUserAgent
+                };
+
+                this.conversationLog.push(message);
+                this.updateConversationDisplay();
+                this.updateStats();
+            }
+
+            updateConversationDisplay() {
+                const container = document.getElementById('conversation-container');
+                
+                if (this.conversationLog.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-comment-dots"></i>
+                            <p>Click "Start User Agent" to begin the automated conversation!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                for (const message of this.conversationLog) {
+                    html += `<div class="message-pair">`;
+                    
+                    if (message.user && message.user.trim()) {
+                        const userLabel = message.isUserAgent ? 'User Agent' : 'You';
+                        const userIcon = message.isUserAgent ? 'fas fa-robot' : 'fas fa-user';
+                        const userAgentIndicator = message.isUserAgent ? '<span class="user-agent-indicator" title="Automated User Agent">🤖</span>' : '';
+                        
+                        html += `<div class="message message-user">
+                            <div class="message-header">
+                                <i class="${userIcon}"></i>
+                                <span>${userLabel}</span>
+                                ${userAgentIndicator}
+                            </div>
+                            <div class="message-content">${this.escapeHtml(message.user)}</div>
+                        </div>`;
+                    }
+                    
+                    if (message.bot && message.bot.trim()) {
+                        html += `<div class="message message-bot">
+                            <div class="message-header">
+                                <i class="fas fa-robot"></i>
+                                <span>Chatbot</span>
+                            </div>
+                            <div class="message-content">${this.escapeHtml(message.bot)}</div>
+                        </div>`;
+                    }
+                    
+                    html += `</div>`;
+                }
+                
+                container.innerHTML = html;
+                container.scrollTop = container.scrollHeight;
+            }
+
+            sendMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                
+                if (!message) return;
+                
+                this.addMessage('user', message);
+                input.value = '';
+                
+                // Simulate chatbot response
+                setTimeout(() => {
+                    this.addMessage('assistant', 'Thank you for your response! This is a test environment.');
+                }, 1000);
+            }
+
+            resetConversation() {
+                this.conversationLog = [];
+                this.currentStep = 0;
+                this.updateConversationDisplay();
+                this.updateStats();
+                this.showNotification('Conversation reset.', 'info');
+            }
+
+            showNotification(message, type = 'info') {
+                // Simple notification
+                console.log(`${type.toUpperCase()}: ${message}`);
+                
+                // Create a simple notification element
+                const notification = document.createElement('div');
+                notification.className = `notification notification-${type}`;
+                notification.innerHTML = `
+                    <div class="notification-content">
+                        <span class="notification-message">${message}</span>
+                    </div>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize the test when page loads
+        window.addEventListener('load', () => {
+            new UserAgentTest();
+        });
+    </script>
+</body>
+</html>
