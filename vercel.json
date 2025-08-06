@@ -4,20 +4,40 @@
     {
       "src": "frontend/**/*",
       "use": "@vercel/static"
-    },
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
+      "src": "/",
+      "dest": "/frontend/index.html"
     },
     {
-      "src": "/",
-      "dest": "/frontend/redirect.html"
+      "src": "/thanks",
+      "dest": "/frontend/thanks.html"
+    },
+    {
+      "src": "/featured",
+      "dest": "/frontend/featured.html"
+    },
+    {
+      "src": "/naive",
+      "dest": "/frontend/naive.html"
+    },
+    {
+      "src": "/neutral",
+      "dest": "/frontend/neutral.html"
+    },
+    {
+      "src": "/test-copy-paste",
+      "dest": "/frontend/test-copy-paste.html"
+    },
+    {
+      "src": "/test-highlighting",
+      "dest": "/frontend/test-highlighting.html"
+    },
+    {
+      "src": "/test-multistep",
+      "dest": "/frontend/test-multistep.html"
     },
     {
       "src": "/(.*)",

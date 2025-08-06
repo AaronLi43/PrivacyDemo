@@ -54,10 +54,12 @@ const ENABLE_AUDIT_LLM = process.env.ENABLE_AUDIT_LLM === 'true';
 console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://localhost:3000'],
+    credentials: true
+}));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static('frontend'));
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -1852,14 +1854,26 @@ app.post('/api/upload-to-s3', async (req, res) => {
     }
 });
 
-// Serve the main page
+// Health check endpoint
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+    res.json({ 
+        status: 'Backend server is running',
+        timestamp: new Date().toISOString(),
+        message: 'This is the backend API server. Frontend is served separately.'
+    });
 });
 
-// Serve the thanks page
-app.get('/thanks', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'thanks.html'));
+// API health check
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        services: {
+            openai: openaiClient ? 'available' : 'not_configured',
+            s3: s3Client ? 'available' : 'not_configured',
+            audit_llm: ENABLE_AUDIT_LLM ? 'enabled' : 'disabled'
+        }
+    });
 });
 
 // Error handling middleware

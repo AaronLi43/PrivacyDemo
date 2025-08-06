@@ -21,8 +21,9 @@ A Node.js-based chatbot application with privacy detection capabilities for data
 
 - Node.js 16+
 - OpenAI API key
+- AWS credentials (if using S3 uploads)
 
-### Installation
+### Local Development
 
 1. Clone the repository:
 ```bash
@@ -35,41 +36,20 @@ cd PrivacyDemo
 npm install
 ```
 
-3. Configure your OpenAI API key using **one of these methods**:
-
-#### Method 1: .env File (Recommended for Development)
-Create a `.env` file in the project root:
-
-```bash
-# Create .env file
-echo "OPENAI_API_KEY=your_api_key_here" > .env
-```
-
-Or manually create `.env` file with this content:
+3. Configure environment variables by creating a `.env` file:
 ```env
 # OpenAI API Configuration
-# Get your API key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=your_api_key_here
+
+# AWS Configuration (optional, for S3 uploads)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+
+# Feature Flags
+ENABLE_AUDIT_LLM=true
 ```
 
-**Security Note**: The `.env` file is automatically ignored by git, and no part of your API key will be displayed on screen.
-
-#### Method 2: Environment Variable
-```bash
-# Windows
-set OPENAI_API_KEY=your_api_key_here
-
-# Linux/Mac
-export OPENAI_API_KEY=your_api_key_here
-```
-
-#### Get Your API Key
-1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Create a new API key
-3. Copy and paste it using one of the methods above
-
-### Running Locally
-
+4. Start the development server:
 ```bash
 # Start the server
 node server.js
@@ -81,6 +61,21 @@ npm run dev
 ```
 
 The application will be available at `http://localhost:3000`
+
+### Production Deployment
+
+This application is designed to be deployed with:
+- **Backend**: Deployed on Render
+- **Frontend**: Deployed on Vercel
+
+See [DEPLOYMENT_README.md](./DEPLOYMENT_README.md) for detailed deployment instructions.
+
+Quick deployment:
+```bash
+# Run the deployment script
+chmod +x deploy.sh
+./deploy.sh
+```
 
 ## Usage
 
