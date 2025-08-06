@@ -1,141 +1,219 @@
-# Deployment Guide: Backend on Render, Frontend on Vercel
+# Privacy Demo Deployment Guide
 
-This guide explains how to deploy your Privacy Demo application with the backend on Render and frontend on Vercel.
+This guide covers deploying the Privacy Demo application with AWS S3 integration and Vercel hosting.
 
 ## Prerequisites
 
-- GitHub repository with your code
-- Render account (free tier available)
-- Vercel account (free tier available)
-- OpenAI API key
-- AWS credentials (if using S3 uploads)
+1. **AWS Account** with S3 access
+2. **Vercel Account** for hosting
+3. **Node.js** (for local development)
 
-## Step 1: Deploy Backend on Render
+## Application Entry Point
 
-### 1.1 Connect to GitHub
-1. Go to [Render Dashboard](https://dashboard.render.com)
-2. Click "New +" and select "Web Service"
-3. Connect your GitHub repository
+The application now uses a **random mode assignment system**:
 
-### 1.2 Configure the Web Service
-- **Name**: `privacy-demo-backend`
-- **Environment**: `Node`
-- **Build Command**: `npm install`
-- **Start Command**: `npm start`
-- **Plan**: Free
+- **Main Entry Point**: `redirect.html` (or root URL `/`)
+- **Mode-Specific Files**: `naive.html`, `neutral.html`, `featured.html`
+- **Random Assignment**: Users are automatically assigned to one of three study modes
 
-### 1.3 Set Environment Variables
-In the Render dashboard, add these environment variables:
+### URL Configuration for Prolific
 
+Use one of these URLs in your Prolific study:
+
+**Option 1 (Recommended - Root URL):**
 ```
-NODE_ENV=production
-PORT=10000
-OPENAI_API_KEY=your_actual_openai_api_key
-AWS_ACCESS_KEY_ID=your_actual_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_actual_aws_secret_key
+https://your-app.vercel.app/
+```
+
+**Option 2 (Direct to redirect.html):**
+```
+https://your-app.vercel.app/frontend/redirect.html
+```
+
+The application will automatically:
+1. Randomly assign users to one of three modes
+2. Preserve all URL parameters (like `PROLIFIC_PID`)
+3. Redirect to the appropriate mode-specific page
+
+## AWS S3 Setup
+
+### 1. Create S3 Bucket
+
+1. Log into AWS Console
+2. Navigate to S3 service
+3. Create a new bucket named `prolificjson`
+4. Select region: **US East (Ohio) us-east-2**
+5. Configure bucket settings:
+   - Block all public access: **Enabled** (for security)
+   - Versioning: **Disabled** (for simplicity)
+   - Encryption: **Default** (AES-256)
+
+### 2. Create IAM User for S3 Access
+
+1. Navigate to IAM service
+2. Create a new user with programmatic access
+3. Attach the following policy:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::prolificjson",
+                "arn:aws:s3:::prolificjson/*"
+            ]
+        }
+    ]
+}
+```
+
+4. Save the Access Key ID and Secret Access Key
+
+## Environment Variables
+
+Set the following environment variables in your deployment environment:
+
+### Required Variables
+- `AWS_ACCESS_KEY_ID`: Your AWS access key
+- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+- `OPENAI_API_KEY`: Your OpenAI API key (if using AI features)
+
+### Optional Variables
+- `ENABLE_AUDIT_LLM`: Set to 'true' to enable audit LLM features
+- `PORT`: Server port (default: 3000)
+
+## Vercel Deployment
+
+### 1. Install Vercel CLI
+```bash
+npm install -g vercel
+```
+
+### 2. Deploy to Vercel
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel --prod
+```
+
+### 3. Set Environment Variables in Vercel
+1. Go to your Vercel dashboard
+2. Select your project
+3. Go to Settings > Environment Variables
+4. Add the required environment variables listed above
+
+### 4. Configure Custom Domain (Optional)
+1. In Vercel dashboard, go to Settings > Domains
+2. Add your custom domain
+3. Configure DNS records as instructed
+
+## Local Development
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Set Environment Variables
+Create a `.env` file in the root directory:
+```env
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+OPENAI_API_KEY=your_openai_key
 ENABLE_AUDIT_LLM=true
 ```
 
-### 1.4 Deploy
-Click "Create Web Service" and wait for deployment to complete.
-
-### 1.5 Get Backend URL
-After deployment, note your backend URL (e.g., `https://privacy-demo-backend.onrender.com`)
-
-## Step 2: Deploy Frontend on Vercel
-
-### 2.1 Connect to GitHub
-1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
-2. Click "New Project"
-3. Import your GitHub repository
-
-### 2.2 Configure the Project
-- **Framework Preset**: Other
-- **Root Directory**: `./` (root of repository)
-- **Build Command**: Leave empty (static files)
-- **Output Directory**: `frontend`
-
-### 2.3 Set Environment Variables
-In the Vercel dashboard, add this environment variable:
-
-```
-REACT_APP_API_URL=https://your-render-backend-url.onrender.com
+### 3. Start Development Server
+```bash
+npm run dev
 ```
 
-Replace `your-render-backend-url.onrender.com` with your actual Render backend URL.
+## Usage
 
-### 2.4 Deploy
-Click "Deploy" and wait for deployment to complete.
-
-## Step 3: Verify Deployment
-
-### 3.1 Test Backend
-Visit your Render backend URL + `/api/test_connection` to verify the backend is working:
+### Prolific Integration
+When users access the web app through Prolific, the URL will contain a `PROLIFIC_PID` parameter:
 ```
-https://your-backend-url.onrender.com/api/test_connection
+https://your-app.vercel.app?PROLIFIC_PID=abc123def456
 ```
 
-### 3.2 Test Frontend
-Visit your Vercel frontend URL to verify the frontend is working and can connect to the backend.
+The application automatically:
+1. Extracts the PROLIFIC_PID from the URL
+2. Includes it in the filename when uploading to S3
+3. Stores it in the metadata for tracking
 
-## Step 4: Update CORS (if needed)
-
-If you encounter CORS issues, you may need to update the CORS configuration in `server.js`:
-
-```javascript
-app.use(cors({
-    origin: ['https://your-vercel-frontend-url.vercel.app', 'http://localhost:3000'],
-    credentials: true
-}));
+### File Naming Convention
+Files uploaded to S3 follow this pattern:
 ```
+{PROLIFIC_PID}_conversation_{timestamp}.json
+```
+
+Example: `abc123def456_conversation_2024-01-15T10-30-45-123Z.json`
+
+## Monitoring
+
+### S3 Monitoring
+- Check the `prolificjson` bucket for uploaded files
+- Monitor CloudWatch logs for upload errors
+- Set up S3 event notifications if needed
+
+### Vercel Monitoring
+- Check Vercel dashboard for deployment status
+- Monitor function logs for API errors
+- Set up alerts for failed deployments
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **CORS Errors**: Make sure your frontend URL is allowed in the backend CORS configuration
-2. **Environment Variables**: Double-check that all environment variables are set correctly
-3. **API Connection**: Verify the `REACT_APP_API_URL` points to your correct Render backend URL
-4. **Build Failures**: Check that all dependencies are listed in `package.json`
+1. **S3 Upload Fails**
+   - Verify AWS credentials are correct
+   - Check bucket permissions
+   - Ensure bucket exists in us-east-2 region
 
-### Debugging
+2. **Vercel Deployment Fails**
+   - Check environment variables are set
+   - Verify Node.js version compatibility
+   - Check build logs for errors
 
-1. Check Render logs for backend issues
-2. Check Vercel logs for frontend issues
-3. Use browser developer tools to check API requests
-4. Verify environment variables are accessible
+3. **PROLIFIC_PID Not Found**
+   - Verify URL contains the parameter
+   - Check browser console for extraction errors
+   - Test with a sample URL
 
-## File Structure After Deployment
+### Debug Commands
+```bash
+# Test S3 connection
+node -e "const { S3Client } = require('@aws-sdk/client-s3'); console.log('S3 client created successfully')"
 
-```
-PrivacyDemo/
-├── frontend/           # Deployed on Vercel
-│   ├── index.html
-│   ├── api.js         # Updated to use Render backend
-│   └── ...
-├── server.js          # Deployed on Render
-├── package.json
-├── render.yaml        # Render deployment config
-├── vercel.json        # Vercel deployment config (updated)
-└── env.example        # Environment variables template
+# Test environment variables
+node -e "console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set')"
 ```
 
-## Environment Variables Reference
+## Security Considerations
 
-### Backend (Render)
-- `NODE_ENV`: Set to "production"
-- `PORT`: Set to 10000 (Render requirement)
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `AWS_ACCESS_KEY_ID`: Your AWS access key (if using S3)
-- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key (if using S3)
-- `ENABLE_AUDIT_LLM`: Set to "true" to enable audit features
+1. **AWS Credentials**: Never commit credentials to version control
+2. **S3 Bucket**: Keep bucket private, only allow specific IAM users access
+3. **Environment Variables**: Use Vercel's secure environment variable storage
+4. **HTTPS**: Vercel automatically provides HTTPS for all deployments
 
-### Frontend (Vercel)
-- `REACT_APP_API_URL`: Your Render backend URL
+## Cost Optimization
 
-## Security Notes
+1. **S3 Storage**: Monitor bucket size and implement lifecycle policies if needed
+2. **Vercel Functions**: Monitor function execution time and memory usage
+3. **API Calls**: Monitor OpenAI API usage and costs
 
-1. Never commit API keys or secrets to your repository
-2. Use environment variables for all sensitive configuration
-3. Consider using Render's secret management for sensitive data
-4. Regularly rotate your API keys and credentials 
+## Support
+
+For issues related to:
+- **AWS S3**: Check AWS documentation and support
+- **Vercel**: Check Vercel documentation and community
+- **Application**: Check the main README.md file 
