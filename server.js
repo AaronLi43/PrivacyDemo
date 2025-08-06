@@ -99,74 +99,38 @@ let globalPiiCounters = {
 // Background questions (first 3 questions - no follow-ups needed)
 const backgroundQuestions = [
     "Tell me about your educational background - what did you study in college or university?",
-    "I'd love to hear about your current work - what do you do for a living?",
-    "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+    "I'd love to hear about your current work and how you got into it by job interviews?",
+    "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
 ];
 
 // Main predefined questions stored on server
 const predefinedQuestions = {
     naive: [
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
         "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
-        "Has AI ever been a game-changer in your interview preparation? I'd love to hear about that experience.",
         "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
-        "Have you ever saved or reused AI-generated answers across multiple interviews? What was that experience like?",
-        "Can you share an example of an AI-generated response you were particularly proud to use in an interview?",
-        "Have you ever gone into an interview feeling like you had AI backing you up? What did that feel like?",
         "Have you ever considered or actually used GenAI during a live interview? What happened?",
-        "If you've used AI-generated notes or prompts during interviews, how did you prepare and manage that?",
-        "Have you ever run AI in the background during a coding challenge or case study? What led you to that decision?",
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
-        "Can you recall a time when you presented an AI-generated idea as your own in an interview? What made you do that?",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Can you share a story about a time when AI actually backfired during a job interview?",
-        "Where do you personally draw the line between getting help and cheating when using AI for interviews?",
-        "Have you talked with friends or colleagues about how far is too far when using GenAI? What do people think?",
-        "If you could do it all over again, would you use AI the same way? Why or why not?",
-        "Are there any memorable stories - funny, embarrassing, or impressive - from your AI interview journey?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
     ],
     neutral: [
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
         "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
-        "Has AI ever been a game-changer in your interview preparation? I'd love to hear about that experience.",
         "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
-        "Have you ever saved or reused AI-generated answers across multiple interviews? What was that experience like?",
-        "Can you share an example of an AI-generated response you were particularly proud to use in an interview?",
-        "Have you ever gone into an interview feeling like you had AI backing you up? What did that feel like?",
         "Have you ever considered or actually used GenAI during a live interview? What happened?",
-        "If you've used AI-generated notes or prompts during interviews, how did you prepare and manage that?",
-        "Have you ever run AI in the background during a coding challenge or case study? What led you to that decision?",
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
-        "Can you recall a time when you presented an AI-generated idea as your own in an interview? What made you do that?",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Can you share a story about a time when AI actually backfired during a job interview?",
-        "Where do you personally draw the line between getting help and cheating when using AI for interviews?",
-        "Have you talked with friends or colleagues about how far is too far when using GenAI? What do people think?",
-        "If you could do it all over again, would you use AI the same way? Why or why not?",
-        "Are there any memorable stories - funny, embarrassing, or impressive - from your AI interview journey?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
     ],
     featured: [
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
         "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
-        "Has AI ever been a game-changer in your interview preparation? I'd love to hear about that experience.",
         "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
-        "Have you ever saved or reused AI-generated answers across multiple interviews? What was that experience like?",
-        "Can you share an example of an AI-generated response you were particularly proud to use in an interview?",
-        "Have you ever gone into an interview feeling like you had AI backing you up? What did that feel like?",
         "Have you ever considered or actually used GenAI during a live interview? What happened?",
-        "If you've used AI-generated notes or prompts during interviews, how did you prepare and manage that?",
-        "Have you ever run AI in the background during a coding challenge or case study? What led you to that decision?",
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
-        "Can you recall a time when you presented an AI-generated idea as your own in an interview? What made you do that?",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Can you share a story about a time when AI actually backfired during a job interview?",
-        "Where do you personally draw the line between getting help and cheating when using AI for interviews?",
-        "Have you talked with friends or colleagues about how far is too far when using GenAI? What do people think?",
-        "If you could do it all over again, would you use AI the same way? Why or why not?",
-        "Are there any memorable stories - funny, embarrassing, or impressive - from your AI interview journey?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
     ]
 };
 
