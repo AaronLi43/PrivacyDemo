@@ -114,19 +114,17 @@ class PrivacyDemoApp {
 
         this.state.userAgentSimulation.isActive = true;
         this.updateUserAgentButton();
-        this.showNotification('User agent simulation started. The agent will take over the entire conversation until completion.', 'success');
+        this.showNotification('User agent simulation started. The agent will respond to all chatbot questions until the conversation ends.', 'success');
         
-        // Always start fresh conversation when user agent is activated
-        this.state.conversationLog = [];
-        this.state.currentStep = 0;
-        this.state.currentQuestionIndex = 0;
-        this.state.predefinedQuestionsCompleted = 0;
-        this.state.questionsCompleted = false;
-        this.state.completedQuestionIndices = [];
-        this.state.justCompletedQuestion = false;
-        
-        // Start the conversation with the first question
-        this.startQuestionConversation();
+        // Start the conversation if not already started
+        if (this.state.conversationLog.length === 0) {
+            this.startQuestionConversation();
+        } else {
+            // If conversation already exists, start the continuous response loop
+            setTimeout(() => {
+                this.processNextChatbotMessage();
+            }, 2000);
+        }
     }
 
     stopUserAgentSimulation() {
@@ -147,37 +145,10 @@ class PrivacyDemoApp {
                 button.className = 'btn btn-success';
             }
         }
-        
-        // Disable/enable chat input based on user agent status
-        const chatInput = document.getElementById('chat-input');
-        const sendBtn = document.getElementById('send-btn');
-        
-        if (chatInput && sendBtn) {
-            if (this.state.userAgentSimulation.isActive) {
-                chatInput.disabled = true;
-                chatInput.placeholder = 'User agent is active - conversation will be automated';
-                sendBtn.disabled = true;
-                chatInput.style.opacity = '0.6';
-                sendBtn.style.opacity = '0.6';
-            } else {
-                chatInput.disabled = false;
-                chatInput.placeholder = 'Type your message here...';
-                sendBtn.disabled = false;
-                chatInput.style.opacity = '1';
-                sendBtn.style.opacity = '1';
-            }
-        }
     }
 
     async processNextChatbotMessage() {
         if (!this.state.userAgentSimulation.isActive || this.state.userAgentSimulation.isResponding) {
-            return;
-        }
-
-        // Check if conversation is already completed
-        if (this.state.questionsCompleted) {
-            this.stopUserAgentSimulation();
-            this.showNotification('User agent simulation completed! All questions have been answered.', 'success');
             return;
         }
 
@@ -190,13 +161,22 @@ class PrivacyDemoApp {
         if (!lastChatbotMessage) {
             // If no chatbot message found, wait a bit and try again
             setTimeout(() => {
-                this.processNextChatbotMessage();
-            }, 1000);
+                if (this.state.userAgentSimulation.isActive) {
+                    this.processNextChatbotMessage();
+                }
+            }, 2000);
+            return;
+        }
+
+        // Check if the last chatbot message indicates the conversation is ending
+        if (this.isConversationEnding(lastChatbotMessage.bot.toLowerCase())) {
+            this.stopUserAgentSimulation();
+            this.showNotification('User agent simulation completed! Chatbot has concluded the conversation.', 'success');
             return;
         }
 
         // Wait a bit to simulate thinking time
-        await this.delay(1500 + Math.random() * 2000);
+        await this.delay(2000 + Math.random() * 3000);
 
         // Generate user agent response
         const response = this.generateUserAgentResponse(lastChatbotMessage.bot);
@@ -299,31 +279,41 @@ class PrivacyDemoApp {
                 this.updateConversationDisplay();
                 this.scrollToBottom();
 
-                // Check if conversation is complete
-                if (response.conversation_complete || response.question_completed) {
+                // Check if conversation is complete - stop user agent when chatbot finishes
+                if (response.conversation_complete || response.question_completed || response.isFinalQuestion) {
                     this.stopUserAgentSimulation();
-                    this.showNotification('User agent simulation completed! All questions have been answered.', 'success');
-                    
-                    // Show congratulation popup if questions are completed
-                    if (response.question_completed) {
-                        this.state.questionsCompleted = true;
-                        this.state.questionMode = false;
-                        this.showCongratulationPopup();
-                    }
+                    this.showNotification('User agent simulation completed! Chatbot has finished all questions.', 'success');
                     return;
                 }
 
-                // Continue the conversation automatically after a delay
+                // Also check if the chatbot message indicates the conversation is ending
+                const botMessage = response.bot_response.toLowerCase();
+                if (this.isConversationEnding(botMessage)) {
+                    this.stopUserAgentSimulation();
+                    this.showNotification('User agent simulation completed! Chatbot has concluded the conversation.', 'success');
+                    return;
+                }
+
+                // Continue the conversation after a delay - keep going until stopped
                 setTimeout(() => {
                     this.state.userAgentSimulation.isResponding = false;
-                    this.processNextChatbotMessage();
-                }, 2000 + Math.random() * 1000);
+                    if (this.state.userAgentSimulation.isActive) {
+                        this.processNextChatbotMessage();
+                    }
+                }, 3000 + Math.random() * 2000);
             }
 
         } catch (error) {
             console.error('Error sending user agent message:', error);
             this.state.userAgentSimulation.isResponding = false;
             this.showNotification('Error in user agent simulation', 'error');
+            
+            // Even if there's an error, continue if still active
+            if (this.state.userAgentSimulation.isActive) {
+                setTimeout(() => {
+                    this.processNextChatbotMessage();
+                }, 5000);
+            }
         }
     }
 
@@ -342,6 +332,34 @@ class PrivacyDemoApp {
 
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Check if the chatbot message indicates the conversation is ending
+    isConversationEnding(botMessage) {
+        const endingPhrases = [
+            'thank you for your time',
+            'thank you for participating',
+            'this concludes our conversation',
+            'this concludes the interview',
+            'thank you for sharing',
+            'thank you for your responses',
+            'this ends our conversation',
+            'thank you for your participation',
+            'we have completed',
+            'that concludes',
+            'thank you so much for',
+            'this concludes our discussion',
+            'thank you for your insights',
+            'this brings our conversation to an end',
+            'thank you for your valuable input',
+            'this completes our interview',
+            'thank you for your thoughtful responses',
+            'this wraps up our conversation',
+            'thank you for your cooperation',
+            'this finishes our discussion'
+        ];
+
+        return endingPhrases.some(phrase => botMessage.includes(phrase));
     }
 
     // Extract PROLIFIC_PID from URL parameters
@@ -1272,11 +1290,11 @@ class PrivacyDemoApp {
             this.scrollToBottom();
             this.showLoading(false);
             
-            // If user agent is active, automatically respond to the chatbot's first message
+            // If user agent is active, start the continuous response loop
             if (this.state.userAgentSimulation.isActive) {
                 setTimeout(() => {
                     this.processNextChatbotMessage();
-                }, 2000);
+                }, 3000);
             }
             
         } catch (error) {
@@ -1623,16 +1641,12 @@ class PrivacyDemoApp {
 
     // Send message
     async sendMessage() {
+
+
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
         
         if (!message) return;
-
-        // Prevent manual messages when user agent is active
-        if (this.state.userAgentSimulation.isActive) {
-            this.showNotification('User agent is currently active. Please wait for the conversation to complete or stop the user agent first.', 'warning');
-            return;
-        }
 
         // Clear real-time detection when sending message
         this.clearRealTimeDetection();

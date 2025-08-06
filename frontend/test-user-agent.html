@@ -107,20 +107,15 @@
                 });
             }
 
-                         startUserAgent() {
-                 this.userAgentActive = true;
-                 this.updateUserAgentButton();
-                 this.updateStats();
-                 this.showNotification('User agent simulation started! The agent will take over the entire conversation.', 'success');
-                 
-                 // Clear conversation and start fresh
-                 this.conversationLog = [];
-                 this.currentStep = 0;
-                 this.updateConversationDisplay();
-                 
-                 // Start the conversation
-                 this.simulateConversation();
-             }
+            startUserAgent() {
+                this.userAgentActive = true;
+                this.updateUserAgentButton();
+                this.updateStats();
+                this.showNotification('User agent simulation started! Will stop when chatbot finishes.', 'success');
+                
+                // Start the conversation
+                this.simulateConversation();
+            }
 
             stopUserAgent() {
                 this.userAgentActive = false;
@@ -129,36 +124,16 @@
                 this.showNotification('User agent simulation stopped.', 'info');
             }
 
-                         updateUserAgentButton() {
-                 const button = document.getElementById('user-agent-btn');
-                 if (this.userAgentActive) {
-                     button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
-                     button.className = 'btn btn-danger';
-                 } else {
-                     button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
-                     button.className = 'btn btn-success';
-                 }
-                 
-                 // Disable/enable chat input based on user agent status
-                 const chatInput = document.getElementById('chat-input');
-                 const sendBtn = document.getElementById('send-btn');
-                 
-                 if (chatInput && sendBtn) {
-                     if (this.userAgentActive) {
-                         chatInput.disabled = true;
-                         chatInput.placeholder = 'User agent is active - conversation will be automated';
-                         sendBtn.disabled = true;
-                         chatInput.style.opacity = '0.6';
-                         sendBtn.style.opacity = '0.6';
-                     } else {
-                         chatInput.disabled = false;
-                         chatInput.placeholder = 'Type your message here...';
-                         sendBtn.disabled = false;
-                         chatInput.style.opacity = '1';
-                         sendBtn.style.opacity = '1';
-                     }
-                 }
-             }
+            updateUserAgentButton() {
+                const button = document.getElementById('user-agent-btn');
+                if (this.userAgentActive) {
+                    button.innerHTML = '<i class="fas fa-stop"></i> Stop User Agent';
+                    button.className = 'btn btn-danger';
+                } else {
+                    button.innerHTML = '<i class="fas fa-user"></i> Start User Agent';
+                    button.className = 'btn btn-success';
+                }
+            }
 
             updateStats() {
                 document.getElementById('stat-messages').textContent = this.conversationLog.length;
@@ -195,7 +170,7 @@
 
                 this.addMessage('user', response, true);
                 
-                // Continue the conversation
+                // Continue the conversation - keep going until stopped
                 setTimeout(() => {
                     if (this.userAgentActive) {
                         this.continueConversation();
@@ -208,8 +183,19 @@
                     "That's fascinating! Have you used AI tools for job interview preparation?",
                     "What are your thoughts on privacy when sharing information with AI systems?",
                     "Do you think AI helped you perform better in interviews?",
-                    "Would you use AI again for interview preparation in the future?"
+                    "Would you use AI again for interview preparation in the future?",
+                    "Can you tell me more about your experience with coding interviews?",
+                    "What specific AI tools did you find most helpful?",
+                    "How did you balance using AI while maintaining your own understanding?",
+                    "What advice would you give to others about using AI for interview prep?"
                 ];
+
+                // Add a final message to demonstrate conversation ending
+                if (this.conversationLog.length >= 10) {
+                    this.addMessage('assistant', "Thank you so much for sharing all of this with me! I've really enjoyed learning about your background, your work experience, and your thoughts on AI in interviews. This concludes our conversation - thank you for your time!");
+                    this.stopUserAgent();
+                    return;
+                }
 
                 const randomQuestion = followUpQuestions[Math.floor(Math.random() * followUpQuestions.length)];
                 this.addMessage('assistant', randomQuestion);
@@ -284,26 +270,20 @@
                 container.scrollTop = container.scrollHeight;
             }
 
-                         sendMessage() {
-                 const input = document.getElementById('chat-input');
-                 const message = input.value.trim();
-                 
-                 if (!message) return;
-                 
-                 // Prevent manual messages when user agent is active
-                 if (this.userAgentActive) {
-                     this.showNotification('User agent is currently active. Please wait for the conversation to complete or stop the user agent first.', 'warning');
-                     return;
-                 }
-                 
-                 this.addMessage('user', message);
-                 input.value = '';
-                 
-                 // Simulate chatbot response
-                 setTimeout(() => {
-                     this.addMessage('assistant', 'Thank you for your response! This is a test environment.');
-                 }, 1000);
-             }
+            sendMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                
+                if (!message) return;
+                
+                this.addMessage('user', message);
+                input.value = '';
+                
+                // Simulate chatbot response
+                setTimeout(() => {
+                    this.addMessage('assistant', 'Thank you for your response! This is a test environment.');
+                }, 1000);
+            }
 
             resetConversation() {
                 this.conversationLog = [];
