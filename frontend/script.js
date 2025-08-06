@@ -363,18 +363,11 @@ class PrivacyDemoApp {
 
     // Update qualification button state
     updateQualificationButton() {
-        // Check for both possible button IDs (multi-step vs individual mode pages)
         const proceedToChatBtn = document.getElementById('proceed-to-chat-btn');
-        const qualificationBtn = document.getElementById('qualification-btn');
-        
         const allAnswered = this.areAllQualificationQuestionsAnswered();
         
         if (proceedToChatBtn) {
             proceedToChatBtn.disabled = !allAnswered;
-        }
-        
-        if (qualificationBtn) {
-            qualificationBtn.disabled = !allAnswered;
         }
     }
 

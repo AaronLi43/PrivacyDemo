@@ -166,37 +166,39 @@
       <div class="step-header">
         <h1><i class="fas fa-clipboard-check"></i> Qualification Questions</h1>
         <div class="step-indicator">
-          <span class="step-number">3</span>
+          <span class="step-number">2</span>
           <span class="step-label">Qualification</span>
         </div>
       </div>
       
       <div class="step-content">
         <div class="qualification-content">
-          <p>Please answer the following questions to help us understand your background and ensure you're eligible for this study.</p>
-          
+          <div class="qualification-intro">
+            <p>Please answer the following questions to ensure you qualify for this study.</p>
+          </div>
+
           <div class="qualification-questions">
-            <div class="form-group">
-              <label for="qual1">Have you ever participated in a job interview?</label>
-              <select id="qual1" class="form-control">
+            <div class="qualification-question">
+              <label for="qual-1">Are you 18 years of age or older?</label>
+              <select id="qual-1" class="form-control qualification-select" required>
                 <option value="">Select an answer...</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
             </div>
 
-            <div class="form-group">
-              <label for="qual2">Are you comfortable having a conversation in English?</label>
-              <select id="qual2" class="form-control">
+            <div class="qualification-question">
+              <label for="qual-2">Do you speak and understand English fluently?</label>
+              <select id="qual-2" class="form-control qualification-select" required>
                 <option value="">Select an answer...</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
             </div>
 
-            <div class="form-group">
-              <label for="qual3">Are you at least 18 years old?</label>
-              <select id="qual3" class="form-control">
+            <div class="qualification-question">
+              <label for="qual-3">Do you have basic experience using AI tools to help you with your job interview (e.g., ChatGPT, Claude, etc.)?</label>
+              <select id="qual-3" class="form-control qualification-select" required>
                 <option value="">Select an answer...</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
@@ -207,7 +209,10 @@
       </div>
 
       <div class="step-actions">
-        <button id="qualification-btn" class="btn btn-primary" disabled>
+        <button id="back-to-consent-btn" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i> Back to Introduction
+        </button>
+        <button id="proceed-to-chat-btn" class="btn btn-primary">
           <i class="fas fa-arrow-right"></i> Continue
         </button>
       </div>
