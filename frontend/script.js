@@ -1250,8 +1250,33 @@ class PrivacyDemoApp {
             // Start monitoring for questions immediately
             console.log('User Agent: Starting to monitor for questions...');
             this.monitorForQuestions();
+            
+            // Set up periodic monitoring
+            this.startPeriodicMonitoring();
         } else {
             this.showNotification('👤 User Agent deactivated. Manual responses only.', 'info');
+            // Stop periodic monitoring
+            this.stopPeriodicMonitoring();
+        }
+    }
+    
+    startPeriodicMonitoring() {
+        // Clear any existing interval
+        this.stopPeriodicMonitoring();
+        
+        // Check for questions every 2 seconds when user agent is enabled
+        this.monitoringInterval = setInterval(() => {
+            if (this.state.userAgentEnabled && !this.state.userAgentResponding) {
+                console.log('User Agent: Periodic monitoring check...');
+                this.monitorForQuestions();
+            }
+        }, 2000);
+    }
+    
+    stopPeriodicMonitoring() {
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
         }
     }
 
@@ -1288,6 +1313,27 @@ class PrivacyDemoApp {
             }
         } else {
             console.log('User Agent: Last message is not a bot question:', lastMessage);
+        }
+        
+        // Also check if there are any unresponded bot questions in the recent history
+        // Look at the last 3 messages to see if there's a bot question that hasn't been responded to
+        const recentMessages = conversationLog.slice(-3);
+        for (let i = recentMessages.length - 1; i >= 0; i--) {
+            const message = recentMessages[i];
+            if (message.bot && !message.user && this.isQuestion(message.bot)) {
+                // Check if this question has been responded to by looking at subsequent messages
+                const messageIndex = conversationLog.length - recentMessages.length + i;
+                const subsequentMessages = conversationLog.slice(messageIndex + 1);
+                
+                // If there are no user messages after this bot question, it hasn't been responded to
+                const hasUserResponse = subsequentMessages.some(msg => msg.user && !msg.bot);
+                
+                if (!hasUserResponse) {
+                    console.log('User Agent: Found unresponded question in recent history:', message.bot);
+                    this.generateUserAgentResponse(message.bot);
+                    break;
+                }
+            }
         }
     }
 
@@ -1457,6 +1503,12 @@ class PrivacyDemoApp {
             
             // Restore the original input value
             input.value = originalValue;
+            
+            // Add a small delay and then check for new questions
+            setTimeout(() => {
+                console.log('User Agent: Checking for new questions after sending message...');
+                this.monitorForQuestions();
+            }, 1000);
             
         } catch (error) {
             console.error('Error sending user agent message:', error);
