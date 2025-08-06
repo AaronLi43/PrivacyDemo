@@ -54,10 +54,14 @@ const ENABLE_AUDIT_LLM = process.env.ENABLE_AUDIT_LLM === 'true';
 console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: true, // Allow all origins
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static('../frontend'));
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -1852,14 +1856,21 @@ app.post('/api/upload-to-s3', async (req, res) => {
     }
 });
 
-// Serve the main page
+// API Health Check
 app.get('/', (req, res) => {
-            res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
-});
-
-// Serve the thanks page
-app.get('/thanks', (req, res) => {
-            res.sendFile(path.join(__dirname, '..', 'frontend', 'thanks.html'));
+    res.json({
+        message: 'Privacy Demo Backend API is running',
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            chat: '/api/chat',
+            privacy_detection: '/api/privacy_detection',
+            test_connection: '/api/test_connection',
+            set_mode: '/api/set_mode',
+            reset: '/api/reset',
+            export: '/api/export'
+        }
+    });
 });
 
 // Error handling middleware
@@ -1870,6 +1881,7 @@ app.use((error, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Frontend available at http://localhost:${PORT}`);
+    console.log(`🚀 Privacy Demo Backend API running on port ${PORT}`);
+    console.log(`📡 API endpoints available at http://localhost:${PORT}/api/*`);
+    console.log(`🔍 Health check: http://localhost:${PORT}/`);
 }); 

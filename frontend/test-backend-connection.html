@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .info {
+            color: blue;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Backend Connection Test</h1>
+    
+    <div class="test-container">
+        <h2>API Configuration</h2>
+        <p><strong>Backend URL:</strong> <span id="backend-url">https://privacydemo.onrender.com</span></p>
+        <p><strong>Current Page URL:</strong> <span id="current-url"></span></p>
+    </div>
+
+    <div class="test-container">
+        <h2>Connection Tests</h2>
+        <button onclick="testBasicConnection()">Test Basic Connection</button>
+        <button onclick="testAPIEndpoints()">Test API Endpoints</button>
+        <button onclick="testChatAPI()">Test Chat API</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // API Configuration
+        const API_BASE_URL = 'https://privacydemo.onrender.com';
+        const API_ENDPOINTS = {
+            TEST_API: '/api/test_connection',
+            CHAT: '/api/chat',
+            SET_MODE: '/api/set_mode'
+        };
+
+        // Display current URLs
+        document.getElementById('current-url').textContent = window.location.href;
+
+        async function makeRequest(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+
+            const config = {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...options.headers,
+                },
+            };
+
+            try {
+                const response = await fetch(url, config);
+                const contentType = response.headers.get('content-type');
+                
+                let data;
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    data = await response.text();
+                }
+
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    headers: Object.fromEntries(response.headers.entries())
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    status: 'Network Error'
+                };
+            }
+        }
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultElement = document.createElement('div');
+            resultElement.className = type;
+            resultElement.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            resultsDiv.appendChild(resultElement);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testBasicConnection() {
+            addResult('Testing basic connection to backend...', 'info');
+            
+            const result = await makeRequest('/');
+            
+            if (result.success) {
+                addResult(`✅ Basic connection successful! Status: ${result.status}`, 'success');
+                addResult(`Response type: ${typeof result.data}`, 'info');
+            } else {
+                addResult(`❌ Basic connection failed! Status: ${result.status}`, 'error');
+                if (result.error) {
+                    addResult(`Error: ${result.error}`, 'error');
+                }
+            }
+        }
+
+        async function testAPIEndpoints() {
+            addResult('Testing API endpoints...', 'info');
+            
+            const endpoints = [
+                { name: 'Test Connection', endpoint: API_ENDPOINTS.TEST_API },
+                { name: 'Set Mode', endpoint: API_ENDPOINTS.SET_MODE }
+            ];
+
+            for (const ep of endpoints) {
+                addResult(`Testing ${ep.name} endpoint...`, 'info');
+                
+                const result = await makeRequest(ep.endpoint, {
+                    method: 'POST',
+                    body: JSON.stringify({ mode: 'test' })
+                });
+
+                if (result.success) {
+                    addResult(`✅ ${ep.name} endpoint working! Status: ${result.status}`, 'success');
+                } else {
+                    addResult(`❌ ${ep.name} endpoint failed! Status: ${result.status}`, 'error');
+                    if (result.error) {
+                        addResult(`Error: ${result.error}`, 'error');
+                    }
+                }
+            }
+        }
+
+        async function testChatAPI() {
+            addResult('Testing Chat API...', 'info');
+            
+            const result = await makeRequest(API_ENDPOINTS.CHAT, {
+                method: 'POST',
+                body: JSON.stringify({
+                    message: 'Hello, this is a test message',
+                    step: 0
+                })
+            });
+
+            if (result.success) {
+                addResult(`✅ Chat API working! Status: ${result.status}`, 'success');
+                if (result.data) {
+                    addResult(`Response: ${JSON.stringify(result.data).substring(0, 200)}...`, 'info');
+                }
+            } else {
+                addResult(`❌ Chat API failed! Status: ${result.status}`, 'error');
+                if (result.error) {
+                    addResult(`Error: ${result.error}`, 'error');
+                }
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            addResult('Page loaded. Ready to test backend connection.', 'info');
+        });
+    </script>
+</body>
+</html> 

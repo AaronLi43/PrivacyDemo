@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = window.location.origin;
+const API_BASE_URL = 'https://privacydemo.onrender.com';
 const API_ENDPOINTS = {
     CHAT: '/api/chat',
     PRIVACY_DETECTION: '/api/privacy_detection',
