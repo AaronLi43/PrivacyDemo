@@ -69,14 +69,52 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// Global state (in production, use a proper database)
-let conversationHistory = [];
-let currentMode = 'chat';
-let uploadedQuestions = [];
-let uploadedReturnLog = [];
-let activeChatSession = null; // Store the active chat session for context
+// Session-based conversation management
+const sessions = new Map(); // Store conversations by session ID
 
-// Global PII category counters for conversation-wide placeholder numbering
+// Helper function to get or create session
+function getSession(sessionId) {
+    if (!sessions.has(sessionId)) {
+        sessions.set(sessionId, {
+            conversationHistory: [],
+            currentMode: 'chat',
+            uploadedQuestions: [],
+            uploadedReturnLog: [],
+            activeChatSession: null,
+            globalPiiCounters: {
+                ADDRESS: 0,
+                IP_ADDRESS: 0,
+                URL: 0,
+                SSN: 0,
+                PHONE_NUMBER: 0,
+                EMAIL: 0,
+                DRIVERS_LICENSE: 0,
+                PASSPORT_NUMBER: 0,
+                TAXPAYER_IDENTIFICATION_NUMBER: 0,
+                ID_NUMBER: 0,
+                NAME: 0,
+                USERNAME: 0,
+                KEYS: 0,
+                GEOLOCATION: 0,
+                AFFILIATION: 0,
+                DEMOGRAPHIC_ATTRIBUTE: 0,
+                TIME: 0,
+                HEALTH_INFORMATION: 0,
+                FINANCIAL_INFORMATION: 0,
+                EDUCATIONAL_RECORD: 0
+            }
+        });
+    }
+    return sessions.get(sessionId);
+}
+
+// Helper function to generate session ID
+function generateSessionId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Legacy global variables (deprecated - use session-based instead)
+// These are kept for backward compatibility but should not be used
 let globalPiiCounters = {
     ADDRESS: 0,
     IP_ADDRESS: 0,
@@ -146,16 +184,17 @@ function isBackgroundQuestion(question) {
 
 
 // Helper function to manage conversation context
-function manageConversationContext() {
+function manageConversationContext(sessionId) {
+    const session = getSession(sessionId);
     // Keep track of conversation context without resetting
     // This allows for continuous conversation tracking
     const maxMessages = 1000; // Increased limit to allow longer conversations
     
-    if (conversationHistory.length > maxMessages) {
+    if (session.conversationHistory.length > maxMessages) {
         console.log('Conversation getting very long, keeping context but trimming history for performance');
         
         // Keep only recent messages in history for reference but maintain chat session
-        conversationHistory = conversationHistory.slice(-100);
+        session.conversationHistory = session.conversationHistory.slice(-100);
     }
 }
 
@@ -174,17 +213,18 @@ function getNextUncompletedQuestionIndex() {
 }
 
 // Helper function to get the next placeholder number for a PII category
-function getNextPlaceholderNumber(piiCategory) {
-    if (globalPiiCounters.hasOwnProperty(piiCategory)) {
-        globalPiiCounters[piiCategory]++;
-        return globalPiiCounters[piiCategory];
+function getNextPlaceholderNumber(piiCategory, sessionId) {
+    const session = getSession(sessionId);
+    if (session.globalPiiCounters.hasOwnProperty(piiCategory)) {
+        session.globalPiiCounters[piiCategory]++;
+        return session.globalPiiCounters[piiCategory];
     }
     // For unknown categories, use a generic counter
-    if (!globalPiiCounters['UNKNOWN']) {
-        globalPiiCounters['UNKNOWN'] = 0;
+    if (!session.globalPiiCounters['UNKNOWN']) {
+        session.globalPiiCounters['UNKNOWN'] = 0;
     }
-    globalPiiCounters['UNKNOWN']++;
-    return globalPiiCounters['UNKNOWN'];
+    session.globalPiiCounters['UNKNOWN']++;
+    return session.globalPiiCounters['UNKNOWN'];
 }
 
 // Enhanced function to get next question from predefined questions array
@@ -270,28 +310,32 @@ app.get('/api/config', (req, res) => {
 // Chat API
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false } = req.body;
+        const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false, sessionId } = req.body;
         
         if (!message || message.trim() === '') {
             return res.status(400).json({ error: 'Message is required and cannot be empty' });
         }
 
+        // Get or create session
+        const currentSessionId = sessionId || generateSessionId();
+        const session = getSession(currentSessionId);
+
         // Add user message to history
-        conversationHistory.push({
+        session.conversationHistory.push({
             role: 'user',
             content: message,
             timestamp: new Date().toISOString(),
             step: step
         });
         
-        console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}"`);
+        console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}", sessionId=${currentSessionId}`);
 
         // Manage conversation context (reset if too long)
-        manageConversationContext();
+        manageConversationContext(currentSessionId);
 
         // Check if this is the first exchange (only one user message in history)
-        const isFirstExchange = conversationHistory.length === 1;
-        console.log(`Conversation history length: ${conversationHistory.length}, isFirstExchange: ${isFirstExchange}`);
+        const isFirstExchange = session.conversationHistory.length === 1;
+        console.log(`Conversation history length: ${session.conversationHistory.length}, isFirstExchange: ${isFirstExchange}`);
         
         // Generate AI response using OpenAI or fallback
         let aiResponse;
@@ -508,7 +552,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                 // Audit LLM evaluation for question completion
                 if (ENABLE_AUDIT_LLM && questionMode && currentQuestion) {
                     console.log('Calling audit LLM for question completion evaluation...');
-                    auditResult = await auditQuestionCompletion(message, aiResponse, currentQuestion, conversationHistory, isFinalQuestion, followUpMode);
+                    auditResult = await auditQuestionCompletion(message, aiResponse, currentQuestion, session.conversationHistory, isFinalQuestion, followUpMode);
                     
                     // Check if this is a background question
                     const isBackground = isBackgroundQuestion(currentQuestion);
@@ -532,7 +576,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                             aiResponse, 
                             auditResult, 
                             currentQuestion, 
-                            conversationHistory,
+                            session.conversationHistory,
                             isFinalQuestion,
                             followUpMode
                         );
@@ -575,7 +619,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                             aiResponse, 
                             auditResult, 
                             currentQuestion, 
-                            conversationHistory,
+                            session.conversationHistory,
                             isFinalQuestion,
                             followUpMode
                         );
@@ -606,7 +650,7 @@ Remember to be conversational and ask follow-up questions based on what the user
             }
         }
         
-        conversationHistory.push({
+        session.conversationHistory.push({
             role: 'assistant',
             content: aiResponse,
             timestamp: new Date().toISOString(),
@@ -615,16 +659,16 @@ Remember to be conversational and ask follow-up questions based on what the user
 
         // Check if privacy detection is needed (featured mode)
         let privacyDetection = null;
-        if (currentMode === 'featured') {
+        if (session.currentMode === 'featured') {
             try {
                 // Use conversation context for enhanced privacy detection
-                privacyDetection = await detectPrivacyWithAI(message, conversationHistory);
+                privacyDetection = await detectPrivacyWithAI(message, session.conversationHistory);
                 if (!privacyDetection || privacyDetection.error) {
-                    privacyDetection = detectPrivacyWithPatterns(message, conversationHistory);
+                    privacyDetection = detectPrivacyWithPatterns(message, session.conversationHistory);
                 }
             } catch (error) {
                 console.error('Privacy detection error in chat:', error);
-                privacyDetection = detectPrivacyWithPatterns(message, conversationHistory);
+                privacyDetection = detectPrivacyWithPatterns(message, session.conversationHistory);
             }
         }
 
@@ -640,12 +684,13 @@ Remember to be conversational and ask follow-up questions based on what the user
         res.json({
             success: true,
             bot_response: aiResponse,
-            conversation_history: conversationHistory,
+            conversation_history: session.conversationHistory,
             step: step,
             privacy_detection: privacyDetection,
             question_completed: questionCompleted,
             audit_result: auditResult,
-            follow_up_questions: auditResult && auditResult.followUpQuestions ? auditResult.followUpQuestions : null
+            follow_up_questions: auditResult && auditResult.followUpQuestions ? auditResult.followUpQuestions : null,
+            session_id: currentSessionId
         });
     } catch (error) {
         console.error('Chat API error:', error);
@@ -1708,20 +1753,33 @@ app.post('/api/set_mode', (req, res) => {
 // Reset API
 app.post('/api/reset', (req, res) => {
     try {
-        conversationHistory = [];
-        uploadedQuestions = [];
-        uploadedReturnLog = [];
-        currentMode = 'chat';
-        activeChatSession = null; // Reset the chat session to clear context
+        const { sessionId } = req.body;
         
-        // Reset global PII counters for conversation-wide numbering
-        Object.keys(globalPiiCounters).forEach(key => {
-            globalPiiCounters[key] = 0;
-        });
+        if (sessionId && sessions.has(sessionId)) {
+            // Reset specific session
+            const session = sessions.get(sessionId);
+            session.conversationHistory = [];
+            session.uploadedQuestions = [];
+            session.uploadedReturnLog = [];
+            session.currentMode = 'chat';
+            session.activeChatSession = null;
+            
+            // Reset PII counters for this session
+            Object.keys(session.globalPiiCounters).forEach(key => {
+                session.globalPiiCounters[key] = 0;
+            });
+            
+            console.log(`Reset session: ${sessionId}`);
+        } else {
+            // Reset all sessions (fallback for backward compatibility)
+            sessions.clear();
+            console.log('Reset all sessions');
+        }
         
         res.json({
             success: true,
-            message: 'Conversation and data reset successfully'
+            message: 'Conversation and data reset successfully',
+            session_id: sessionId
         });
     } catch (error) {
         console.error('Reset error:', error);

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Audit LLM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .info {
+            color: blue;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .audit-result {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Audit LLM</h1>
+    
+    <div class="test-container">
+        <h2>Test Audit LLM Functionality</h2>
+        <p>This page tests the audit LLM functionality to ensure it's working properly.</p>
+        
+        <button onclick="testAuditLLM()">Test Audit LLM</button>
+        <button onclick="testSessionReset()">Test Session Reset</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'https://privacydemo.onrender.com';
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultElement = document.createElement('div');
+            resultElement.className = type;
+            resultElement.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            resultsDiv.appendChild(resultElement);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testAuditLLM() {
+            addResult('Testing Audit LLM functionality...', 'info');
+            
+            try {
+                // Test 1: Check if audit LLM is enabled
+                const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+                const configData = await configResponse.json();
+                
+                if (configData.audit_llm_enabled) {
+                    addResult('✅ Audit LLM is enabled in configuration', 'success');
+                } else {
+                    addResult('❌ Audit LLM is disabled in configuration', 'error');
+                    return;
+                }
+
+                // Test 2: Send a test message with question mode
+                const testMessage = "I studied computer science at MIT and I've been using ChatGPT for job interviews.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 0,
+                        questionMode: true,
+                        currentQuestion: "Tell me about your educational background - what did you study in college or university?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        ],
+                        isFinalQuestion: false,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Chat API responded successfully', 'success');
+                    
+                    if (chatData.audit_result) {
+                        addResult('✅ Audit LLM result received', 'success');
+                        
+                        const auditDiv = document.createElement('div');
+                        auditDiv.className = 'audit-result';
+                        auditDiv.innerHTML = `
+                            <h4>Audit LLM Result:</h4>
+                            <p><strong>Should Proceed:</strong> ${chatData.audit_result.shouldProceed}</p>
+                            <p><strong>Confidence:</strong> ${chatData.audit_result.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.audit_result.reason}</p>
+                            ${chatData.audit_result.followUpQuestions ? `<p><strong>Follow-up Questions:</strong> ${chatData.audit_result.followUpQuestions.join(', ')}</p>` : ''}
+                        `;
+                        document.getElementById('results').appendChild(auditDiv);
+                    } else {
+                        addResult('⚠️ No audit result in response', 'info');
+                    }
+                    
+                    addResult(`Bot Response: ${chatData.bot_response.substring(0, 100)}...`, 'info');
+                } else {
+                    addResult(`❌ Chat API failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing audit LLM: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSessionReset() {
+            addResult('Testing session reset functionality...', 'info');
+            
+            try {
+                // Generate a session ID
+                const sessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                
+                // Send a message to create a session
+                const chatResponse1 = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: "Hello",
+                        sessionId: sessionId
+                    })
+                });
+
+                const chatData1 = await chatResponse1.json();
+                
+                if (chatData1.success) {
+                    addResult('✅ First message sent successfully', 'success');
+                    
+                    // Reset the session
+                    const resetResponse = await fetch(`${API_BASE_URL}/api/reset`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            sessionId: sessionId
+                        })
+                    });
+
+                    const resetData = await resetResponse.json();
+                    
+                    if (resetData.success) {
+                        addResult('✅ Session reset successfully', 'success');
+                        
+                        // Send another message to verify reset
+                        const chatResponse2 = await fetch(`${API_BASE_URL}/api/chat`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: "Hello again",
+                                sessionId: sessionId
+                            })
+                        });
+
+                        const chatData2 = await chatResponse2.json();
+                        
+                        if (chatData2.success) {
+                            addResult('✅ Second message sent after reset', 'success');
+                            addResult(`Conversation history length after reset: ${chatData2.conversation_history.length}`, 'info');
+                        } else {
+                            addResult(`❌ Second message failed: ${chatData2.error}`, 'error');
+                        }
+                    } else {
+                        addResult(`❌ Session reset failed: ${resetData.error}`, 'error');
+                    }
+                } else {
+                    addResult(`❌ First message failed: ${chatData1.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing session reset: ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            addResult('Page loaded. Ready to test audit LLM functionality.', 'info');
+        });
+    </script>
+</body>
+</html> 

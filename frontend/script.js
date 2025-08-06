@@ -787,6 +787,11 @@ class PrivacyDemoApp {
         this.state.justCompletedQuestion = false; // Reset completion flag
         this.state.conversationLog = []; // Clear conversation when changing modes
         
+        // Reset session ID for new conversation
+        if (typeof resetSessionId === 'function') {
+            resetSessionId();
+        }
+        
         // Load predefined questions from server
         await this.loadPredefinedQuestions(mode);
         
@@ -1269,6 +1274,14 @@ class PrivacyDemoApp {
             
             // Clear real-time detection
             this.clearRealTimeDetection();
+            
+            // Reset session ID for new conversation
+            if (typeof resetSessionId === 'function') {
+                resetSessionId();
+            }
+            
+            // Call backend reset API
+            await API.resetConversation();
             
             // Load predefined questions and start main conversation
             await this.loadPredefinedQuestions(this.state.mode);

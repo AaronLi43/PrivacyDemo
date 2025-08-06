@@ -1,5 +1,26 @@
 // API Configuration
 const API_BASE_URL = 'https://privacydemo.onrender.com';
+
+// Session management
+let currentSessionId = null;
+
+// Generate a new session ID
+function generateSessionId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Get or create session ID
+function getSessionId() {
+    if (!currentSessionId) {
+        currentSessionId = generateSessionId();
+    }
+    return currentSessionId;
+}
+
+// Reset session ID for new conversation
+function resetSessionId() {
+    currentSessionId = null;
+}
 const API_ENDPOINTS = {
     CHAT: '/api/chat',
     PRIVACY_DETECTION: '/api/privacy_detection',
@@ -57,6 +78,7 @@ class API {
         const requestBody = {
             message: message,
             step: step,
+            sessionId: getSessionId(),
             ...additionalParams
         };
         
@@ -142,7 +164,10 @@ class API {
     // Reset Conversation
     static async resetConversation() {
         return this.request(API_ENDPOINTS.RESET, {
-            method: 'POST'
+            method: 'POST',
+            body: JSON.stringify({
+                sessionId: getSessionId()
+            })
         });
     }
 
