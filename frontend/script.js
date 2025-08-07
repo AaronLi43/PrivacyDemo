@@ -1037,6 +1037,40 @@ class PrivacyDemoApp {
         }
     }
 
+    // Stop chatbot and user agent before showing congratulation popup
+    stopConversationAndShowCongratulation() {
+        console.log('🛑 Stopping conversation and user agent before showing congratulation popup...');
+        
+        // Stop user agent monitoring
+        this.stopPeriodicMonitoring();
+        this.state.userAgentEnabled = false;
+        this.state.userAgentResponding = false;
+        
+        // Disable chat input to prevent further interactions
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.disabled = true;
+            chatInput.placeholder = 'Conversation completed';
+        }
+        
+        // Disable send button
+        const sendBtn = document.getElementById('send-btn');
+        if (sendBtn) {
+            sendBtn.disabled = true;
+        }
+        
+        // Update user agent button to show it's stopped
+        this.updateUserAgentButton();
+        
+        // Show notification that conversation has ended
+        this.showNotification('🛑 Conversation completed - Chatbot and User Agent stopped', 'info');
+        
+        // Show congratulation popup after a short delay
+        setTimeout(() => {
+            this.showCongratulationPopup();
+        }, 500);
+    }
+
     // Show congratulation popup when all questions are completed
     showCongratulationPopup() {
         const popup = document.getElementById('congratulation-popup');
@@ -1076,6 +1110,19 @@ class PrivacyDemoApp {
         const popup = document.getElementById('congratulation-popup');
         popup.style.display = 'none';
         
+        // Re-enable chat input for next stage interactions
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.disabled = false;
+            chatInput.placeholder = 'Type your message...';
+        }
+        
+        // Re-enable send button
+        const sendBtn = document.getElementById('send-btn');
+        if (sendBtn) {
+            sendBtn.disabled = false;
+        }
+        
         if (this.state.mode === 'neutral') {
             // For neutral mode: Congratulations → Data Collection consent → Post task survey
             this.showNotification('📋 Starting data collection consent...', 'info');
@@ -1114,24 +1161,11 @@ class PrivacyDemoApp {
     // Perform real-time privacy detection
     async performRealTimeDetection(text) {
         try {
-            const response = await fetch('/api/privacy_detection', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ user_message: text })
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                // Only use the actual API response for privacy detection
-                if (result.privacy_issue) {
-                    this.displayRealTimePrivacyIssues(text, result);
-                } else {
-                    this.clearRealTimeDetection();
-                }
+            const result = await API.detectPrivacy(text);
+            // Only use the actual API response for privacy detection
+            if (result.privacy_issue) {
+                this.displayRealTimePrivacyIssues(text, result);
             } else {
-                // Only fallback if the API is unreachable or returns an error
                 this.clearRealTimeDetection();
             }
         } catch (error) {
@@ -1804,7 +1838,7 @@ class PrivacyDemoApp {
                         if (nextQuestionIndex === -1) {
                             this.state.questionsCompleted = true;
                             this.state.questionMode = false;
-                            this.showCongratulationPopup();
+                            this.stopConversationAndShowCongratulation();
                             return;
                         }
                         
@@ -2000,10 +2034,8 @@ class PrivacyDemoApp {
                             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                             this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
                             
-                            // Show congratulation popup after a short delay
-                            setTimeout(() => {
-                                this.showCongratulationPopup();
-                            }, 1000);
+                            // Stop conversation and show congratulation popup
+                            this.stopConversationAndShowCongratulation();
                         } else {
                             // Show notification to user about progress
                             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
@@ -2047,10 +2079,8 @@ class PrivacyDemoApp {
                                 const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                                 this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
                                 
-                                // Show congratulation popup after a short delay
-                                setTimeout(() => {
-                                    this.showCongratulationPopup();
-                                }, 1000);
+                                // Stop conversation and show congratulation popup
+                                this.stopConversationAndShowCongratulation();
                             }
                         }
                     }
@@ -2070,7 +2100,7 @@ class PrivacyDemoApp {
                         console.log('All questions completed - ending conversation');
                         this.state.questionsCompleted = true;
                         this.state.questionMode = false;
-                        this.showCongratulationPopup();
+                        this.stopConversationAndShowCongratulation();
                         return;
                     }
                     
@@ -2303,22 +2333,9 @@ class PrivacyDemoApp {
                 if (turn.user && turn.user.trim()) {
                     try {
                         this.addLoadingNotification('Checking user message for privacy issues...', 'info');
-                        const response = await fetch('/api/privacy_detection', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ user_message: turn.user })
-                        });
-                        
-                        if (response.ok) {
-                            userPrivacyResult = await response.json();
-                            if (userPrivacyResult.privacy_issue) {
-                                this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
-                            }
-                        } else {
-                            console.error(`Privacy detection failed for user message ${i}:`, response.status);
-                            this.addLoadingNotification(`❌ Privacy detection failed for user message ${i + 1}`, 'error');
+                        userPrivacyResult = await API.detectPrivacy(turn.user);
+                        if (userPrivacyResult.privacy_issue) {
+                            this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for user message ${i}:`, error);
@@ -2331,22 +2348,9 @@ class PrivacyDemoApp {
                 if (turn.bot && turn.bot.trim()) {
                     try {
                         this.addLoadingNotification('Checking bot response for privacy issues...', 'info');
-                        const response = await fetch('/api/privacy_detection', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ user_message: turn.bot })
-                        });
-                        
-                        if (response.ok) {
-                            botPrivacyResult = await response.json();
-                            if (botPrivacyResult.privacy_issue) {
-                                this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
-                            }
-                        } else {
-                            console.error(`Privacy detection failed for bot message ${i}:`, response.status);
-                            this.addLoadingNotification(`❌ Privacy detection failed for bot response ${i + 1}`, 'error');
+                        botPrivacyResult = await API.detectPrivacy(turn.bot);
+                        if (botPrivacyResult.privacy_issue) {
+                            this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for bot message ${i}:`, error);
@@ -2424,22 +2428,9 @@ class PrivacyDemoApp {
                 if (turn.user && turn.user.trim()) {
                     try {
                         this.addLoadingNotification('Checking user message for privacy issues...', 'info');
-                        const response = await fetch('/api/privacy_detection', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ user_message: turn.user })
-                        });
-                        
-                        if (response.ok) {
-                            userPrivacyResult = await response.json();
-                            if (userPrivacyResult.privacy_issue) {
-                                this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
-                            }
-                        } else {
-                            console.error(`Privacy detection failed for user message ${i}:`, response.status);
-                            this.addLoadingNotification(`❌ Privacy detection failed for user message ${i + 1}`, 'error');
+                        userPrivacyResult = await API.detectPrivacy(turn.user);
+                        if (userPrivacyResult.privacy_issue) {
+                            this.addLoadingNotification(`⚠️ Privacy issue found in user message ${i + 1}`, 'warning');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for user message ${i}:`, error);
@@ -2452,22 +2443,9 @@ class PrivacyDemoApp {
                 if (turn.bot && turn.bot.trim()) {
                     try {
                         this.addLoadingNotification('Checking bot response for privacy issues...', 'info');
-                        const response = await fetch('/api/privacy_detection', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ user_message: turn.bot })
-                        });
-                        
-                        if (response.ok) {
-                            botPrivacyResult = await response.json();
-                            if (botPrivacyResult.privacy_issue) {
-                                this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
-                            }
-                        } else {
-                            console.error(`Privacy detection failed for bot message ${i}:`, response.status);
-                            this.addLoadingNotification(`❌ Privacy detection failed for bot response ${i + 1}`, 'error');
+                        botPrivacyResult = await API.detectPrivacy(turn.bot);
+                        if (botPrivacyResult.privacy_issue) {
+                            this.addLoadingNotification(`⚠️ Privacy issue found in bot response ${i + 1}`, 'warning');
                         }
                     } catch (error) {
                         console.error(`Privacy detection error for bot message ${i}:`, error);
