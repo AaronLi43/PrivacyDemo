@@ -80,6 +80,8 @@
         
         <button onclick="testQuestionPresence()">Test Question Presence Audit</button>
         <button onclick="testResponseRegeneration()">Test Response Regeneration</button>
+        <button onclick="testFinalQuestion()">Test Final Question</button>
+        <button onclick="testFinalFollowUpQuestion()">Test Final Follow-Up Question</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -237,6 +239,138 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing response regeneration: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFinalQuestion() {
+            addResult('Testing final question scenario...', 'info');
+            
+            try {
+                // Test with a message that might generate a response without questions for final question
+                const testMessage = "That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 6,
+                        questionMode: true,
+                        currentQuestion: "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Have you ever considered or actually used GenAI during a live interview? What happened?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Final question test completed', 'success');
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions (regeneration successful)', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions (regeneration failed)', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit) {
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>Final Question Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ Final question test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing final question: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFinalFollowUpQuestion() {
+            addResult('Testing final follow-up question scenario...', 'info');
+            
+            try {
+                // Test with a message that might generate a response without questions for final follow-up question
+                const testMessage = "That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 3,
+                        questionMode: true,
+                        currentQuestion: "What specific outcomes did you achieve from using AI in your interview preparation?",
+                        predefinedQuestions: [
+                            "What specific outcomes did you achieve from using AI in your interview preparation?",
+                            "Can you share another example of how you used AI in your preparation?",
+                            "What feedback did you receive from interviewers about your responses?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: true
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Final follow-up question test completed', 'success');
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions (regeneration successful)', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions (regeneration failed)', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit) {
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>Final Follow-Up Question Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ Final follow-up question test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing final follow-up question: ${error.message}`, 'error');
             }
         }
 

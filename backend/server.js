@@ -1023,13 +1023,23 @@ QUESTION PRESENCE GUIDELINES:
 - Questions should be relevant to the current topic or help transition to the next topic
 - For background questions: Questions should be efficient and move quickly to main topics
 - For main questions: Questions should be engaging and encourage detailed responses
-- For final questions: Questions should lead to natural conversation conclusion
+- For final questions: The AI MUST include the final question in the response before concluding
+
+CRITICAL FINAL QUESTION RULE:
+- If isFinalQuestion = true AND followUpMode = false AND the response does not contain the final question, it MUST be regenerated
+- If isFinalQuestion = true AND followUpMode = true, this is the final follow-up question for a topic, not the final question of the conversation
+- For final follow-up questions (followUpMode = true), the AI should still ask follow-up questions to gather more information
+- Only for the actual final question of the conversation (followUpMode = false) should summaries be allowed after the question is asked
 
 EXCEPTIONS (when questions are NOT required):
-- When the AI is providing a final summary or conclusion
+- When the AI is providing a final summary or conclusion AFTER the final question of the entire conversation has been asked (isFinalQuestion = true AND followUpMode = false)
 - When the AI is acknowledging information without needing more details
-- When the conversation is naturally concluding
 - When the AI is transitioning between topics without needing user input
+
+IMPORTANT: 
+- For final questions of the entire conversation (isFinalQuestion = true AND followUpMode = false), the AI MUST still ask the final question before concluding
+- For final follow-up questions of a topic (isFinalQuestion = true AND followUpMode = true), the AI should still ask follow-up questions to gather more information
+- Only after the final question of the entire conversation has been asked and the user has responded should the AI provide a summary without questions
 
 RESPONSE FORMAT:
 Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
@@ -1048,7 +1058,9 @@ DECISION GUIDELINES:
 EXAMPLES:
 - Response with good question: {"hasQuestion": true, "reason": "Response includes relevant follow-up question", "confidence": 0.9, "shouldRegenerate": false}
 - Response without question (needs regeneration): {"hasQuestion": false, "reason": "Response lacks engaging questions to continue conversation", "confidence": 0.8, "shouldRegenerate": true}
-- Response without question (exception): {"hasQuestion": false, "reason": "Final summary response, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
+- Response without question (final question not asked): {"hasQuestion": false, "reason": "Final question not yet asked, should include the final question", "confidence": 0.9, "shouldRegenerate": true}
+- Response without question (final follow-up question): {"hasQuestion": false, "reason": "Final follow-up question should still include questions to gather more information", "confidence": 0.9, "shouldRegenerate": true}
+- Response without question (exception - after final question): {"hasQuestion": false, "reason": "Final summary response after final question was asked, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
 - Response with irrelevant question: {"hasQuestion": true, "reason": "Response has question but it's not relevant to current topic", "confidence": 0.7, "shouldRegenerate": true}
 
 IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
@@ -1062,6 +1074,33 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
         if (recentMessages.length > 0) {
             const contextMessage = `Recent conversation context:\n${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
             auditMessages.push({ role: 'user', content: contextMessage });
+        }
+
+        // Special check for final questions and final follow-up questions
+        if (isFinalQuestion && currentQuestion) {
+            const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
+            const endsWithQuestionMark = /\?$/;
+            const hasQuestion = questionWords.test(aiResponse) || endsWithQuestionMark.test(aiResponse);
+            
+            if (!hasQuestion) {
+                if (followUpMode) {
+                    console.log('Final follow-up question detected but response lacks questions - forcing regeneration');
+                    return {
+                        hasQuestion: false,
+                        reason: "Final follow-up question should still include questions to gather more information",
+                        confidence: 0.95,
+                        shouldRegenerate: true
+                    };
+                } else {
+                    console.log('Final question detected but response lacks questions - forcing regeneration');
+                    return {
+                        hasQuestion: false,
+                        reason: "Final question not included in response - must regenerate to include the final question",
+                        confidence: 0.95,
+                        shouldRegenerate: true
+                    };
+                }
+            }
         }
 
         const auditCompletion = await openaiClient.chat.completions.create({
@@ -1140,14 +1179,29 @@ BACKGROUND QUESTION HANDLING:
 - Questions should help transition smoothly to more substantive topics
 
 FINAL QUESTION HANDLING:
-- For final questions, ask follow-up questions that lead to natural conversation conclusion
-- Questions should help summarize and reflect on the conversation
-- Focus on gathering final thoughts and experiences
+- For final questions of the entire conversation (followUpMode = false), you MUST include the final question in your response
+- The final question should be the main question that was supposed to be asked
+- After asking the final question, you can include follow-up questions to gather more information
+- Questions should help gather comprehensive information before concluding
+- Focus on getting detailed responses about the final topic
+
+FINAL FOLLOW-UP QUESTION HANDLING:
+- For final follow-up questions of a topic (followUpMode = true), you should still ask follow-up questions
+- These are not the final questions of the conversation, just the final follow-up for the current topic
+- Ask engaging follow-up questions to gather more information about the current topic
+- Questions should help deepen the conversation about the current subject
+- Focus on getting comprehensive information about the current topic before moving to the next main question
 
 IMPORTANT: Your response should be a single, cohesive message that naturally incorporates questions. Do not include multiple separate questions or responses.
 
 Example of a good regenerated response with questions:
 "That's fascinating! I can see how your computer science background at MIT would give you a great foundation for understanding AI tools. I'm curious about your first experience with ChatGPT - what made you decide to try it for interview preparation? And what specific aspects of your interview prep did you find it most helpful for?"
+
+Example of a good final question response:
+"That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively. Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage."
+
+Example of a good final follow-up question response:
+"That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style?"
 
 Please provide a regenerated response that includes appropriate questions:`;
 

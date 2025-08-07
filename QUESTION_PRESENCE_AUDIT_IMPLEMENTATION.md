@@ -70,6 +70,18 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 - **Question Words**: What, How, Why, When, Where, Who, Did, Do, Can, Are, Is, Could, Would, Will, Have, Has, Was, Were
 - **Validation**: Ensures questions are relevant and appropriate for context
 
+### Final Question Handling
+- **Special Detection**: Final questions are detected when `isFinalQuestion = true`
+- **Forced Regeneration**: If a final question response lacks questions, it's automatically regenerated
+- **Question Inclusion**: Final questions must include the actual question before concluding
+- **Exception Logic**: Only after the final question has been asked should summaries be allowed
+
+### Final Follow-Up Question Handling
+- **Distinction**: Final follow-up questions (`isFinalQuestion = true` AND `followUpMode = true`) are different from final questions of the conversation
+- **Question Requirement**: Final follow-up questions must still include questions to gather more information
+- **Purpose**: These are the last follow-up questions for a specific topic, not the end of the conversation
+- **Regeneration Logic**: If final follow-up questions lack questions, they are regenerated to include engaging follow-up questions
+
 ### Regeneration Process
 1. **Audit Evaluation**: Determines if response needs regeneration
 2. **Prompt Engineering**: Creates focused prompt for question inclusion
@@ -78,7 +90,7 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 5. **Fallback**: Uses original response if regeneration fails
 
 ### Exception Handling
-- **Final Questions**: No questions needed for conversation conclusions
+- **Final Questions**: Must include the final question before concluding (special handling)
 - **Background Questions**: More lenient question requirements
 - **Follow-up Mode**: Different evaluation criteria
 - **API Failures**: Graceful fallback to original response
@@ -129,8 +141,10 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 ### Expected Behavior
 - Responses without questions should trigger regeneration
 - Regenerated responses should contain appropriate questions
-- Final summaries should not require questions
+- Final questions MUST include the question before concluding
+- Final follow-up questions MUST include questions to gather more information
 - Background questions should have more lenient requirements
+- Final summaries are only allowed after the final question of the entire conversation has been asked
 
 ## Future Enhancements
 
