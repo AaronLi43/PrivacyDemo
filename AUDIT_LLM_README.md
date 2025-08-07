@@ -354,3 +354,52 @@ if (turn.userPrivacy.safer_versions) {
 - **Test Function**: `testPrivacyAnalysisDisplay()` in test-question-presence.html
 - **Test Button**: "Test Privacy Analysis Display" button
 - **Verification**: Tests that original, placeholder, and fake data versions display correctly
+
+## PII Highlighting Enhancement
+
+### Issue Resolution: New PII Categories Not Highlighted
+- **Problem**: Newly added PII categories like `GEOLOCATION`, `DEMOGRAPHIC_ATTRIBUTE`, `TIME`, `HEALTH_INFORMATION`, `FINANCIAL_INFORMATION`, `EDUCATIONAL_RECORD` were not being highlighted
+- **Solution**: Enhanced highlighting patterns and testing to include all new PII categories
+- **Implementation**: Updated placeholder patterns and test coverage
+
+### Enhanced PII Categories
+The system now highlights all these new PII categories:
+- `[GEOLOCATION\d+]` - Geographic locations
+- `[DEMOGRAPHIC_ATTRIBUTE\d+]` - Demographic information
+- `[TIME\d+]` - Time-related information
+- `[HEALTH_INFORMATION\d+]` - Health-related data
+- `[FINANCIAL_INFORMATION\d+]` - Financial information
+- `[EDUCATIONAL_RECORD\d+]` - Educational records
+
+### Testing
+- **Enhanced Test File**: test-highlighting.html includes all new PII categories
+- **Comprehensive Coverage**: Tests all 20+ PII category patterns
+- **Visual Verification**: Shows highlighted text with red underlines for all patterns
+
+## Final Question Ending Enhancement
+
+### Issue Resolution: Final Question Not Ending Properly
+- **Problem**: Final question sometimes still asked questions instead of concluding with wrapping-up sentences
+- **Solution**: Strengthened final question ending logic with more explicit instructions
+- **Implementation**: Enhanced system prompts and audit logic
+
+### Enhanced Final Question Logic
+- **Stronger Instructions**: Added "CRITICAL" and "MUST" language to system prompts
+- **Better Detection**: Enhanced wrapping-up sentence detection patterns
+- **Stricter Enforcement**: Audit LLM now more strictly enforces final question ending
+
+### Wrapping-Up Sentence Patterns
+The system now detects these wrapping-up patterns:
+- "Thank you for sharing with me"
+- "Thank you for your participation"
+- "This concludes our conversation"
+- "Conversation is complete"
+- "Enjoyed learning about you"
+- "Thank you for your time"
+- "Study is over"
+- "Study is complete"
+
+### Testing
+- **New Test Function**: `testFinalQuestionEnding()` in test-question-presence.html
+- **Test Button**: "Test Final Question Ending" button
+- **Verification**: Tests that final questions end with proper wrapping-up sentences

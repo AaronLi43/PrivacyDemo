@@ -534,7 +534,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                     
                     const finalQuestionContext = isFinalQuestion ? 
                         (isFinalFollowUpOfFinalQuestion ? 
-                            " This is the FINAL follow-up of the FINAL question - after asking your follow-up question, include wrapping-up sentences that explicitly tell the user the study is over and thank them for their participation. Example: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!'" :
+                            " CRITICAL: This is the FINAL follow-up of the FINAL question - you MUST include wrapping-up sentences that explicitly tell the user the study is over and thank them for their participation. After asking your follow-up question, you MUST add: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!' DO NOT end without these wrapping-up sentences." :
                             " This is the FINAL question - engage in natural follow-up conversation with 3-4 questions before ending with a thank you and summary.") : 
                         "";
                     
@@ -1151,7 +1151,11 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
                 /enjoyed learning about you/i.test(aiResponse) ||
                 /thank you.*time/i.test(aiResponse) ||
                 /study.*over/i.test(aiResponse) ||
-                /study.*complete/i.test(aiResponse)
+                /study.*complete/i.test(aiResponse) ||
+                /this concludes our conversation/i.test(aiResponse) ||
+                /conversation is complete/i.test(aiResponse) ||
+                /thank you.*concludes our conversation/i.test(aiResponse) ||
+                /thank you.*conversation.*complete/i.test(aiResponse)
             );
             
             if (!hasQuestion) {
@@ -1283,9 +1287,10 @@ FINAL FOLLOW-UP QUESTION HANDLING:
 - Focus on getting comprehensive information about the current topic before moving to the next main question
 
 FINAL FOLLOW-UP OF FINAL QUESTION HANDLING:
-- For the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true), you should include wrapping-up sentences
-- After asking your follow-up question, include explicit wrapping-up sentences that tell the user the study is over
-- Thank the user for their participation and explicitly state that the conversation is concluding
+- For the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true), you MUST include wrapping-up sentences
+- After asking your follow-up question, you MUST include explicit wrapping-up sentences that tell the user the study is over
+- You MUST thank the user for their participation and explicitly state that the conversation is concluding
+- CRITICAL: DO NOT end the response without these wrapping-up sentences
 - Example: "Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
 
 IMPORTANT: Your response should be a single, cohesive message that naturally incorporates questions. Do not include multiple separate questions or responses.

@@ -48,6 +48,8 @@
 My name is John Smith and I live at 123 Main Street, New York, NY 10001. My phone number is 555-123-4567 and my email is john.smith@email.com. I work as a software engineer at Tech Corp.
 
 Text with new placeholders: I graduated from [AFFILIATION1] with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1] and I work at [AFFILIATION2]. My email is [EMAIL1] and phone is [PHONE_NUMBER1].
+
+Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMOGRAPHIC_ATTRIBUTE1], I was born on [TIME1], I have [HEALTH_INFORMATION1], my salary is [FINANCIAL_INFORMATION1], and I studied [EDUCATIONAL_RECORD2].
         </textarea>
         
         <div>
@@ -242,6 +244,10 @@ Text with new placeholders: I graduated from [AFFILIATION1] with a degree in [ED
             const placeholderTestText = 'I graduated from [AFFILIATION1] with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1] and I work at [AFFILIATION2].';
             const placeholderHighlightedText = highlightSensitiveText(placeholderTestText, { privacy_issue: true });
             
+            // Test highlighting for all new PII categories
+            const newPiiTestText = 'I\'m from [GEOLOCATION1], my ethnicity is [DEMOGRAPHIC_ATTRIBUTE1], I was born on [TIME1], I have [HEALTH_INFORMATION1], my salary is [FINANCIAL_INFORMATION1], and I studied [EDUCATIONAL_RECORD2].';
+            const newPiiHighlightedText = highlightSensitiveText(newPiiTestText, { privacy_issue: true });
+            
             // Update results
             const resultsContent = document.getElementById('results-content');
             resultsContent.innerHTML = `
@@ -254,12 +260,24 @@ Text with new placeholders: I graduated from [AFFILIATION1] with a degree in [ED
                     <strong>Highlighted:</strong> ${placeholderHighlightedText}
                 </div>
                 
+                <h5>New PII Categories Test:</h5>
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; background: white;">
+                    <strong>Original:</strong> ${newPiiTestText}<br><br>
+                    <strong>Highlighted:</strong> ${newPiiHighlightedText}
+                </div>
+                
                 <h5>Placeholder Test Results:</h5>
                 <ul>
                     <li>✅ AFFILIATION1 highlighted: ${placeholderHighlightedText.includes('sensitive-text-highlight') && placeholderHighlightedText.includes('[AFFILIATION1]') ? 'PASSED' : 'FAILED'}</li>
                     <li>✅ EDUCATIONAL_RECORD1 highlighted: ${placeholderHighlightedText.includes('sensitive-text-highlight') && placeholderHighlightedText.includes('[EDUCATIONAL_RECORD1]') ? 'PASSED' : 'FAILED'}</li>
                     <li>✅ NAME1 highlighted: ${placeholderHighlightedText.includes('sensitive-text-highlight') && placeholderHighlightedText.includes('[NAME1]') ? 'PASSED' : 'FAILED'}</li>
                     <li>✅ AFFILIATION2 highlighted: ${placeholderHighlightedText.includes('sensitive-text-highlight') && placeholderHighlightedText.includes('[AFFILIATION2]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ GEOLOCATION1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[GEOLOCATION1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ DEMOGRAPHIC_ATTRIBUTE1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[DEMOGRAPHIC_ATTRIBUTE1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ TIME1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[TIME1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ HEALTH_INFORMATION1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[HEALTH_INFORMATION1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ FINANCIAL_INFORMATION1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[FINANCIAL_INFORMATION1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ EDUCATIONAL_RECORD2 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[EDUCATIONAL_RECORD2]') ? 'PASSED' : 'FAILED'}</li>
                 </ul>
             `;
         }

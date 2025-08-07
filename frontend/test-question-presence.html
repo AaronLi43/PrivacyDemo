@@ -90,6 +90,7 @@
         <button onclick="testAuditLLMPrecedence()">Test Audit LLM Precedence</button>
         <button onclick="testPlaceholderHighlighting()">Test Placeholder Highlighting</button>
         <button onclick="testPrivacyAnalysisDisplay()">Test Privacy Analysis Display</button>
+        <button onclick="testFinalQuestionEnding()">Test Final Question Ending</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -1070,6 +1071,89 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing privacy analysis display: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFinalQuestionEnding() {
+            addResult('Testing final question ending with wrapping-up sentences...', 'info');
+            
+            try {
+                // Test with a response that should trigger final follow-up of final question
+                const testMessage = "I used AI once for interview prep and it helped me get the job.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 6,
+                        questionMode: true,
+                        currentQuestion: "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Have you ever considered or actually used GenAI during a live interview? What happened?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: true
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Final question ending test completed', 'success');
+                    
+                    // Check if the response contains wrapping-up sentences
+                    const hasWrappingUpSentences = (
+                        /thank you.*sharing.*with me/i.test(chatData.bot_response) ||
+                        /thank you.*participation/i.test(chatData.bot_response) ||
+                        /concludes our conversation/i.test(chatData.bot_response) ||
+                        /conversation.*complete/i.test(chatData.bot_response) ||
+                        /enjoyed learning about you/i.test(chatData.bot_response) ||
+                        /thank you.*time/i.test(chatData.bot_response) ||
+                        /study.*over/i.test(chatData.bot_response) ||
+                        /study.*complete/i.test(chatData.bot_response) ||
+                        /this concludes our conversation/i.test(chatData.bot_response) ||
+                        /conversation is complete/i.test(chatData.bot_response) ||
+                        /thank you.*concludes our conversation/i.test(chatData.bot_response) ||
+                        /thank you.*conversation.*complete/i.test(chatData.bot_response)
+                    );
+                    
+                    if (hasWrappingUpSentences) {
+                        addResult('✅ Response contains wrapping-up sentences', 'success');
+                    } else {
+                        addResult('❌ Response does not contain wrapping-up sentences', 'error');
+                    }
+                    
+                    // Check if the response still contains questions (should not for final ending)
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('⚠️ Response still contains questions (should end with wrapping-up)', 'warning');
+                    } else {
+                        addResult('✅ Response does not contain questions (proper ending)', 'success');
+                    }
+                    
+                    addResult(`Bot Response: ${chatData.bot_response}`, 'info');
+                    
+                    // Check audit results
+                    if (chatData.question_presence_audit) {
+                        addResult(`Question Presence Audit: ${JSON.stringify(chatData.question_presence_audit, null, 2)}`, 'info');
+                    }
+                    
+                } else {
+                    addResult(`❌ Final question ending test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing final question ending: ${error.message}`, 'error');
             }
         }
 
