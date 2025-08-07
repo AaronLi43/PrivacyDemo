@@ -146,7 +146,23 @@
                 /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
                 /\[ID_NUMBER\d+\]/g,
                 /\[USERNAME\d+\]/g,
-                /\[KEYS\d+\]/g
+                /\[KEYS\d+\]/g,
+                // New format patterns as requested
+                /\[Key\d+\]/g,
+                /\[Geolocation\d+\]/g,
+                /\[Affiliation\d+\]/g,
+                /\[Demographic_Attribute\d+\]/g,
+                /\[Time\d+\]/g,
+                /\[Health_Information\d+\]/g,
+                /\[Financial_Information\d+\]/g,
+                /\[Education_Record\d+\]/g,
+                // Legacy patterns for backward compatibility
+                /\[Address\d+\]/g,
+                /\[Name\d+\]/g,
+                /\[Phone\d+\]/g,
+                /\[Email\d+\]/g,
+                /\[CreditCard\d+\]/g,
+                /\[Date\d+\]/g
             ];
 
             // Apply highlighting to all placeholder patterns

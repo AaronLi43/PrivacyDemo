@@ -4605,6 +4605,10 @@ class PrivacyDemoApp {
         }
 
         let highlightedText = text;
+        
+        // Debug logging to help identify highlighting issues
+        console.log('Highlighting text:', text);
+        console.log('Privacy result:', privacyResult);
 
         // 1. Highlight original sensitive text if available
         let sensitiveText = privacyResult.sensitive_text;
@@ -4633,15 +4637,34 @@ class PrivacyDemoApp {
             }
         }
 
+        // Also check affected_text as another fallback
+        if (!sensitiveText && privacyResult.affected_text) {
+            sensitiveText = privacyResult.affected_text;
+        }
+
         if (sensitiveText) {
-            // Escape special regex characters in the sensitive text
-            const escapedSensitiveText = this.escapeRegex(sensitiveText);
+            console.log('Processing sensitive text:', sensitiveText);
+            // Handle comma-separated sensitive text (multiple PII items)
+            const sensitiveItems = sensitiveText.split(',').map(item => item.trim()).filter(item => item.length > 0);
+            console.log('Sensitive items to highlight:', sensitiveItems);
             
-            // Create a regex that matches the sensitive text (case-insensitive)
-            const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
-            
-            // Replace the sensitive text with highlighted version
-            highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+            sensitiveItems.forEach(item => {
+                // Escape special regex characters in the sensitive text
+                const escapedSensitiveText = this.escapeRegex(item);
+                
+                // Create a regex that matches the sensitive text (case-insensitive)
+                const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
+                
+                // Replace the sensitive text with highlighted version
+                const beforeHighlight = highlightedText;
+                highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+                
+                if (beforeHighlight !== highlightedText) {
+                    console.log(`Successfully highlighted: "${item}"`);
+                } else {
+                    console.log(`Failed to highlight: "${item}" - not found in text`);
+                }
+            });
         }
 
         // 2. Highlight placeholder patterns (new placeholders like [AFFILIATION1], [EDUCATIONAL_RECORD1], etc.)
@@ -4665,14 +4688,36 @@ class PrivacyDemoApp {
             /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
             /\[ID_NUMBER\d+\]/g,
             /\[USERNAME\d+\]/g,
-            /\[KEYS\d+\]/g
+            /\[KEYS\d+\]/g,
+            // New format patterns as requested
+            /\[Key\d+\]/g,
+            /\[Geolocation\d+\]/g,
+            /\[Affiliation\d+\]/g,
+            /\[Demographic_Attribute\d+\]/g,
+            /\[Time\d+\]/g,
+            /\[Health_Information\d+\]/g,
+            /\[Financial_Information\d+\]/g,
+            /\[Education_Record\d+\]/g,
+            // Legacy patterns for backward compatibility
+            /\[Address\d+\]/g,
+            /\[Name\d+\]/g,
+            /\[Phone\d+\]/g,
+            /\[Email\d+\]/g,
+            /\[CreditCard\d+\]/g,
+            /\[Date\d+\]/g
         ];
 
         // Apply highlighting to all placeholder patterns
         placeholderPatterns.forEach(pattern => {
+            const beforeHighlight = highlightedText;
             highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
+            
+            if (beforeHighlight !== highlightedText) {
+                console.log(`Successfully highlighted placeholder pattern: ${pattern.source}`);
+            }
         });
 
+        console.log('Final highlighted text:', highlightedText);
         return highlightedText;
     }
 

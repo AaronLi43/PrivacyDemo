@@ -231,6 +231,34 @@ function getNextUncompletedQuestionIndex(sessionId) {
     return currentStep;
 }
 
+// Helper function to convert PII category to new placeholder format
+function convertToNewPlaceholderFormat(piiCategory) {
+    const formatMap = {
+        'KEYS': 'Key',
+        'GEOLOCATION': 'Geolocation',
+        'AFFILIATION': 'Affiliation',
+        'DEMOGRAPHIC_ATTRIBUTE': 'Demographic_Attribute',
+        'TIME': 'Time',
+        'HEALTH_INFORMATION': 'Health_Information',
+        'FINANCIAL_INFORMATION': 'Financial_Information',
+        'EDUCATIONAL_RECORD': 'Education_Record',
+        'NAME': 'Name',
+        'EMAIL': 'Email',
+        'PHONE_NUMBER': 'Phone_Number',
+        'ADDRESS': 'Address',
+        'SSN': 'SSN',
+        'IP_ADDRESS': 'IP_Address',
+        'URL': 'URL',
+        'DRIVERS_LICENSE': 'Drivers_License',
+        'PASSPORT_NUMBER': 'Passport_Number',
+        'TAXPAYER_IDENTIFICATION_NUMBER': 'Taxpayer_Identification_Number',
+        'ID_NUMBER': 'ID_Number',
+        'USERNAME': 'Username'
+    };
+    
+    return formatMap[piiCategory] || piiCategory;
+}
+
 // Helper function to get the next placeholder number for a PII category
 function getNextPlaceholderNumber(piiCategory, sessionId) {
     const session = getSession(sessionId);
@@ -1626,7 +1654,8 @@ Current user message: "${userMessage}"${contextInfo}`;
             } else {
                 // Generate new placeholder for new entity
                 const nextNumber = getNextPlaceholderNumber(pii.type);
-                newPlaceholder = `${pii.type}${nextNumber}`;
+                const newFormat = convertToNewPlaceholderFormat(pii.type);
+                newPlaceholder = `[${newFormat}${nextNumber}]`;
                 
                 // Track this new entity
                 if (!session.detectedEntities) {
@@ -1869,35 +1898,42 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
             
             if (type === 'Full Address') {
                 // Replace full address with conversation-wide numbered placeholder and fake address
-                const addressNumber = getNextPlaceholderNumber('ADDRESS');
-                replacingMessage = userMessage.replace(pattern, `[Address${addressNumber}]`);
+                const addressNumber = getNextPlaceholderNumber('ADDRESS', null);
+                const addressFormat = convertToNewPlaceholderFormat('ADDRESS');
+                replacingMessage = userMessage.replace(pattern, `[${addressFormat}${addressNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, '123 Oak Street, Springfield, IL 62701');
             } else if (type === 'Full Name') {
                 // Replace full name with conversation-wide numbered placeholder and fake name
-                const nameNumber = getNextPlaceholderNumber('NAME');
-                replacingMessage = userMessage.replace(pattern, `[Name${nameNumber}]`);
+                const nameNumber = getNextPlaceholderNumber('NAME', null);
+                const nameFormat = convertToNewPlaceholderFormat('NAME');
+                replacingMessage = userMessage.replace(pattern, `[${nameFormat}${nameNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, 'Brian Johnson');
             } else if (type === 'Phone Number') {
                 // Replace phone number with conversation-wide numbered placeholder and fake number
-                const phoneNumber = getNextPlaceholderNumber('PHONE_NUMBER');
-                replacingMessage = userMessage.replace(pattern, `[Phone${phoneNumber}]`);
+                const phoneNumber = getNextPlaceholderNumber('PHONE_NUMBER', null);
+                const phoneFormat = convertToNewPlaceholderFormat('PHONE_NUMBER');
+                replacingMessage = userMessage.replace(pattern, `[${phoneFormat}${phoneNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, '(555) 123-4567');
             } else if (type === 'Email Address') {
                 // Replace email with conversation-wide numbered placeholder and fake email
-                const emailNumber = getNextPlaceholderNumber('EMAIL');
-                replacingMessage = userMessage.replace(pattern, `[Email${emailNumber}]`);
+                const emailNumber = getNextPlaceholderNumber('EMAIL', null);
+                const emailFormat = convertToNewPlaceholderFormat('EMAIL');
+                replacingMessage = userMessage.replace(pattern, `[${emailFormat}${emailNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, 'brian.johnson@example.com');
             } else if (type === 'Social Security Number') {
-                const ssnNumber = getNextPlaceholderNumber('SSN');
-                replacingMessage = userMessage.replace(pattern, `[SSN${ssnNumber}]`);
+                const ssnNumber = getNextPlaceholderNumber('SSN', null);
+                const ssnFormat = convertToNewPlaceholderFormat('SSN');
+                replacingMessage = userMessage.replace(pattern, `[${ssnFormat}${ssnNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, '123-45-6789');
             } else if (type === 'Credit Card Number') {
-                const creditCardNumber = getNextPlaceholderNumber('FINANCIAL_INFORMATION');
-                replacingMessage = userMessage.replace(pattern, `[CreditCard${creditCardNumber}]`);
+                const creditCardNumber = getNextPlaceholderNumber('FINANCIAL_INFORMATION', null);
+                const financialFormat = convertToNewPlaceholderFormat('FINANCIAL_INFORMATION');
+                replacingMessage = userMessage.replace(pattern, `[${financialFormat}${creditCardNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, '4111-1111-1111-1111');
             } else if (type === 'Date of Birth') {
-                const dateNumber = getNextPlaceholderNumber('TIME');
-                replacingMessage = userMessage.replace(pattern, `[Date${dateNumber}]`);
+                const dateNumber = getNextPlaceholderNumber('TIME', null);
+                const timeFormat = convertToNewPlaceholderFormat('TIME');
+                replacingMessage = userMessage.replace(pattern, `[${timeFormat}${dateNumber}]`);
                 abstractionMessage = userMessage.replace(pattern, '01/15/1985');
             } else {
                 // Use the default replacement for other patterns

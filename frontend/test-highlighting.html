@@ -50,6 +50,8 @@ My name is John Smith and I live at 123 Main Street, New York, NY 10001. My phon
 Text with new placeholders: I graduated from [AFFILIATION1] with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1] and I work at [AFFILIATION2]. My email is [EMAIL1] and phone is [PHONE_NUMBER1].
 
 Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMOGRAPHIC_ATTRIBUTE1], I was born on [TIME1], I have [HEALTH_INFORMATION1], my salary is [FINANCIAL_INFORMATION1], and I studied [EDUCATIONAL_RECORD2].
+
+Text with new format placeholders: I have a [Key1], I'm from [Geolocation1], I work at [Affiliation1], my ethnicity is [Demographic_Attribute1], I was born on [Time1], I have [Health_Information1], my salary is [Financial_Information1], and I studied [Education_Record1].
         </textarea>
         
         <div>
@@ -135,7 +137,23 @@ Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMO
                 /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
                 /\[ID_NUMBER\d+\]/g,
                 /\[USERNAME\d+\]/g,
-                /\[KEYS\d+\]/g
+                /\[KEYS\d+\]/g,
+                // New format patterns as requested
+                /\[Key\d+\]/g,
+                /\[Geolocation\d+\]/g,
+                /\[Affiliation\d+\]/g,
+                /\[Demographic_Attribute\d+\]/g,
+                /\[Time\d+\]/g,
+                /\[Health_Information\d+\]/g,
+                /\[Financial_Information\d+\]/g,
+                /\[Education_Record\d+\]/g,
+                // Legacy patterns for backward compatibility
+                /\[Address\d+\]/g,
+                /\[Name\d+\]/g,
+                /\[Phone\d+\]/g,
+                /\[Email\d+\]/g,
+                /\[CreditCard\d+\]/g,
+                /\[Date\d+\]/g
             ];
 
             // Apply highlighting to all placeholder patterns
@@ -248,6 +266,10 @@ Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMO
             const newPiiTestText = 'I\'m from [GEOLOCATION1], my ethnicity is [DEMOGRAPHIC_ATTRIBUTE1], I was born on [TIME1], I have [HEALTH_INFORMATION1], my salary is [FINANCIAL_INFORMATION1], and I studied [EDUCATIONAL_RECORD2].';
             const newPiiHighlightedText = highlightSensitiveText(newPiiTestText, { privacy_issue: true });
             
+            // Test highlighting for new format patterns
+            const newFormatTestText = 'I have a [Key1], I\'m from [Geolocation1], I work at [Affiliation1], my ethnicity is [Demographic_Attribute1], I was born on [Time1], I have [Health_Information1], my salary is [Financial_Information1], and I studied [Education_Record1].';
+            const newFormatHighlightedText = highlightSensitiveText(newFormatTestText, { privacy_issue: true });
+            
             // Update results
             const resultsContent = document.getElementById('results-content');
             resultsContent.innerHTML = `
@@ -266,6 +288,12 @@ Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMO
                     <strong>Highlighted:</strong> ${newPiiHighlightedText}
                 </div>
                 
+                <h5>New Format Patterns Test:</h5>
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; background: white;">
+                    <strong>Original:</strong> ${newFormatTestText}<br><br>
+                    <strong>Highlighted:</strong> ${newFormatHighlightedText}
+                </div>
+                
                 <h5>Placeholder Test Results:</h5>
                 <ul>
                     <li>✅ AFFILIATION1 highlighted: ${placeholderHighlightedText.includes('sensitive-text-highlight') && placeholderHighlightedText.includes('[AFFILIATION1]') ? 'PASSED' : 'FAILED'}</li>
@@ -278,6 +306,18 @@ Text with all new PII categories: I'm from [GEOLOCATION1], my ethnicity is [DEMO
                     <li>✅ HEALTH_INFORMATION1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[HEALTH_INFORMATION1]') ? 'PASSED' : 'FAILED'}</li>
                     <li>✅ FINANCIAL_INFORMATION1 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[FINANCIAL_INFORMATION1]') ? 'PASSED' : 'FAILED'}</li>
                     <li>✅ EDUCATIONAL_RECORD2 highlighted: ${newPiiHighlightedText.includes('sensitive-text-highlight') && newPiiHighlightedText.includes('[EDUCATIONAL_RECORD2]') ? 'PASSED' : 'FAILED'}</li>
+                </ul>
+                
+                <h5>New Format Test Results:</h5>
+                <ul>
+                    <li>✅ Key1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Key1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Geolocation1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Geolocation1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Affiliation1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Affiliation1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Demographic_Attribute1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Demographic_Attribute1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Time1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Time1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Health_Information1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Health_Information1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Financial_Information1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Financial_Information1]') ? 'PASSED' : 'FAILED'}</li>
+                    <li>✅ Education_Record1 highlighted: ${newFormatHighlightedText.includes('sensitive-text-highlight') && newFormatHighlightedText.includes('[Education_Record1]') ? 'PASSED' : 'FAILED'}</li>
                 </ul>
             `;
         }
