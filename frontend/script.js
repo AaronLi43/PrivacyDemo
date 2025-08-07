@@ -1456,7 +1456,7 @@ class PrivacyDemoApp {
         }
     }
 
-    async generatePersonalResponseWithLLM(botMessage) {
+        async generatePersonalResponseWithLLM(botMessage) {
         try {
             console.log('User Agent: Generating response with LLM for:', botMessage);
             
@@ -1466,8 +1466,15 @@ class PrivacyDemoApp {
                 content: entry.user || entry.bot || ''
             }));
             
+            // Determine backend URL based on environment
+            const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? 'http://localhost:3000' 
+                : 'https://privacydemo.onrender.com';
+            
+            console.log('User Agent: Using backend URL:', backendUrl);
+            
             // Call the LLM API
-            const response = await fetch('/api/generate_user_agent_response', {
+            const response = await fetch(`${backendUrl}/api/generate_user_agent_response`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
