@@ -369,7 +369,7 @@ app.post('/api/chat', async (req, res) => {
                 // If in question mode, enhance the system prompt with predefined questions
                 if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
                     const finalQuestionNote = isFinalQuestion ? 
-                        "\n\nFINAL QUESTION INSTRUCTIONS: This is the LAST question in the conversation. You should engage in natural follow-up conversation about this topic, asking 3-4 follow-up questions to gather detailed information before ending. Do NOT use 'NEXT_QUESTION:' for the final question. After sufficient discussion (3-4 exchanges), provide a natural conclusion that:\n1. Thanks the user for their participation\n2. Briefly summarizes what you've learned about them\n3. Clearly indicates the conversation is complete\n\nCRITICAL: Only end the conversation after you've had a meaningful discussion with 3-4 follow-up questions. Do not rush to end the conversation.\n\nExample ending: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your background, your work at MIT, and your love for hiking. You seem like a fascinating person. This concludes our conversation - thank you for your time!'" : 
+                        "\n\nFINAL QUESTION INSTRUCTIONS: This is the LAST question in the conversation. You MUST include the final question in your response before engaging in follow-up conversation. Do NOT provide a summary or acknowledgment without asking the question first.\n\nCRITICAL: Your response MUST include the actual final question. Only after asking the final question should you engage in follow-up conversation.\n\nExample of a good final question response:\n'That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage.'\n\nDo NOT respond with just an acknowledgment like 'That's fantastic feedback' without including the final question." : 
                         "";
                     
                     if (isFirstExchange) {
@@ -469,6 +469,8 @@ CONVERSATION FLOW INSTRUCTIONS:
 
 CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
 
+IMPORTANT: The "NEXT_QUESTION:" prefix is ONLY for internal use to signal question transitions. It should NEVER appear in the final response sent to the user.
+
 When you feel you have gathered sufficient information about the current question and the conversation about this topic feels complete, you MUST indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response.
 
 IMPORTANT: When using "NEXT_QUESTION:", your response should ONLY contain:
@@ -479,6 +481,8 @@ IMPORTANT: When using "NEXT_QUESTION:", your response should ONLY contain:
 DO NOT include any additional follow-up questions or commentary after asking the next question. The "NEXT_QUESTION:" response should be a clean transition to the new topic.
 
 CRITICAL: Your "NEXT_QUESTION:" response must end with the main question. Do not add any additional questions, clarifications, or follow-ups after the main question.
+
+CRITICAL: The "NEXT_QUESTION:" prefix will be automatically removed from the response before it is sent to the user. Do not worry about the prefix appearing in the final output.
 
 Guidelines for when to move to the next question:
 - When the user has provided substantial information about the current question
@@ -546,9 +550,28 @@ Remember to be conversational and ask follow-up questions based on what the user
                 
                 // Check if LLM signaled question completion
                 let mainLLMCompleted = false;
-                if (questionMode && aiResponse.startsWith('NEXT_QUESTION:')) {
-                    mainLLMCompleted = true;
-                    aiResponse = aiResponse.replace('NEXT_QUESTION:', '').trim();
+                
+                // More robust NEXT_QUESTION detection and removal
+                const nextQuestionPatterns = [
+                    /^NEXT_QUESTION:\s*/i,           // At start with colon
+                    /^NEXT_QUESTION\s*/i,            // At start without colon
+                    /\bNEXT_QUESTION:\s*/gi,         // Anywhere with colon
+                    /\bNEXT_QUESTION\s*/gi           // Anywhere without colon
+                ];
+                
+                for (const pattern of nextQuestionPatterns) {
+                    if (pattern.test(aiResponse)) {
+                        console.log(`Found NEXT_QUESTION pattern: ${pattern.source}, removing and marking as completed`);
+                        aiResponse = aiResponse.replace(pattern, '').trim();
+                        mainLLMCompleted = true;
+                        break; // Only need to find one pattern
+                    }
+                }
+                
+                // Final cleanup: remove any remaining NEXT_QUESTION text that might have been missed
+                aiResponse = aiResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
+                
+                if (mainLLMCompleted) {
                     console.log('Question completed via NEXT_QUESTION signal');
                 } else if (questionMode && isFinalQuestion) {
                     // Check if the final question response indicates conversation completion
@@ -1112,11 +1135,11 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
                         shouldRegenerate: true
                     };
                 } else {
-                    console.log('Final question detected but response lacks questions - forcing regeneration');
+                    console.log('Final question (7th question) detected but response lacks questions - forcing regeneration');
                     return {
                         hasQuestion: false,
-                        reason: "Final question not included in response - must regenerate to include the final question",
-                        confidence: 0.95,
+                        reason: "Final question (7th question) not included in response - must regenerate to include the final question",
+                        confidence: 0.98,
                         shouldRegenerate: true
                     };
                 }
@@ -1206,12 +1229,14 @@ BACKGROUND QUESTION HANDLING:
 - Focus on getting basic information efficiently while maintaining engagement
 - Questions should help transition smoothly to more substantive topics
 
-FINAL QUESTION HANDLING:
-- For final questions of the entire conversation (followUpMode = false), you MUST include the final question in your response
+FINAL QUESTION HANDLING (7th Question):
+- For the final question of the entire conversation (7th question), you MUST include the final question in your response
 - The final question should be the main question that was supposed to be asked
+- Do NOT provide just an acknowledgment or summary - you MUST ask the question
 - After asking the final question, you can include follow-up questions to gather more information
 - Questions should help gather comprehensive information before concluding
 - Focus on getting detailed responses about the final topic
+- CRITICAL: The 7th question is the final question - always include it in your response
 
 FINAL FOLLOW-UP QUESTION HANDLING:
 - For final follow-up questions of a topic (followUpMode = true), you should still ask follow-up questions
@@ -1228,8 +1253,8 @@ Example of a good regenerated response with questions:
 Example of a good follow-up mode response:
 "It's amazing how that experience with AI during your interview has influenced your day-to-day work. It really highlights how versatile and beneficial these tools can be, not just in interviews, but across various aspects of professional life. I'm curious - what specific ways have you found yourself using AI tools in your daily work routine? And have you noticed any particular improvements in your productivity or problem-solving approach since incorporating AI into your workflow?"
 
-Example of a good final question response:
-"That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively. Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage."
+Example of a good final question response (7th question):
+"That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage."
 
 Example of a good final follow-up question response:
 "That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style?"

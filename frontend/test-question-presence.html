@@ -81,6 +81,8 @@
         <button onclick="testQuestionPresence()">Test Question Presence Audit</button>
         <button onclick="testResponseRegeneration()">Test Response Regeneration</button>
         <button onclick="testFinalQuestion()">Test Final Question</button>
+        <button onclick="testSeventhQuestion()">Test 7th Question Issue</button>
+        <button onclick="testSixthQuestion()">Test 6th Question NEXT_QUESTION Leakage</button>
         <button onclick="testFinalFollowUpQuestion()">Test Final Follow-Up Question</button>
         <button onclick="testFollowUpMode()">Test Follow-Up Mode</button>
         <button onclick="clearResults()">Clear Results</button>
@@ -372,6 +374,151 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing final follow-up question: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSeventhQuestion() {
+            addResult('Testing 7th question issue (final question without questions)...', 'info');
+            
+            try {
+                // Test with the exact problematic response for the 7th question
+                const testMessage = "That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 6,
+                        questionMode: true,
+                        currentQuestion: "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Have you ever considered or actually used GenAI during a live interview? What happened?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ 7th question test completed', 'success');
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions (regeneration successful)', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions (regeneration failed)', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit) {
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>7th Question Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ 7th question test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing 7th question: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSixthQuestion() {
+            addResult('Testing 6th question NEXT_QUESTION leakage issue...', 'info');
+            
+            try {
+                // Test with a message that might generate a response with NEXT_QUESTION prefix for the 6th question
+                const testMessage = "Yes, I did have a close call once. I was using AI to help me prepare for an interview, and I accidentally included some AI-generated content in my response that was too similar to what the AI had suggested. The interviewer noticed and asked me about it directly. I had to quickly think on my feet and explain that I had used AI as a tool for preparation but that the ideas were my own. It was really nerve-wracking, but I managed to turn it around by being honest about using AI as a preparation tool.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 5,
+                        questionMode: true,
+                        currentQuestion: "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: false,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ 6th question test completed', 'success');
+                    
+                    // Check if the response contains NEXT_QUESTION prefix
+                    const hasNextQuestionPrefix = /\bNEXT_QUESTION\b/i.test(chatData.bot_response);
+                    
+                    if (hasNextQuestionPrefix) {
+                        addResult('⚠️ Response contains NEXT_QUESTION prefix (leakage detected)', 'warning');
+                    } else {
+                        addResult('✅ Response does not contain NEXT_QUESTION prefix (no leakage)', 'success');
+                    }
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit) {
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>6th Question Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ 6th question test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing 6th question: ${error.message}`, 'error');
             }
         }
 

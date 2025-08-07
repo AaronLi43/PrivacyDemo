@@ -70,11 +70,20 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 - **Question Words**: What, How, Why, When, Where, Who, Did, Do, Can, Are, Is, Could, Would, Will, Have, Has, Was, Were
 - **Validation**: Ensures questions are relevant and appropriate for context
 
-### Final Question Handling
-- **Special Detection**: Final questions are detected when `isFinalQuestion = true`
-- **Forced Regeneration**: If a final question response lacks questions, it's automatically regenerated
-- **Question Inclusion**: Final questions must include the actual question before concluding
-- **Exception Logic**: Only after the final question has been asked should summaries be allowed
+### Final Question Handling (7th Question)
+- **Special Detection**: Final questions (7th question) are detected when `isFinalQuestion = true`
+- **Forced Regeneration**: If the 7th question response lacks questions, it's automatically regenerated with higher confidence (0.98)
+- **Question Inclusion**: The 7th question must include the actual final question before concluding
+- **Exception Logic**: Only after the 7th question has been asked and answered should summaries be allowed
+- **Specific Issue**: Addresses the problem where the chatbot generates responses like "That's fantastic feedback..." without including the final question
+
+### NEXT_QUESTION Prefix Leakage Fix (6th Question)
+- **Issue**: The "NEXT_QUESTION:" prefix was appearing in responses sent to users
+- **Root Cause**: Incomplete prefix removal logic in the backend
+- **Solution**: Enhanced prefix detection and removal with multiple regex patterns
+- **Patterns**: Handles variations like "NEXT_QUESTION:", "NEXT_QUESTION", and different positions in text
+- **Cleanup**: Final cleanup step removes any remaining NEXT_QUESTION text
+- **System Prompt**: Updated to clarify that prefix is for internal use only
 
 ### Follow-Up Mode Handling
 - **Strict Question Requirement**: When `followUpMode = true`, questions are ALWAYS required in responses
@@ -148,10 +157,11 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 - Responses without questions should trigger regeneration
 - Regenerated responses should contain appropriate questions
 - Follow-up mode responses MUST include questions to guide conversation
-- Final questions MUST include the question before concluding
+- **7th question (final question) MUST include the final question before concluding**
+- **6th question should NOT contain "NEXT_QUESTION:" prefix in user-facing responses**
 - Final follow-up questions MUST include questions to gather more information
 - Background questions should have more lenient requirements
-- Final summaries are only allowed after the final question of the entire conversation has been asked
+- Final summaries are only allowed after the 7th question has been asked and answered
 
 ## Future Enhancements
 
