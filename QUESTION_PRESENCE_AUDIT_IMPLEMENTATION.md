@@ -76,6 +76,12 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 - **Question Inclusion**: Final questions must include the actual question before concluding
 - **Exception Logic**: Only after the final question has been asked should summaries be allowed
 
+### Follow-Up Mode Handling
+- **Strict Question Requirement**: When `followUpMode = true`, questions are ALWAYS required in responses
+- **User Guidance**: Follow-up responses must include questions to guide users on what to say next
+- **Conversation Flow**: Prevents responses that leave users unsure how to continue the conversation
+- **Regeneration Logic**: Any follow-up response without questions is automatically regenerated
+
 ### Final Follow-Up Question Handling
 - **Distinction**: Final follow-up questions (`isFinalQuestion = true` AND `followUpMode = true`) are different from final questions of the conversation
 - **Question Requirement**: Final follow-up questions must still include questions to gather more information
@@ -141,6 +147,7 @@ This implementation adds a new audit LLM feature that checks if chatbot response
 ### Expected Behavior
 - Responses without questions should trigger regeneration
 - Regenerated responses should contain appropriate questions
+- Follow-up mode responses MUST include questions to guide conversation
 - Final questions MUST include the question before concluding
 - Final follow-up questions MUST include questions to gather more information
 - Background questions should have more lenient requirements

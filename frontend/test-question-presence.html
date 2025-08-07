@@ -82,6 +82,7 @@
         <button onclick="testResponseRegeneration()">Test Response Regeneration</button>
         <button onclick="testFinalQuestion()">Test Final Question</button>
         <button onclick="testFinalFollowUpQuestion()">Test Final Follow-Up Question</button>
+        <button onclick="testFollowUpMode()">Test Follow-Up Mode</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -371,6 +372,79 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing final follow-up question: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFollowUpMode() {
+            addResult('Testing follow-up mode scenario...', 'info');
+            
+            try {
+                // Test with the exact problematic responses mentioned by the user
+                const testMessages = [
+                    "It's amazing how that experience with AI during your interview has influenced your day-to-day work. It really highlights how versatile and beneficial these tools can be, not just in interviews, but across various aspects of professional life.",
+                    "It sounds like you've implemented a thoughtful and effective approach to managing AI-generated content, turning a close call into an opportunity for growth and collaboration. It's impressive how your team has adapted and fostered a culture of continuous learning and improvement with AI tools."
+                ];
+
+                for (let i = 0; i < testMessages.length; i++) {
+                    const testMessage = testMessages[i];
+                    addResult(`Testing follow-up response ${i + 1}: "${testMessage.substring(0, 50)}..."`, 'info');
+                    
+                    const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: testMessage,
+                            step: 2,
+                            questionMode: true,
+                            currentQuestion: "What specific ways have you found yourself using AI tools in your daily work routine?",
+                            predefinedQuestions: [
+                                "What specific ways have you found yourself using AI tools in your daily work routine?",
+                                "Have you noticed any particular improvements in your productivity?",
+                                "How has your team adapted to using AI tools?"
+                            ],
+                            isFinalQuestion: false,
+                            followUpMode: true
+                        })
+                    });
+
+                    const chatData = await chatResponse.json();
+                    
+                    if (chatData.success) {
+                        addResult(`✅ Follow-up mode test ${i + 1} completed`, 'success');
+                        
+                        // Check if the response was regenerated
+                        const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                           /\?$/.test(chatData.bot_response);
+                        
+                        if (hasQuestion) {
+                            addResult(`✅ Response ${i + 1} contains questions (regeneration successful)`, 'success');
+                        } else {
+                            addResult(`⚠️ Response ${i + 1} does not contain questions (regeneration failed)`, 'warning');
+                        }
+                        
+                        if (chatData.question_presence_audit) {
+                            const presenceDiv = document.createElement('div');
+                            presenceDiv.className = 'presence-result';
+                            presenceDiv.innerHTML = `
+                                <h4>Follow-Up Mode Test ${i + 1} Audit Result:</h4>
+                                <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                                <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                                <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                                <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                            `;
+                            document.getElementById('results').appendChild(presenceDiv);
+                        }
+                        
+                        addResult(`Response ${i + 1}: ${chatData.bot_response}`, 'info');
+                    } else {
+                        addResult(`❌ Follow-up mode test ${i + 1} failed: ${chatData.error}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing follow-up mode: ${error.message}`, 'error');
             }
         }
 

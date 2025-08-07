@@ -1025,7 +1025,8 @@ QUESTION PRESENCE GUIDELINES:
 - For main questions: Questions should be engaging and encourage detailed responses
 - For final questions: The AI MUST include the final question in the response before concluding
 
-CRITICAL FINAL QUESTION RULE:
+CRITICAL RULES:
+- If followUpMode = true, the response MUST contain questions to guide the conversation forward
 - If isFinalQuestion = true AND followUpMode = false AND the response does not contain the final question, it MUST be regenerated
 - If isFinalQuestion = true AND followUpMode = true, this is the final follow-up question for a topic, not the final question of the conversation
 - For final follow-up questions (followUpMode = true), the AI should still ask follow-up questions to gather more information
@@ -1033,10 +1034,11 @@ CRITICAL FINAL QUESTION RULE:
 
 EXCEPTIONS (when questions are NOT required):
 - When the AI is providing a final summary or conclusion AFTER the final question of the entire conversation has been asked (isFinalQuestion = true AND followUpMode = false)
-- When the AI is acknowledging information without needing more details
-- When the AI is transitioning between topics without needing user input
+- When the AI is acknowledging information without needing more details (ONLY when NOT in followUpMode)
+- When the AI is transitioning between topics without needing user input (ONLY when NOT in followUpMode)
 
 IMPORTANT: 
+- If followUpMode = true, questions are ALWAYS required to guide the conversation
 - For final questions of the entire conversation (isFinalQuestion = true AND followUpMode = false), the AI MUST still ask the final question before concluding
 - For final follow-up questions of a topic (isFinalQuestion = true AND followUpMode = true), the AI should still ask follow-up questions to gather more information
 - Only after the final question of the entire conversation has been asked and the user has responded should the AI provide a summary without questions
@@ -1059,6 +1061,7 @@ EXAMPLES:
 - Response with good question: {"hasQuestion": true, "reason": "Response includes relevant follow-up question", "confidence": 0.9, "shouldRegenerate": false}
 - Response without question (needs regeneration): {"hasQuestion": false, "reason": "Response lacks engaging questions to continue conversation", "confidence": 0.8, "shouldRegenerate": true}
 - Response without question (final question not asked): {"hasQuestion": false, "reason": "Final question not yet asked, should include the final question", "confidence": 0.9, "shouldRegenerate": true}
+- Response without question (follow-up mode): {"hasQuestion": false, "reason": "Follow-up mode requires questions to guide conversation", "confidence": 0.95, "shouldRegenerate": true}
 - Response without question (final follow-up question): {"hasQuestion": false, "reason": "Final follow-up question should still include questions to gather more information", "confidence": 0.9, "shouldRegenerate": true}
 - Response without question (exception - after final question): {"hasQuestion": false, "reason": "Final summary response after final question was asked, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
 - Response with irrelevant question: {"hasQuestion": true, "reason": "Response has question but it's not relevant to current topic", "confidence": 0.7, "shouldRegenerate": true}
@@ -1074,6 +1077,23 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
         if (recentMessages.length > 0) {
             const contextMessage = `Recent conversation context:\n${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
             auditMessages.push({ role: 'user', content: contextMessage });
+        }
+
+        // Special check for follow-up mode - questions are always required
+        if (followUpMode) {
+            const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
+            const endsWithQuestionMark = /\?$/;
+            const hasQuestion = questionWords.test(aiResponse) || endsWithQuestionMark.test(aiResponse);
+            
+            if (!hasQuestion) {
+                console.log('Follow-up mode detected but response lacks questions - forcing regeneration');
+                return {
+                    hasQuestion: false,
+                    reason: "Follow-up mode requires questions to guide conversation",
+                    confidence: 0.95,
+                    shouldRegenerate: true
+                };
+            }
         }
 
         // Special check for final questions and final follow-up questions
@@ -1173,6 +1193,14 @@ QUESTION GUIDELINES:
 - Use phrases like "I'm curious about...", "I'd love to hear more about...", "That's interesting! Can you tell me..."
 - Make questions feel natural and conversational, not robotic
 
+FOLLOW-UP MODE HANDLING:
+- When in follow-up mode, you MUST include questions to guide the conversation
+- Questions are ALWAYS required in follow-up mode to keep the conversation flowing
+- Questions should help gather more detailed information about the current topic
+- Keep the conversation engaging and interactive
+- Questions should be specific to the user's previous response
+- Users need guidance on what to say next - provide clear questions
+
 BACKGROUND QUESTION HANDLING:
 - For background questions (education, job, AI experience), be more concise but still ask relevant questions
 - Focus on getting basic information efficiently while maintaining engagement
@@ -1196,6 +1224,9 @@ IMPORTANT: Your response should be a single, cohesive message that naturally inc
 
 Example of a good regenerated response with questions:
 "That's fascinating! I can see how your computer science background at MIT would give you a great foundation for understanding AI tools. I'm curious about your first experience with ChatGPT - what made you decide to try it for interview preparation? And what specific aspects of your interview prep did you find it most helpful for?"
+
+Example of a good follow-up mode response:
+"It's amazing how that experience with AI during your interview has influenced your day-to-day work. It really highlights how versatile and beneficial these tools can be, not just in interviews, but across various aspects of professional life. I'm curious - what specific ways have you found yourself using AI tools in your daily work routine? And have you noticed any particular improvements in your productivity or problem-solving approach since incorporating AI into your workflow?"
 
 Example of a good final question response:
 "That's fantastic feedback to receive. It's clear that your dedication to using GenAI for preparation really paid off, especially in terms of communicating your thought process effectively. Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage."
