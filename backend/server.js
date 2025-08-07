@@ -56,12 +56,26 @@ console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 // Global mode configuration
 let currentMode = 'chat';
 
+// CORS configuration
+const corsOrigins = process.env.CORS_ORIGINS ? 
+    process.env.CORS_ORIGINS.split(',') : 
+    [
+        'https://privacy-demo-flame.vercel.app',
+        'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
+        'http://localhost:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:8000',
+        'http://127.0.0.1:3000'
+    ];
+
+console.log('🔧 CORS origins configured:', corsOrigins);
+
 // Middleware
 app.use(cors({
-    origin: true, // Allow all origins
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
 }));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
