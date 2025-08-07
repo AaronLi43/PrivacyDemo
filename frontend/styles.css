@@ -1009,19 +1009,7 @@ textarea.copy-paste-disabled:focus {
 
 /* Action Buttons Panel - Fixed Position */
 .action-buttons-panel {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    background-color: var(--container-bg);
-    padding: 1rem;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    border: 2px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-width: 200px;
+    display: none; /* Completely hide the action buttons panel */
 }
 
 .config-button-container {
