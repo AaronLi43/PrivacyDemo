@@ -2379,6 +2379,9 @@ app.post('/api/upload-to-s3', async (req, res) => {
         // Prepare the data for upload
         const jsonData = JSON.stringify(exportData, null, 2);
         
+        // Extract mode from export data
+        const mode = exportData.metadata && exportData.metadata.mode ? exportData.metadata.mode : 'unknown';
+        
         // Upload to S3
         const uploadParams = {
             Bucket: 'prolificjson',
@@ -2388,20 +2391,22 @@ app.post('/api/upload-to-s3', async (req, res) => {
             Metadata: {
                 'prolific-id': prolificId || 'unknown',
                 'upload-timestamp': new Date().toISOString(),
-                'conversation-length': exportData.conversation ? exportData.conversation.length.toString() : '0'
+                'conversation-length': exportData.conversation ? exportData.conversation.length.toString() : '0',
+                'mode': mode
             }
         };
 
         const command = new PutObjectCommand(uploadParams);
         await s3Client.send(command);
 
-        console.log(`✅ Successfully uploaded ${filename} to S3`);
+        console.log(`✅ Successfully uploaded ${filename} to S3 (Mode: ${mode})`);
 
         res.json({
             success: true,
             message: 'File uploaded to S3 successfully',
             filename: filename,
-            s3_url: `s3://prolificjson/${filename}`
+            s3_url: `s3://prolificjson/${filename}`,
+            mode: mode
         });
 
     } catch (error) {
