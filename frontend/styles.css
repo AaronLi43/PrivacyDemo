@@ -70,18 +70,7 @@ body {
     text-align: center;
 }
 
-.toggle-sidebar-btn {
-    background-color: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-}
 
-.toggle-sidebar-btn:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
-}
 
 .header h1 {
     font-size: 2.5rem;
@@ -1002,53 +991,7 @@ textarea.copy-paste-disabled:focus {
     border: 1px solid rgba(40, 167, 69, 0.3);
 }
 
-/* Action Buttons Panel - Fixed Position */
-.action-buttons-panel {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    background-color: var(--container-bg);
-    padding: 1rem;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    border: 2px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-width: 200px;
-}
 
-.config-button-container {
-    display: flex;
-    justify-content: center;
-}
-
-.config-button-container .btn {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    width: 100%;
-}
-
-/* Export Buttons Container */
-.export-buttons-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.export-buttons-container .btn {
-    min-width: 150px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    width: 100%;
-}
 
 /* Privacy Popup */
 .privacy-popup {
@@ -1573,37 +1516,7 @@ textarea.copy-paste-disabled:focus {
         gap: 1rem;
     }
     
-    .action-buttons-panel {
-        top: 10px;
-        right: 10px;
-        left: 10px;
-        min-width: auto;
-        flex-direction: row;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    
-    .config-button-container {
-        flex: 1;
-        min-width: 120px;
-        max-width: 200px;
-    }
-    
-    .export-buttons-container {
-        flex-direction: row;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        flex: 2;
-    }
-    
-    .export-buttons-container .btn {
-        min-width: 120px;
-        height: 44px;
-        flex: 1;
-        max-width: 200px;
-    }
+
     
     .choice-buttons {
         flex-direction: column;
