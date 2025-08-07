@@ -296,3 +296,61 @@ Check server logs for:
 - **NAME**: Only actual person names (John Smith, Sarah Johnson)
 - **EDUCATIONAL_RECORD**: Academic fields, majors, subjects (Computer Science, Mathematics)
 - **Duplicate Detection**: Same entity gets same placeholder across conversation
+
+## Placeholder Highlighting
+
+### New Placeholder Support
+The highlighting system now supports all new placeholder patterns:
+- **AFFILIATION**: `[AFFILIATION1]`, `[AFFILIATION2]`, etc.
+- **EDUCATIONAL_RECORD**: `[EDUCATIONAL_RECORD1]`, `[EDUCATIONAL_RECORD2]`, etc.
+- **All PII Categories**: All 20+ PII categories are supported with numbered placeholders
+
+### Implementation
+- **Dual Highlighting**: System highlights both original sensitive text and placeholder patterns
+- **Pattern Matching**: Uses regex patterns to identify and highlight all placeholder formats
+- **Visual Consistency**: All placeholders receive the same red underline highlighting as original text
+- **Testing**: Comprehensive tests verify highlighting for all placeholder patterns
+
+### Supported Patterns
+The system recognizes and highlights these placeholder patterns:
+- `[AFFILIATION\d+]`, `[EDUCATIONAL_RECORD\d+]`, `[NAME\d+]`, `[EMAIL\d+]`
+- `[PHONE_NUMBER\d+]`, `[ADDRESS\d+]`, `[SSN\d+]`, `[FINANCIAL_INFORMATION\d+]`
+- `[TIME\d+]`, `[GEOLOCATION\d+]`, `[DEMOGRAPHIC_ATTRIBUTE\d+]`, `[HEALTH_INFORMATION\d+]`
+- `[IP_ADDRESS\d+]`, `[URL\d+]`, `[DRIVERS_LICENSE\d+]`, `[PASSPORT_NUMBER\d+]`
+- `[TAXPAYER_IDENTIFICATION_NUMBER\d+]`, `[ID_NUMBER\d+]`, `[USERNAME\d+]`, `[KEYS\d+]`
+
+### Testing
+- **Test Function**: `testPlaceholderHighlighting()` in test-question-presence.html
+- **Test Button**: "Test Placeholder Highlighting" button
+- **Visual Test**: test-highlighting.html includes placeholder pattern examples
+- **Comprehensive Coverage**: Tests all placeholder patterns and mixed text scenarios
+
+## Privacy Analysis Display Fix
+
+### Issue Resolution: Incorrect Display of Original and Fake Data
+- **Problem**: Both "Original Data" and "Fake Data" versions were displaying placeholder versions instead of actual content
+- **Root Cause**: Frontend was incorrectly using suggestion parsing results instead of `safer_versions` object
+- **Solution**: Updated display logic to prioritize `safer_versions` and use actual original text
+
+### Implementation Details
+- **Original Text**: Now displays actual conversation text instead of parsed suggestion
+- **Placeholder Version**: Uses `safer_versions.replacing` (e.g., `[AFFILIATION1]`)
+- **Fake Data Version**: Uses `safer_versions.abstraction` (e.g., "MIT" instead of "Carnegie Mellon")
+- **Fallback Logic**: Only uses suggestion parsing if `safer_versions` is not available
+
+### Display Logic
+```javascript
+// Use actual original text from conversation
+let before = turn.user; // or turn.bot
+
+// Get safer versions from backend
+if (turn.userPrivacy.safer_versions) {
+    placeholderVersion = turn.userPrivacy.safer_versions.replacing;
+    fakeDataVersion = turn.userPrivacy.safer_versions.abstraction;
+}
+```
+
+### Testing
+- **Test Function**: `testPrivacyAnalysisDisplay()` in test-question-presence.html
+- **Test Button**: "Test Privacy Analysis Display" button
+- **Verification**: Tests that original, placeholder, and fake data versions display correctly

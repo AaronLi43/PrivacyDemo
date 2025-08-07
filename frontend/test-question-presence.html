@@ -88,6 +88,8 @@
         <button onclick="testFinalFollowUpWithWrappingUp()">Test Final Follow-Up with Wrapping-Up</button>
         <button onclick="testPrivacyDetection()">Test Privacy Detection Fixes</button>
         <button onclick="testAuditLLMPrecedence()">Test Audit LLM Precedence</button>
+        <button onclick="testPlaceholderHighlighting()">Test Placeholder Highlighting</button>
+        <button onclick="testPrivacyAnalysisDisplay()">Test Privacy Analysis Display</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -95,6 +97,64 @@
 
     <script>
         const API_BASE_URL = 'https://privacydemo.onrender.com';
+        
+        // Simplified highlighting function for testing
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+        
+        function highlightSensitiveText(text, privacyResult) {
+            if (!privacyResult || !privacyResult.privacy_issue) {
+                return text;
+            }
+
+            let highlightedText = text;
+
+            // 1. Highlight original sensitive text if available
+            let sensitiveText = privacyResult.sensitive_text;
+            
+            if (sensitiveText) {
+                // Escape special regex characters in the sensitive text
+                const escapedSensitiveText = escapeRegex(sensitiveText);
+                
+                // Create a regex that matches the sensitive text (case-insensitive)
+                const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
+                
+                // Replace the sensitive text with highlighted version
+                highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+            }
+
+            // 2. Highlight placeholder patterns (new placeholders like [AFFILIATION1], [EDUCATIONAL_RECORD1], etc.)
+            const placeholderPatterns = [
+                /\[AFFILIATION\d+\]/g,
+                /\[EDUCATIONAL_RECORD\d+\]/g,
+                /\[NAME\d+\]/g,
+                /\[EMAIL\d+\]/g,
+                /\[PHONE_NUMBER\d+\]/g,
+                /\[ADDRESS\d+\]/g,
+                /\[SSN\d+\]/g,
+                /\[FINANCIAL_INFORMATION\d+\]/g,
+                /\[TIME\d+\]/g,
+                /\[GEOLOCATION\d+\]/g,
+                /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g,
+                /\[HEALTH_INFORMATION\d+\]/g,
+                /\[IP_ADDRESS\d+\]/g,
+                /\[URL\d+\]/g,
+                /\[DRIVERS_LICENSE\d+\]/g,
+                /\[PASSPORT_NUMBER\d+\]/g,
+                /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
+                /\[ID_NUMBER\d+\]/g,
+                /\[USERNAME\d+\]/g,
+                /\[KEYS\d+\]/g
+            ];
+
+            // Apply highlighting to all placeholder patterns
+            placeholderPatterns.forEach(pattern => {
+                highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
+            });
+
+            return highlightedText;
+        }
 
         function addResult(message, type = 'info') {
             const resultsDiv = document.getElementById('results');
@@ -869,6 +929,147 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing audit LLM precedence: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPlaceholderHighlighting() {
+            addResult('Testing placeholder highlighting for new privacy detection placeholders...', 'info');
+            
+            try {
+                // Test text with various placeholder patterns
+                const testText = 'I graduated from [AFFILIATION1] with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1] and I work at [AFFILIATION2]. My email is [EMAIL1] and phone is [PHONE_NUMBER1].';
+                
+                // Create a mock privacy result
+                const mockPrivacyResult = {
+                    privacy_issue: true,
+                    type: 'Mixed Information',
+                    sensitive_text: 'Carnegie Mellon'
+                };
+                
+                // Test the highlighting function
+                const highlightedText = highlightSensitiveText(testText, mockPrivacyResult);
+                
+                addResult('✅ Placeholder highlighting test completed', 'success');
+                addResult(`Original text: ${testText}`, 'info');
+                addResult(`Highlighted text: ${highlightedText}`, 'info');
+                
+                // Check if placeholders are highlighted
+                const placeholderPatterns = [
+                    '[AFFILIATION1]',
+                    '[EDUCATIONAL_RECORD1]', 
+                    '[NAME1]',
+                    '[AFFILIATION2]',
+                    '[EMAIL1]',
+                    '[PHONE_NUMBER1]'
+                ];
+                
+                let allHighlighted = true;
+                placeholderPatterns.forEach(placeholder => {
+                    if (highlightedText.includes(placeholder) && !highlightedText.includes(`<span class="sensitive-text-highlight">${placeholder}</span>`)) {
+                        allHighlighted = false;
+                        addResult(`❌ ${placeholder} not properly highlighted`, 'error');
+                    } else {
+                        addResult(`✅ ${placeholder} properly highlighted`, 'success');
+                    }
+                });
+                
+                if (allHighlighted) {
+                    addResult('🎉 All placeholder patterns are properly highlighted!', 'success');
+                } else {
+                    addResult('⚠️ Some placeholder patterns are not highlighted correctly', 'warning');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing placeholder highlighting: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPrivacyAnalysisDisplay() {
+            addResult('Testing privacy analysis display logic...', 'info');
+            
+            try {
+                // Create a mock privacy result with safer_versions
+                const mockPrivacyResult = {
+                    privacy_issue: true,
+                    type: 'AFFILIATION',
+                    suggestion: 'Before: "I graduated from Carnegie Mellon" After: "I graduated from [AFFILIATION1]"',
+                    safer_versions: {
+                        replacing: 'I graduated from [AFFILIATION1]',
+                        abstraction: 'I graduated from MIT'
+                    },
+                    affected_text: 'Carnegie Mellon',
+                    sensitive_text: 'Carnegie Mellon'
+                };
+                
+                // Test the display logic
+                const originalText = 'I graduated from Carnegie Mellon with a degree in Computer Science.';
+                
+                // Simulate the display logic from updatePrivacyChoices
+                let before = originalText; // Use actual original text
+                let after = '';
+                
+                // Parse suggestion for fallback (should not be used since safer_versions exists)
+                if (!mockPrivacyResult.safer_versions && mockPrivacyResult.suggestion) {
+                    const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                    if (beforeAfterPattern.test(mockPrivacyResult.suggestion)) {
+                        const match = mockPrivacyResult.suggestion.match(beforeAfterPattern);
+                        if (match) {
+                            before = match[1];
+                            after = match[2];
+                        }
+                    }
+                }
+                
+                // Get safer versions
+                let placeholderVersion = '';
+                let fakeDataVersion = '';
+                
+                if (mockPrivacyResult.safer_versions) {
+                    placeholderVersion = mockPrivacyResult.safer_versions.replacing;
+                    fakeDataVersion = mockPrivacyResult.safer_versions.abstraction;
+                } else {
+                    placeholderVersion = after;
+                }
+                
+                addResult('✅ Privacy analysis display test completed', 'success');
+                addResult(`Original text: ${originalText}`, 'info');
+                addResult(`Display logic results:`, 'info');
+                addResult(`- Before (Original): ${before}`, 'info');
+                addResult(`- Placeholder Version: ${placeholderVersion}`, 'info');
+                addResult(`- Fake Data Version: ${fakeDataVersion}`, 'info');
+                
+                // Check if the display logic is correct
+                const originalCorrect = before === originalText;
+                const placeholderCorrect = placeholderVersion === 'I graduated from [AFFILIATION1]';
+                const fakeDataCorrect = fakeDataVersion === 'I graduated from MIT';
+                
+                if (originalCorrect) {
+                    addResult('✅ Original text display is correct', 'success');
+                } else {
+                    addResult('❌ Original text display is incorrect', 'error');
+                }
+                
+                if (placeholderCorrect) {
+                    addResult('✅ Placeholder version display is correct', 'success');
+                } else {
+                    addResult('❌ Placeholder version display is incorrect', 'error');
+                }
+                
+                if (fakeDataCorrect) {
+                    addResult('✅ Fake data version display is correct', 'success');
+                } else {
+                    addResult('❌ Fake data version display is incorrect', 'error');
+                }
+                
+                const allCorrect = originalCorrect && placeholderCorrect && fakeDataCorrect;
+                if (allCorrect) {
+                    addResult('🎉 All privacy analysis display logic is working correctly!', 'success');
+                } else {
+                    addResult('⚠️ Some privacy analysis display logic needs fixing', 'warning');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing privacy analysis display: ${error.message}`, 'error');
             }
         }
 

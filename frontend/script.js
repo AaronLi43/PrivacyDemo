@@ -3631,14 +3631,17 @@ class PrivacyDemoApp {
             // User message privacy issues
             if (turn.userPrivacy && turn.userPrivacy.privacy_issue) {
                 const userChoice = currentChoices.user || 'none';
+                // Use the actual original text from the conversation
                 let before = turn.user;
                 let after = '';
-                // More robust regex to handle different quote types and spacing
-                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
-                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
-                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                 
-                if (turn.userPrivacy.suggestion) {
+                // Parse suggestion for fallback purposes (only if safer_versions is not available)
+                if (!turn.userPrivacy.safer_versions && turn.userPrivacy.suggestion) {
+                    // More robust regex to handle different quote types and spacing
+                    const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                    const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                    const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                    
                     if (beforeAfterPattern.test(turn.userPrivacy.suggestion)) {
                         const match = turn.userPrivacy.suggestion.match(beforeAfterPattern);
                         if (match) {
@@ -3672,12 +3675,15 @@ class PrivacyDemoApp {
                 const contextualRiskClass = turn.userPrivacy.contextual_risk ? 'has-contextual-risk' : '';
                 
                 // Get both safer versions if available
-                let placeholderVersion = after;
+                let placeholderVersion = '';
                 let fakeDataVersion = '';
                 
                 if (turn.userPrivacy.safer_versions) {
                     placeholderVersion = turn.userPrivacy.safer_versions.replacing;
                     fakeDataVersion = turn.userPrivacy.safer_versions.abstraction;
+                } else {
+                    // Fallback: use the 'after' variable if safer_versions is not available
+                    placeholderVersion = after;
                 }
                 
                 html += `
@@ -3714,14 +3720,17 @@ class PrivacyDemoApp {
             // Bot message privacy issues
             if (turn.botPrivacy && turn.botPrivacy.privacy_issue) {
                 const botChoice = currentChoices.bot || 'none';
+                // Use the actual original text from the conversation
                 let before = turn.bot;
                 let after = '';
-                // More robust regex to handle different quote types and spacing
-                const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
-                const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
-                const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                 
-                if (turn.botPrivacy.suggestion) {
+                // Parse suggestion for fallback purposes (only if safer_versions is not available)
+                if (!turn.botPrivacy.safer_versions && turn.botPrivacy.suggestion) {
+                    // More robust regex to handle different quote types and spacing
+                    const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
+                    const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
+                    const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
+                    
                     if (beforeAfterPattern.test(turn.botPrivacy.suggestion)) {
                         const match = turn.botPrivacy.suggestion.match(beforeAfterPattern);
                         if (match) {
@@ -3746,12 +3755,15 @@ class PrivacyDemoApp {
                     }
                 }
                 // Get both safer versions if available
-                let placeholderVersion = after;
+                let placeholderVersion = '';
                 let fakeDataVersion = '';
                 
                 if (turn.botPrivacy.safer_versions) {
                     placeholderVersion = turn.botPrivacy.safer_versions.replacing;
                     fakeDataVersion = turn.botPrivacy.safer_versions.abstraction;
+                } else {
+                    // Fallback: use the 'after' variable if safer_versions is not available
+                    placeholderVersion = after;
                 }
                 
                 html += `
@@ -4586,13 +4598,15 @@ class PrivacyDemoApp {
         }
     }
 
-    // Highlight sensitive text with red underlines using backend sensitive_text field
+    // Highlight sensitive text with red underlines using backend sensitive_text field and placeholder patterns
     highlightSensitiveText(text, privacyResult) {
         if (!privacyResult || !privacyResult.privacy_issue) {
             return text;
         }
 
-        // Use the sensitive_text field from the backend if available
+        let highlightedText = text;
+
+        // 1. Highlight original sensitive text if available
         let sensitiveText = privacyResult.sensitive_text;
         
         // Fallback to extracting from suggestion if sensitive_text is not available
@@ -4619,18 +4633,47 @@ class PrivacyDemoApp {
             }
         }
 
-        if (!sensitiveText) {
-            return text;
+        if (sensitiveText) {
+            // Escape special regex characters in the sensitive text
+            const escapedSensitiveText = this.escapeRegex(sensitiveText);
+            
+            // Create a regex that matches the sensitive text (case-insensitive)
+            const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
+            
+            // Replace the sensitive text with highlighted version
+            highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
         }
 
-        // Escape special regex characters in the sensitive text
-        const escapedSensitiveText = this.escapeRegex(sensitiveText);
-        
-        // Create a regex that matches the sensitive text (case-insensitive)
-        const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
-        
-        // Replace the sensitive text with highlighted version
-        return text.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
+        // 2. Highlight placeholder patterns (new placeholders like [AFFILIATION1], [EDUCATIONAL_RECORD1], etc.)
+        const placeholderPatterns = [
+            /\[AFFILIATION\d+\]/g,
+            /\[EDUCATIONAL_RECORD\d+\]/g,
+            /\[NAME\d+\]/g,
+            /\[EMAIL\d+\]/g,
+            /\[PHONE_NUMBER\d+\]/g,
+            /\[ADDRESS\d+\]/g,
+            /\[SSN\d+\]/g,
+            /\[FINANCIAL_INFORMATION\d+\]/g,
+            /\[TIME\d+\]/g,
+            /\[GEOLOCATION\d+\]/g,
+            /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g,
+            /\[HEALTH_INFORMATION\d+\]/g,
+            /\[IP_ADDRESS\d+\]/g,
+            /\[URL\d+\]/g,
+            /\[DRIVERS_LICENSE\d+\]/g,
+            /\[PASSPORT_NUMBER\d+\]/g,
+            /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
+            /\[ID_NUMBER\d+\]/g,
+            /\[USERNAME\d+\]/g,
+            /\[KEYS\d+\]/g
+        ];
+
+        // Apply highlighting to all placeholder patterns
+        placeholderPatterns.forEach(pattern => {
+            highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
+        });
+
+        return highlightedText;
     }
 
     // Apply sensitive text highlighting inline within textarea elements
@@ -4770,26 +4813,77 @@ class PrivacyDemoApp {
     testSensitiveTextHighlighting() {
         console.log('Testing sensitive text highlighting...');
         
-        // Create a test privacy result
-        const testPrivacyResult = {
+        // Test 1: Original sensitive text highlighting
+        const testPrivacyResult1 = {
             privacy_issue: true,
             type: 'Personal Information',
             suggestion: 'Before: "My name is John Smith and I live at 123 Main St" After: "My name is [REDACTED] and I live at [REDACTED]"'
         };
         
-        // Test text with sensitive information
-        const testText = 'My name is John Smith and I live at 123 Main St';
+        const testText1 = 'My name is John Smith and I live at 123 Main St';
+        const highlightedText1 = this.highlightSensitiveText(testText1, testPrivacyResult1);
         
-        // Test the highlighting function
-        const highlightedText = this.highlightSensitiveText(testText, testPrivacyResult);
-        console.log('Original text:', testText);
-        console.log('Highlighted text:', highlightedText);
+        console.log('Test 1 - Original text:', testText1);
+        console.log('Test 1 - Highlighted text:', highlightedText1);
         
-        // Test if the sensitive text was found and highlighted
-        if (highlightedText.includes('sensitive-text-highlight')) {
-            console.log('✅ Sensitive text highlighting test PASSED');
+        // Test 2: New placeholder patterns highlighting
+        const testPrivacyResult2 = {
+            privacy_issue: true,
+            type: 'Mixed Information',
+            sensitive_text: 'Carnegie Mellon'
+        };
+        
+        const testText2 = 'I graduated from [AFFILIATION1] with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1] and I work at [AFFILIATION2].';
+        const highlightedText2 = this.highlightSensitiveText(testText2, testPrivacyResult2);
+        
+        console.log('Test 2 - Original text:', testText2);
+        console.log('Test 2 - Highlighted text:', highlightedText2);
+        
+        // Test 3: Mixed text with both original and placeholders
+        const testPrivacyResult3 = {
+            privacy_issue: true,
+            type: 'Mixed Information',
+            sensitive_text: 'Carnegie Mellon'
+        };
+        
+        const testText3 = 'I graduated from Carnegie Mellon with a degree in [EDUCATIONAL_RECORD1]. My name is [NAME1].';
+        const highlightedText3 = this.highlightSensitiveText(testText3, testPrivacyResult3);
+        
+        console.log('Test 3 - Original text:', testText3);
+        console.log('Test 3 - Highlighted text:', highlightedText3);
+        
+        // Check results
+        const test1Passed = highlightedText1.includes('sensitive-text-highlight');
+        const test2Passed = highlightedText2.includes('sensitive-text-highlight') && 
+                           highlightedText2.includes('[AFFILIATION1]') && 
+                           highlightedText2.includes('[EDUCATIONAL_RECORD1]');
+        const test3Passed = highlightedText3.includes('sensitive-text-highlight') && 
+                           highlightedText3.includes('Carnegie Mellon') && 
+                           highlightedText3.includes('[EDUCATIONAL_RECORD1]');
+        
+        if (test1Passed) {
+            console.log('✅ Test 1 PASSED - Original sensitive text highlighting');
         } else {
-            console.log('❌ Sensitive text highlighting test FAILED');
+            console.log('❌ Test 1 FAILED - Original sensitive text highlighting');
+        }
+        
+        if (test2Passed) {
+            console.log('✅ Test 2 PASSED - New placeholder patterns highlighting');
+        } else {
+            console.log('❌ Test 2 FAILED - New placeholder patterns highlighting');
+        }
+        
+        if (test3Passed) {
+            console.log('✅ Test 3 PASSED - Mixed text highlighting');
+        } else {
+            console.log('❌ Test 3 FAILED - Mixed text highlighting');
+        }
+        
+        const allTestsPassed = test1Passed && test2Passed && test3Passed;
+        if (allTestsPassed) {
+            console.log('🎉 All sensitive text highlighting tests PASSED');
+        } else {
+            console.log('❌ Some sensitive text highlighting tests FAILED');
         }
     }
 }
