@@ -1418,8 +1418,8 @@ class PrivacyDemoApp {
         this.state.userAgentResponding = true;
         
         try {
-            // Generate a personal experience response based on the question
-            const response = this.generatePersonalResponse(botMessage);
+            // Generate a personal experience response using LLM API
+            const response = await this.generatePersonalResponseWithLLM(botMessage);
             
             // Add a small delay to make it feel more natural
             await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
@@ -1440,13 +1440,66 @@ class PrivacyDemoApp {
             
         } catch (error) {
             console.error('Error generating user agent response:', error);
+            // Fallback to predefined responses if LLM fails
+            const fallbackResponse = this.generatePersonalResponse(botMessage);
+            this.state.conversationLog.push({
+                user: fallbackResponse,
+                bot: '',
+                timestamp: new Date().toISOString()
+            });
+            this.state.currentStep++;
+            this.updateUI();
+            this.scrollToBottom();
+            await this.sendUserAgentMessage(fallbackResponse);
         } finally {
             this.state.userAgentResponding = false;
         }
     }
 
+    async generatePersonalResponseWithLLM(botMessage) {
+        try {
+            console.log('User Agent: Generating response with LLM for:', botMessage);
+            
+            // Prepare conversation history for context
+            const conversationHistory = this.state.conversationLog.map(entry => ({
+                role: entry.user ? 'user' : 'assistant',
+                content: entry.user || entry.bot || ''
+            }));
+            
+            // Call the LLM API
+            const response = await fetch('/api/generate_user_agent_response', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    botMessage: botMessage,
+                    conversationHistory: conversationHistory,
+                    userProfile: null // Can be extended to include user profile
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.user_agent_response) {
+                console.log('User Agent: LLM response generated successfully');
+                return data.user_agent_response;
+            } else {
+                throw new Error('Invalid response from LLM API');
+            }
+            
+        } catch (error) {
+            console.error('User Agent: Error generating LLM response:', error);
+            throw error;
+        }
+    }
+
     generatePersonalResponse(botMessage) {
-        // Generate contextual personal responses based on the question
+        // Fallback predefined responses (used when LLM fails)
         const responses = {
             education: [
                 "I studied Computer Science at MIT. It was really challenging but I loved the problem-solving aspects. I focused on artificial intelligence and machine learning, which is why I'm so interested in this topic.",

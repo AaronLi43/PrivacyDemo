@@ -1963,7 +1963,8 @@ app.get('/', (req, res) => {
             test_connection: '/api/test_connection',
             set_mode: '/api/set_mode',
             reset: '/api/reset',
-            export: '/api/export'
+            export: '/api/export',
+            generate_user_agent_response: '/api/generate_user_agent_response'
         }
     });
 });
@@ -1979,4 +1980,120 @@ app.listen(PORT, () => {
     console.log(`🚀 Privacy Demo Backend API running on port ${PORT}`);
     console.log(`📡 API endpoints available at http://localhost:${PORT}/api/*`);
     console.log(`🔍 Health check: http://localhost:${PORT}/`);
-}); 
+});
+
+// User Agent Response Generation API
+app.post('/api/generate_user_agent_response', async (req, res) => {
+    try {
+        const { botMessage, conversationHistory = [], userProfile = null } = req.body;
+        
+        if (!botMessage || botMessage.trim() === '') {
+            return res.status(400).json({ error: 'Bot message is required' });
+        }
+
+        if (!openaiClient) {
+            return res.status(500).json({ error: 'LLM service not available' });
+        }
+
+        // Generate user agent response using LLM
+        const userAgentResponse = await generateUserAgentResponse(botMessage, conversationHistory, userProfile);
+        
+        res.json({
+            success: true,
+            user_agent_response: userAgentResponse,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('User agent response generation error:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate user agent response',
+            details: error.message 
+        });
+    }
+});
+
+// Helper function to generate user agent response using LLM
+async function generateUserAgentResponse(botMessage, conversationHistory = [], userProfile = null) {
+    if (!openaiClient) {
+        throw new Error('LLM service not available');
+    }
+
+    try {
+        // Build context from conversation history
+        let conversationContext = '';
+        if (conversationHistory && conversationHistory.length > 0) {
+            const recentMessages = conversationHistory.slice(-6); // Last 6 messages for context
+            conversationContext = `\n\nRecent conversation context:\n${recentMessages.map(msg => 
+                `${msg.role === 'user' ? 'User' : 'Bot'}: ${msg.content}`
+            ).join('\n')}`;
+        }
+
+        // Build user profile context
+        let profileContext = '';
+        if (userProfile) {
+            profileContext = `\n\nUser Profile:\n${JSON.stringify(userProfile, null, 2)}`;
+        }
+
+        const systemPrompt = `You are a helpful AI assistant that generates realistic, personal responses for a user agent in a conversation about AI and job interviews.
+
+Your task is to generate a natural, personal response to the bot's question that feels authentic and conversational. The response should:
+
+1. Be personal and specific - include realistic details about education, work experience, or AI usage
+2. Be conversational and natural - not robotic or overly formal
+3. Be consistent with any previous responses in the conversation
+4. Show genuine interest and engagement with the topic
+5. Be appropriate in length (2-4 sentences typically)
+6. Include realistic personal details that make sense for the context
+
+IMPORTANT GUIDELINES:
+- Generate responses that feel like they come from a real person
+- Include specific details like university names, job titles, company names, etc.
+- Make responses feel natural and conversational
+- Be consistent with the user's background if mentioned before
+- Avoid generic or vague responses
+- Don't be overly enthusiastic or robotic
+- Keep responses authentic and believable
+
+RESPONSE CATEGORIES:
+- Education: Include realistic university/college details, majors, experiences
+- Work: Include realistic job titles, companies, experiences, timeframes
+- AI Experience: Include realistic AI tools, usage patterns, timeframes, experiences
+- Interview Preparation: Include realistic interview scenarios, AI usage, outcomes
+- AI Concerns: Include realistic worries, privacy concerns, job security concerns
+- AI Benefits: Include realistic benefits, time savings, productivity gains
+
+${profileContext}
+
+${conversationContext}
+
+Generate a natural, personal response to this question: "${botMessage}"
+
+Response:`;
+
+        const messages = [
+            { role: 'system', content: systemPrompt }
+        ];
+
+        const completion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: messages,
+            max_tokens: 300,
+            temperature: 0.8
+        });
+
+        const response = completion.choices[0].message.content.trim();
+        
+        // Validate the response
+        if (!response || response.length === 0) {
+            throw new Error('Generated response is empty');
+        }
+
+        console.log(`User Agent Response Generated: "${response}"`);
+        return response;
+
+    } catch (error) {
+        console.error('Error generating user agent response:', error);
+        throw error;
+    }
+} 
