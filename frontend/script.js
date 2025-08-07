@@ -1859,6 +1859,14 @@ class PrivacyDemoApp {
                         console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
                     }
                     
+                    // Check if current question is a background question
+                    const backgroundQuestions = [
+                        "Tell me about your educational background - what did you study in college or university?",
+                        "I'd love to hear about your current work - what do you do for a living?",
+                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+                    ];
+                    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+                    
                     console.log('Current question details:');
                     console.log('- Current question index:', this.state.currentQuestionIndex);
                     console.log('- Current question text:', currentQuestion);
@@ -1868,14 +1876,6 @@ class PrivacyDemoApp {
                     
                     // Handle follow-up questions from audit LLM (but not for background questions)
                     if (response.follow_up_questions && response.follow_up_questions.length > 0) {
-                        // Check if current question is a background question
-                        const backgroundQuestions = [
-                            "Tell me about your educational background - what did you study in college or university?",
-                            "I'd love to hear about your current work - what do you do for a living?",
-                            "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
-                        ];
-                        const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
-                        
                         if (!isBackgroundQuestion) {
                             console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
                             this.state.followUpQuestions = response.follow_up_questions;
@@ -1896,14 +1896,6 @@ class PrivacyDemoApp {
                         this.state.followUpQuestions = [];
                         this.state.currentFollowUpQuestionIndex = 0;
                     }
-                    
-                    // Check if current question is a background question
-                    const backgroundQuestions = [
-                        "Tell me about your educational background - what did you study in college or university?",
-                        "I'd love to hear about your current work - what do you do for a living?",
-                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
-                    ];
-                    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
                     
                     // For background questions, be more lenient about completion
                     const shouldCompleteQuestion = response && (
