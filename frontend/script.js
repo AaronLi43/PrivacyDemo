@@ -3131,9 +3131,11 @@ class PrivacyDemoApp {
         let html = '';
         
         for (let i = 0; i < this.state.conversationLog.length; i++) {
+            // Get analyzed data for this message index
+            const analyzed = this.state.analyzedLog[i];
+            
             // In analysis mode with filter, skip messages without privacy issues
             if (analysisMode && filterActive) {
-                const analyzed = this.state.analyzedLog[i];
                 if (!analyzed || !analyzed.hasPrivacyIssues) continue;
             }
             const turn = this.state.conversationLog[i];
@@ -3144,7 +3146,6 @@ class PrivacyDemoApp {
             const shouldShowEditable = analysisMode || (this.state.mode === 'naive' && this.state.editMode);
             
             if (shouldShowEditable) {
-                const analyzed = this.state.analyzedLog[i];
                 // User privacy issue warning sign
                 if (analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue) {
                     userWarning = '<span class="privacy-warning-sign" data-type="user" data-index="' + i + '" style="cursor: pointer;">&#9888;&#65039;</span>';
@@ -4772,24 +4773,30 @@ class PrivacyDemoApp {
 // Global functions for popup interactions
 function closePrivacyPopup() {
     const popup = document.getElementById('privacy-popup');
-    popup.style.display = 'none';
+    if (popup) {
+        popup.style.display = 'none';
+    }
 }
 
 function closeConsentPopup() {
     const popup = document.getElementById('consent-popup');
-    popup.style.display = 'none';
+    if (popup) {
+        popup.style.display = 'none';
+    }
 }
 
 function closeSurveyPopup() {
     const popup = document.getElementById('survey-popup');
-    popup.style.display = 'none';
+    if (popup) {
+        popup.style.display = 'none';
+    }
 }
-
-
 
 function closeCongratulationPopup() {
     const popup = document.getElementById('congratulation-popup');
-    popup.style.display = 'none';
+    if (popup) {
+        popup.style.display = 'none';
+    }
 }
 
 function closeFreeEditPopup() {
@@ -4798,6 +4805,13 @@ function closeFreeEditPopup() {
         popup.classList.remove('show');
     }
 }
+
+// Expose all popup functions globally
+window.closePrivacyPopup = closePrivacyPopup;
+window.closeConsentPopup = closeConsentPopup;
+window.closeSurveyPopup = closeSurveyPopup;
+window.closeCongratulationPopup = closeCongratulationPopup;
+window.closeFreeEditPopup = closeFreeEditPopup;
 
 // Initialize the application
 const app = new PrivacyDemoApp();
