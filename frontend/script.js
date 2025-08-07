@@ -58,7 +58,9 @@ class PrivacyDemoApp {
             prolificId: null,
             // User agent properties
             userAgentEnabled: false,
-            userAgentResponding: false
+            userAgentResponding: false,
+            // Privacy choices for analysis mode
+            privacyChoices: {}
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -3132,13 +3134,20 @@ class PrivacyDemoApp {
         
         for (let i = 0; i < this.state.conversationLog.length; i++) {
             // Get analyzed data for this message index
-            const analyzed = this.state.analyzedLog[i];
+            const analyzed = this.state.analyzedLog && Array.isArray(this.state.analyzedLog) ? this.state.analyzedLog[i] : null;
+            
+            // Debug logging to help identify the issue
+            if (analysisMode && i === 0) {
+                console.log('Debug: analyzedLog length:', this.state.analyzedLog.length);
+                console.log('Debug: analyzedLog[0]:', this.state.analyzedLog[0]);
+                console.log('Debug: analyzed for index 0:', analyzed);
+            }
             
             // In analysis mode with filter, skip messages without privacy issues
             if (analysisMode && filterActive) {
                 if (!analyzed || !analyzed.hasPrivacyIssues) continue;
             }
-            const turn = this.state.conversationLog[i];
+            const turn = this.state.conversationLog[i] || {};
             let userWarning = '';
             let botWarning = '';
             
@@ -3157,14 +3166,14 @@ class PrivacyDemoApp {
                 html += `<div class="message-pair editable" data-index="${i}">`;
                 
                 // Only show user message if it exists
-                if (turn.user && turn.user.trim()) {
+                if (turn && turn.user && typeof turn.user === 'string' && turn.user.trim()) {
                     // Check if there's a privacy suggestion for this message and user's choice
                     let displayText = turn.user;
                     let privacyIndicator = '';
-                    const userChoice = this.state.privacyChoices[i]?.user;
+                    const userChoice = this.state.privacyChoices && this.state.privacyChoices[i] ? this.state.privacyChoices[i].user : null;
                     
                     // Only apply privacy analysis logic in analysis mode
-                    if (analysisMode && analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue && analyzed.userPrivacy.suggestion) {
+                    if (analysisMode && analyzed && analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue && analyzed.userPrivacy.suggestion && typeof analyzed.userPrivacy.suggestion === 'string') {
                         if (userChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.userPrivacy.suggestion;
@@ -3173,19 +3182,19 @@ class PrivacyDemoApp {
                             const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
                             const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                             
-                            if (beforeAfterPattern.test(analyzed.userPrivacy.suggestion)) {
+                            if (analyzed.userPrivacy.suggestion && beforeAfterPattern.test(analyzed.userPrivacy.suggestion)) {
                                 const match = analyzed.userPrivacy.suggestion.match(beforeAfterPattern);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
-                            } else if (beforeAfterPatternAlt.test(analyzed.userPrivacy.suggestion)) {
+                            } else if (analyzed.userPrivacy.suggestion && beforeAfterPatternAlt.test(analyzed.userPrivacy.suggestion)) {
                                 const match = analyzed.userPrivacy.suggestion.match(beforeAfterPatternAlt);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
-                            } else if (beforeAfterPatternFlexible.test(analyzed.userPrivacy.suggestion)) {
+                            } else if (analyzed.userPrivacy.suggestion && beforeAfterPatternFlexible.test(analyzed.userPrivacy.suggestion)) {
                                 const match = analyzed.userPrivacy.suggestion.match(beforeAfterPatternFlexible);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
                             } else {
@@ -3216,14 +3225,14 @@ class PrivacyDemoApp {
                 }
                 
                 // Only show bot message if it exists
-                if (turn.bot && turn.bot.trim()) {
+                if (turn && turn.bot && typeof turn.bot === 'string' && turn.bot.trim()) {
                     // Check if there's a privacy suggestion for this message and user's choice
                     let displayText = turn.bot;
                     let privacyIndicator = '';
-                    const botChoice = this.state.privacyChoices[i]?.bot;
+                    const botChoice = this.state.privacyChoices && this.state.privacyChoices[i] ? this.state.privacyChoices[i].bot : null;
                     
                     // Only apply privacy analysis logic in analysis mode
-                    if (analysisMode && analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue && analyzed.botPrivacy.suggestion) {
+                    if (analysisMode && analyzed && analyzed.botPrivacy && analyzed.botPrivacy.privacy_issue && analyzed.botPrivacy.suggestion && typeof analyzed.botPrivacy.suggestion === 'string') {
                         if (botChoice === 'accept') {
                             // User chose to accept the safer version - parse the "After" part
                             let after = analyzed.botPrivacy.suggestion;
@@ -3232,19 +3241,19 @@ class PrivacyDemoApp {
                             const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
                             const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
                             
-                            if (beforeAfterPattern.test(analyzed.botPrivacy.suggestion)) {
+                            if (analyzed.botPrivacy.suggestion && beforeAfterPattern.test(analyzed.botPrivacy.suggestion)) {
                                 const match = analyzed.botPrivacy.suggestion.match(beforeAfterPattern);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
-                            } else if (beforeAfterPatternAlt.test(analyzed.botPrivacy.suggestion)) {
+                            } else if (analyzed.botPrivacy.suggestion && beforeAfterPatternAlt.test(analyzed.botPrivacy.suggestion)) {
                                 const match = analyzed.botPrivacy.suggestion.match(beforeAfterPatternAlt);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
-                            } else if (beforeAfterPatternFlexible.test(analyzed.botPrivacy.suggestion)) {
+                            } else if (analyzed.botPrivacy.suggestion && beforeAfterPatternFlexible.test(analyzed.botPrivacy.suggestion)) {
                                 const match = analyzed.botPrivacy.suggestion.match(beforeAfterPatternFlexible);
-                                if (match) {
+                                if (match && match[2]) {
                                     after = match[2];
                                 }
                             } else {
@@ -3279,7 +3288,7 @@ class PrivacyDemoApp {
                 html += `<div class="message-pair" data-index="${i}">`;
                 
                 // Only show user message if it exists
-                if (turn.user && turn.user.trim()) {
+                if (turn && turn.user && typeof turn.user === 'string' && turn.user.trim()) {
                     html += `<div class="message message-user" id="log-entry-user-${i}">
                         <div class="message-header">
                             <i class="fas fa-user"></i>
@@ -3290,7 +3299,7 @@ class PrivacyDemoApp {
                 }
                 
                 // Show bot message if it exists
-                if (turn.bot && turn.bot.trim()) {
+                if (turn && turn.bot && typeof turn.bot === 'string' && turn.bot.trim()) {
                     html += `<div class="message message-bot" id="log-entry-bot-${i}">
                         <div class="message-header">
                             <i class="fas fa-robot"></i>
