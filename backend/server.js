@@ -155,6 +155,9 @@ let globalPiiCounters = {
     EDUCATIONAL_RECORD: 0
 };
 
+// Track detected entities to ensure consistent placeholders across conversation
+const detectedEntities = new Map(); // Map of entity text -> {type, placeholder, sessionId}
+
 // Background questions (first 3 questions - no follow-ups needed)
 const backgroundQuestions = [
     "Tell me about your educational background - what did you study in college or university?",
@@ -231,6 +234,43 @@ function getNextUncompletedQuestionIndex(sessionId) {
 }
 
 // Helper function to get the next placeholder number for a PII category
+// Function to track detected entities and ensure consistent placeholders
+function trackDetectedEntity(entityText, entityType, placeholder, sessionId) {
+    const key = `${entityText.toLowerCase().trim()}_${entityType}`;
+    detectedEntities.set(key, {
+        entityText: entityText,
+        type: entityType,
+        placeholder: placeholder,
+        sessionId: sessionId,
+        timestamp: Date.now()
+    });
+}
+
+// Function to get previously detected entity placeholder
+function getPreviouslyDetectedEntity(entityText, entityType, sessionId) {
+    const key = `${entityText.toLowerCase().trim()}_${entityType}`;
+    const detected = detectedEntities.get(key);
+    if (detected && detected.sessionId === sessionId) {
+        return detected.placeholder;
+    }
+    return null;
+}
+
+// Function to get all previously detected entities for a session
+function getPreviouslyDetectedEntities(sessionId) {
+    const entities = [];
+    for (const [key, value] of detectedEntities.entries()) {
+        if (value.sessionId === sessionId) {
+            entities.push({
+                entityText: value.entityText,
+                type: value.type,
+                placeholder: value.placeholder
+            });
+        }
+    }
+    return entities;
+}
+
 function getNextPlaceholderNumber(piiCategory, sessionId) {
     const session = getSession(sessionId);
     if (session.globalPiiCounters.hasOwnProperty(piiCategory)) {
@@ -528,8 +568,13 @@ Remember to be conversational and ask follow-up questions based on what the user
                 // If in question mode, add context to help the AI understand the current state
                 let userMessage = message;
                 if (questionMode && currentQuestion) {
+                    // Check if this is the final follow-up of the final question
+                    const isFinalFollowUpOfFinalQuestion = isFinalQuestion && followUpMode;
+                    
                     const finalQuestionContext = isFinalQuestion ? 
-                        " This is the FINAL question - engage in natural follow-up conversation with 3-4 questions before ending with a thank you and summary." : 
+                        (isFinalFollowUpOfFinalQuestion ? 
+                            " This is the FINAL follow-up of the FINAL question - after asking your follow-up question, include wrapping-up sentences that explicitly tell the user the study is over and thank them for their participation. Example: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!'" :
+                            " This is the FINAL question - engage in natural follow-up conversation with 3-4 questions before ending with a thank you and summary.") : 
                         "";
                     
                     userMessage = `[CONTEXT: Current question is "${currentQuestion}". You are in a conversation flow with predefined questions. Be INTERACTIVE and CONVERSATIONAL - show genuine interest, ask follow-up questions, and engage naturally with their responses. Trust your judgment on when to move to the next question based on the natural flow of conversation.${finalQuestionContext}]\n\nUser: ${message}`;
@@ -1057,6 +1102,7 @@ CRITICAL RULES:
 
 EXCEPTIONS (when questions are NOT required):
 - When the AI is providing a final summary or conclusion AFTER the final question of the entire conversation has been asked (isFinalQuestion = true AND followUpMode = false)
+- When the AI is providing wrapping-up sentences in the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true) with explicit thank you and study completion statements
 - When the AI is acknowledging information without needing more details (ONLY when NOT in followUpMode)
 - When the AI is transitioning between topics without needing user input (ONLY when NOT in followUpMode)
 
@@ -1087,6 +1133,7 @@ EXAMPLES:
 - Response without question (follow-up mode): {"hasQuestion": false, "reason": "Follow-up mode requires questions to guide conversation", "confidence": 0.95, "shouldRegenerate": true}
 - Response without question (final follow-up question): {"hasQuestion": false, "reason": "Final follow-up question should still include questions to gather more information", "confidence": 0.9, "shouldRegenerate": true}
 - Response without question (exception - after final question): {"hasQuestion": false, "reason": "Final summary response after final question was asked, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
+- Response without question (exception - final follow-up with wrapping-up): {"hasQuestion": false, "reason": "Final follow-up of final question with proper wrapping-up sentences - study completion allowed", "confidence": 0.9, "shouldRegenerate": false}
 - Response with irrelevant question: {"hasQuestion": true, "reason": "Response has question but it's not relevant to current topic", "confidence": 0.7, "shouldRegenerate": true}
 
 IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
@@ -1125,8 +1172,31 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
             const endsWithQuestionMark = /\?$/;
             const hasQuestion = questionWords.test(aiResponse) || endsWithQuestionMark.test(aiResponse);
             
+            // Check if this is the final follow-up of the final question
+            const isFinalFollowUpOfFinalQuestion = isFinalQuestion && followUpMode;
+            
+            // Check for wrapping-up sentences in final follow-up of final question
+            const hasWrappingUpSentences = isFinalFollowUpOfFinalQuestion && (
+                /thank you.*sharing.*with me/i.test(aiResponse) ||
+                /thank you.*participation/i.test(aiResponse) ||
+                /concludes our conversation/i.test(aiResponse) ||
+                /conversation.*complete/i.test(aiResponse) ||
+                /enjoyed learning about you/i.test(aiResponse) ||
+                /thank you.*time/i.test(aiResponse) ||
+                /study.*over/i.test(aiResponse) ||
+                /study.*complete/i.test(aiResponse)
+            );
+            
             if (!hasQuestion) {
-                if (followUpMode) {
+                if (isFinalFollowUpOfFinalQuestion && hasWrappingUpSentences) {
+                    console.log('Final follow-up of final question with wrapping-up sentences detected - allowing completion');
+                    return {
+                        hasQuestion: false,
+                        reason: "Final follow-up of final question with proper wrapping-up sentences - study completion allowed",
+                        confidence: 0.9,
+                        shouldRegenerate: false
+                    };
+                } else if (followUpMode) {
                     console.log('Final follow-up question detected but response lacks questions - forcing regeneration');
                     return {
                         hasQuestion: false,
@@ -1245,6 +1315,12 @@ FINAL FOLLOW-UP QUESTION HANDLING:
 - Questions should help deepen the conversation about the current subject
 - Focus on getting comprehensive information about the current topic before moving to the next main question
 
+FINAL FOLLOW-UP OF FINAL QUESTION HANDLING:
+- For the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true), you should include wrapping-up sentences
+- After asking your follow-up question, include explicit wrapping-up sentences that tell the user the study is over
+- Thank the user for their participation and explicitly state that the conversation is concluding
+- Example: "Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
+
 IMPORTANT: Your response should be a single, cohesive message that naturally incorporates questions. Do not include multiple separate questions or responses.
 
 Example of a good regenerated response with questions:
@@ -1258,6 +1334,9 @@ Example of a good final question response (7th question):
 
 Example of a good final follow-up question response:
 "That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style?"
+
+Example of a good final follow-up of final question response (with wrapping-up):
+"That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style? Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
 
 Please provide a regenerated response that includes appropriate questions:`;
 
@@ -1447,7 +1526,7 @@ DRIVERS_LICENSE
 PASSPORT_NUMBER
 TAXPAYER_IDENTIFICATION_NUMBER
 ID_NUMBER
-NAME
+NAME: Only actual person names (first names, last names, full names). NOT academic fields, majors, or subjects.
 USERNAME
 KEYS: Passwords, passkeys, API keys, encryption keys, and any
 other form of security keys.
@@ -1466,13 +1545,21 @@ health status, medical conditions, treatment records, and
 health insurance information.
 FINANCIAL_INFORMATION: Financial details such as bank account numbers, credit card numbers, investment records,
 salary information, and other financial statuses or activities.
-EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, and certifications.
+EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, certifications, majors, fields of study, and academic subjects (e.g., "Computer Science", "Mathematics", "Engineering").
+
+CRITICAL CLASSIFICATION RULES:
+- "Computer Science", "Mathematics", "Engineering", etc. should be classified as EDUCATIONAL_RECORD, not NAME
+- Academic fields, majors, and subjects are EDUCATIONAL_RECORD
+- Only actual person names (like "John Smith", "Sarah Johnson") should be classified as NAME
+- Universities and organizations (like "Carnegie Mellon", "MIT", "Google") should be classified as AFFILIATION
 
 For the given message that a user sends to a chatbot, identify all the personally identifiable information using the above taxonomy only.
 Note that the information should be related to a real person not in a public context, but okay if not uniquely identifiable.
 Result should be in its minimum possible unit.
 
 IMPORTANT: For each detected PII, assign a numbered placeholder (e.g., NAME1, NAME2, EMAIL1, etc.) that counts across the entire conversation history. The numbering should be sequential across all conversations, not just within a single message. For example, if NAME1 was used in a previous message, the next name should be NAME2.
+
+DUPLICATE ENTITY DETECTION: If you detect the same entity (e.g., "Carnegie Mellon") that was mentioned before, use the same placeholder number. For example, if "Carnegie Mellon" was previously assigned AFFILIATION1, use AFFILIATION1 again for the same entity.
 
 Use this exact format:
 {
@@ -1499,12 +1586,25 @@ If no privacy issues found, respond with:
 
 Current user message: "${userMessage}"${contextInfo}`;
 
+        // Get previously detected entities for duplicate detection
+        let previouslyDetectedEntities = '';
+        const currentSessionId = null; // Use default session for now
+        const previousEntities = getPreviouslyDetectedEntities(currentSessionId);
+        
+        if (previousEntities.length > 0) {
+            previouslyDetectedEntities = '\n\nPREVIOUSLY DETECTED ENTITIES (use same placeholder for duplicates):\n';
+            previousEntities.forEach(entity => {
+                previouslyDetectedEntities += `- "${entity.entityText}" (${entity.type}) -> ${entity.placeholder}\n`;
+            });
+            previouslyDetectedEntities += '\nIMPORTANT: If you detect the same entity again, use the EXACT SAME placeholder number.\n';
+        }
+
         // Step 1: Detection LLM - Identify PII and create numbered placeholders
         const detectionCompletion = await openaiClient.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues considering conversation context and respond with ONLY valid JSON." },
-                { role: "user", content: detectionPrompt }
+                { role: "user", content: detectionPrompt + previouslyDetectedEntities }
             ],
             max_tokens: 800,
             temperature: 0.1
@@ -1544,13 +1644,29 @@ Current user message: "${userMessage}"${contextInfo}`;
             };
         }
         
-        // Update placeholders with conversation-wide numbering
+        // Update placeholders with conversation-wide numbering and track entities
         let updatedTextWithPlaceholders = detectionData.text_with_placeholders;
         const updatedDetectedPii = [];
+        const entitySessionId = null; // Use default session for now
         
         for (const pii of detectionData.detected_pii) {
-            const nextNumber = getNextPlaceholderNumber(pii.type);
-            const newPlaceholder = `${pii.type}${nextNumber}`;
+            // Check if this entity was previously detected
+            const previousPlaceholder = getPreviouslyDetectedEntity(pii.original_text, pii.type, entitySessionId);
+            
+            let newPlaceholder;
+            if (previousPlaceholder) {
+                // Use the same placeholder for duplicate entities
+                newPlaceholder = previousPlaceholder;
+                console.log(`Reusing placeholder ${newPlaceholder} for duplicate entity: "${pii.original_text}"`);
+            } else {
+                // Generate new placeholder for new entity
+                const nextNumber = getNextPlaceholderNumber(pii.type, entitySessionId);
+                newPlaceholder = `${pii.type}${nextNumber}`;
+                
+                // Track this new entity
+                trackDetectedEntity(pii.original_text, pii.type, newPlaceholder, entitySessionId);
+                console.log(`Tracking new entity: "${pii.original_text}" -> ${newPlaceholder}`);
+            }
             
             // Update the placeholder in the detected PII
             const updatedPii = {

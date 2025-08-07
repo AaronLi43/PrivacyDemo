@@ -240,3 +240,18 @@ Check server logs for:
 - `Question Presence Audit Result: {...}`
 - `Question presence audit recommends regeneration...`
 - `Response regenerated with questions via audit LLM recommendation...` 
+
+## Final Follow-Up with Wrapping-Up
+
+### Special Case: Final Follow-Up of Final Question
+- **Condition**: `isFinalQuestion = true` AND `followUpMode = true`
+- **Requirement**: Must include explicit wrapping-up sentences that tell users the study is over
+- **Thank You Requirement**: Must thank users for their participation and explicitly state the conversation is concluding
+- **Example**: "Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
+- **Audit Exception**: This is the only case where a follow-up response without questions is allowed (if it contains proper wrapping-up sentences)
+
+### Implementation
+- **System Prompt**: Enhanced to detect final follow-up of final question and include wrapping-up instructions
+- **Audit Logic**: Special detection for wrapping-up sentences in final follow-up responses
+- **Regeneration**: Includes examples of proper wrapping-up responses in regeneration prompts
+- **Testing**: New test function `testFinalFollowUpWithWrappingUp()` added to verify functionality

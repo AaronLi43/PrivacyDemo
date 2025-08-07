@@ -85,6 +85,8 @@
         <button onclick="testSixthQuestion()">Test 6th Question NEXT_QUESTION Leakage</button>
         <button onclick="testFinalFollowUpQuestion()">Test Final Follow-Up Question</button>
         <button onclick="testFollowUpMode()">Test Follow-Up Mode</button>
+        <button onclick="testFinalFollowUpWithWrappingUp()">Test Final Follow-Up with Wrapping-Up</button>
+        <button onclick="testPrivacyDetection()">Test Privacy Detection</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -592,6 +594,213 @@
                 
             } catch (error) {
                 addResult(`❌ Error testing follow-up mode: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFinalFollowUpWithWrappingUp() {
+            addResult('Testing final follow-up of final question with wrapping-up sentences...', 'info');
+            
+            try {
+                // Test with a response that should include wrapping-up sentences for the final follow-up of the final question
+                const testMessage = "Yes, I have used AI in ways I wouldn't share with family or colleagues. I've used it to generate cover letters and even some interview responses that I've then modified. I feel a bit conflicted about it because it feels like I'm getting an unfair advantage, but everyone else seems to be doing it too.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 6,
+                        questionMode: true,
+                        currentQuestion: "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Have you ever considered or actually used GenAI during a live interview? What happened?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: true
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Final follow-up with wrapping-up test completed', 'success');
+                    
+                    // Check if the response contains wrapping-up sentences
+                    const hasWrappingUpSentences = (
+                        /thank you.*sharing.*with me/i.test(chatData.bot_response) ||
+                        /thank you.*participation/i.test(chatData.bot_response) ||
+                        /concludes our conversation/i.test(chatData.bot_response) ||
+                        /conversation.*complete/i.test(chatData.bot_response) ||
+                        /enjoyed learning about you/i.test(chatData.bot_response) ||
+                        /thank you.*time/i.test(chatData.bot_response) ||
+                        /study.*over/i.test(chatData.bot_response) ||
+                        /study.*complete/i.test(chatData.bot_response)
+                    );
+                    
+                    if (hasWrappingUpSentences) {
+                        addResult('✅ Response contains wrapping-up sentences', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain wrapping-up sentences', 'warning');
+                    }
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit) {
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>Final Follow-Up with Wrapping-Up Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ Final follow-up with wrapping-up test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing final follow-up with wrapping-up: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPrivacyDetection() {
+            addResult('Testing privacy detection improvements...', 'info');
+            
+            try {
+                // Test 1: Check if "Computer Science" is classified as EDUCATIONAL_RECORD, not NAME
+                const testMessage1 = "I studied Computer Science at Carnegie Mellon University.";
+                addResult(`Testing message 1: "${testMessage1}"`, 'info');
+                
+                const privacyResponse1 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_message: testMessage1
+                    })
+                });
+
+                const privacyData1 = await privacyResponse1.json();
+                
+                if (privacyData1.privacy_issue) {
+                    addResult('✅ Privacy issue detected in message 1', 'success');
+                    
+                    // Check if Computer Science is classified as EDUCATIONAL_RECORD
+                    const hasComputerScienceAsEducational = privacyData1.safer_versions && 
+                        privacyData1.safer_versions.replacing.includes('EDUCATIONAL_RECORD');
+                    
+                    if (hasComputerScienceAsEducational) {
+                        addResult('✅ Computer Science correctly classified as EDUCATIONAL_RECORD', 'success');
+                    } else {
+                        addResult('⚠️ Computer Science may be incorrectly classified', 'warning');
+                    }
+                    
+                    // Check if Carnegie Mellon is classified as AFFILIATION
+                    const hasCarnegieMellonAsAffiliation = privacyData1.safer_versions && 
+                        privacyData1.safer_versions.replacing.includes('AFFILIATION');
+                    
+                    if (hasCarnegieMellonAsAffiliation) {
+                        addResult('✅ Carnegie Mellon correctly classified as AFFILIATION', 'success');
+                    } else {
+                        addResult('⚠️ Carnegie Mellon may be incorrectly classified', 'warning');
+                    }
+                    
+                    addResult(`Message 1 result: ${privacyData1.safer_versions.replacing}`, 'info');
+                } else {
+                    addResult('⚠️ No privacy issue detected in message 1', 'warning');
+                }
+                
+                // Test 2: Check duplicate entity detection - mention Carnegie Mellon again
+                const testMessage2 = "I graduated from Carnegie Mellon with a degree in Computer Science.";
+                addResult(`Testing message 2: "${testMessage2}"`, 'info');
+                
+                const privacyResponse2 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_message: testMessage2
+                    })
+                });
+
+                const privacyData2 = await privacyResponse2.json();
+                
+                if (privacyData2.privacy_issue) {
+                    addResult('✅ Privacy issue detected in message 2', 'success');
+                    
+                    // Check if Carnegie Mellon gets the same placeholder (should be AFFILIATION1)
+                    const hasSameCarnegieMellonPlaceholder = privacyData2.safer_versions && 
+                        privacyData2.safer_versions.replacing.includes('AFFILIATION1');
+                    
+                    if (hasSameCarnegieMellonPlaceholder) {
+                        addResult('✅ Carnegie Mellon correctly reuses same placeholder (AFFILIATION1)', 'success');
+                    } else {
+                        addResult('⚠️ Carnegie Mellon may have different placeholder', 'warning');
+                    }
+                    
+                    addResult(`Message 2 result: ${privacyData2.safer_versions.replacing}`, 'info');
+                } else {
+                    addResult('⚠️ No privacy issue detected in message 2', 'warning');
+                }
+                
+                // Test 3: Check if Computer Science is still classified as EDUCATIONAL_RECORD
+                const testMessage3 = "My major was Computer Science and I loved it.";
+                addResult(`Testing message 3: "${testMessage3}"`, 'info');
+                
+                const privacyResponse3 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_message: testMessage3
+                    })
+                });
+
+                const privacyData3 = await privacyResponse3.json();
+                
+                if (privacyData3.privacy_issue) {
+                    addResult('✅ Privacy issue detected in message 3', 'success');
+                    
+                    // Check if Computer Science is classified as EDUCATIONAL_RECORD
+                    const hasComputerScienceAsEducational = privacyData3.safer_versions && 
+                        privacyData3.safer_versions.replacing.includes('EDUCATIONAL_RECORD');
+                    
+                    if (hasComputerScienceAsEducational) {
+                        addResult('✅ Computer Science correctly classified as EDUCATIONAL_RECORD in message 3', 'success');
+                    } else {
+                        addResult('⚠️ Computer Science may be incorrectly classified in message 3', 'warning');
+                    }
+                    
+                    addResult(`Message 3 result: ${privacyData3.safer_versions.replacing}`, 'info');
+                } else {
+                    addResult('⚠️ No privacy issue detected in message 3', 'warning');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing privacy detection: ${error.message}`, 'error');
             }
         }
 
