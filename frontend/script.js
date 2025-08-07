@@ -4569,7 +4569,7 @@ class PrivacyDemoApp {
     // Redirect to thanks page
     redirectToThanksPage() {
         try {
-            const thanksUrl = `/thanks`;
+            const thanksUrl = `thanks.html`;
             console.log('Redirecting to thanks page:', thanksUrl);
             
             // Show a notification before redirecting
