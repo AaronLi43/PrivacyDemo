@@ -20,6 +20,10 @@
       "dest": "/frontend/redirect.html"
     },
     {
+      "src": "/thanks",
+      "dest": "/frontend/thanks.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
