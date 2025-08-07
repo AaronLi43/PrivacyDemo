@@ -359,6 +359,7 @@ app.post('/api/chat', async (req, res) => {
         let aiResponse;
         let questionCompleted = false;
         let auditResult = null;
+        let questionPresenceResult = null;
         
         if (openaiClient) {
             try {
@@ -567,7 +568,7 @@ Remember to be conversational and ask follow-up questions based on what the user
                     }
                 }
 
-                // Audit LLM evaluation for question completion
+                // Audit LLM evaluation for question completion and question presence
                 if (ENABLE_AUDIT_LLM && questionMode && currentQuestion) {
                     console.log('Calling audit LLM for question completion evaluation...');
                     auditResult = await auditQuestionCompletion(message, aiResponse, currentQuestion, session.conversationHistory, isFinalQuestion, followUpMode);
@@ -647,6 +648,31 @@ Remember to be conversational and ask follow-up questions based on what the user
                             console.log('Response polished with audit LLM feedback');
                         }
                     }
+                    
+                    // Check for question presence in the response
+                    console.log('Calling audit LLM for question presence evaluation...');
+                    const questionPresenceResult = await auditQuestionPresence(message, aiResponse, currentQuestion, session.conversationHistory, isFinalQuestion, followUpMode);
+                    
+                    if (questionPresenceResult && questionPresenceResult.shouldRegenerate && questionPresenceResult.confidence >= 0.7) {
+                        console.log(`Question presence audit recommends regeneration: ${questionPresenceResult.reason} (confidence: ${questionPresenceResult.confidence})`);
+                        
+                        // Regenerate the response with explicit instruction to include questions
+                        const regeneratedResponse = await regenerateResponseWithQuestions(
+                            message, 
+                            aiResponse, 
+                            currentQuestion, 
+                            session.conversationHistory,
+                            isFinalQuestion,
+                            followUpMode
+                        );
+                        
+                        if (regeneratedResponse) {
+                            aiResponse = regeneratedResponse;
+                            console.log('Response regenerated with questions via audit LLM recommendation');
+                        }
+                    } else if (questionPresenceResult) {
+                        console.log(`Question presence audit result: ${questionPresenceResult.reason} (confidence: ${questionPresenceResult.confidence})`);
+                    }
                 }
 
                 // Final decision: use main LLM's decision if it made one
@@ -710,6 +736,7 @@ Remember to be conversational and ask follow-up questions based on what the user
             question_completed: questionCompleted,
             audit_result: auditResult,
             follow_up_questions: auditResult && auditResult.followUpQuestions ? auditResult.followUpQuestions : null,
+            question_presence_audit: questionPresenceResult || null,
             session_id: currentSessionId
         });
     } catch (error) {
@@ -963,6 +990,208 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code bl
     } catch (error) {
         console.error('Audit LLM error:', error);
         return { shouldProceed: false, reason: 'Audit LLM error: ' + error.message, confidence: 0.0 };
+    }
+}
+
+// Audit LLM for Question Presence Check
+async function auditQuestionPresence(userMessage, aiResponse, currentQuestion, conversationHistory, isFinalQuestion = false, followUpMode = false) {
+    if (!openaiClient) {
+        console.log('⚠️  Audit LLM not available - skipping question presence audit');
+        return { hasQuestion: true, reason: 'Audit LLM not available' };
+    }
+
+    try {
+        const auditPrompt = `You are an impartial auditor evaluating whether a chatbot response includes appropriate questions.
+
+CURRENT CONTEXT:
+- Current Question: "${currentQuestion}"
+- User's Latest Response: "${userMessage}"
+- AI's Response: "${aiResponse}"
+- Is Final Question: ${isFinalQuestion}
+- Follow-up Mode: ${followUpMode}
+- Is Background Question: ${isBackgroundQuestion(currentQuestion)}
+
+EVALUATION CRITERIA:
+1. Does the AI response contain at least one question?
+2. Is the question relevant to the conversation context?
+3. Is the question appropriate for the current stage of the conversation?
+4. Does the question help move the conversation forward?
+
+QUESTION PRESENCE GUIDELINES:
+- The AI should ask questions to engage the user and gather information
+- Questions should be natural and conversational
+- Questions should be relevant to the current topic or help transition to the next topic
+- For background questions: Questions should be efficient and move quickly to main topics
+- For main questions: Questions should be engaging and encourage detailed responses
+- For final questions: Questions should lead to natural conversation conclusion
+
+EXCEPTIONS (when questions are NOT required):
+- When the AI is providing a final summary or conclusion
+- When the AI is acknowledging information without needing more details
+- When the conversation is naturally concluding
+- When the AI is transitioning between topics without needing user input
+
+RESPONSE FORMAT:
+Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
+{
+    "hasQuestion": true/false,
+    "reason": "Brief explanation of your decision",
+    "confidence": 0.0-1.0,
+    "shouldRegenerate": true/false
+}
+
+DECISION GUIDELINES:
+- hasQuestion = false AND shouldRegenerate = true: Response lacks questions and should be regenerated
+- hasQuestion = true AND shouldRegenerate = false: Response has appropriate questions
+- hasQuestion = false AND shouldRegenerate = false: Response doesn't need questions (exception case)
+
+EXAMPLES:
+- Response with good question: {"hasQuestion": true, "reason": "Response includes relevant follow-up question", "confidence": 0.9, "shouldRegenerate": false}
+- Response without question (needs regeneration): {"hasQuestion": false, "reason": "Response lacks engaging questions to continue conversation", "confidence": 0.8, "shouldRegenerate": true}
+- Response without question (exception): {"hasQuestion": false, "reason": "Final summary response, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
+- Response with irrelevant question: {"hasQuestion": true, "reason": "Response has question but it's not relevant to current topic", "confidence": 0.7, "shouldRegenerate": true}
+
+IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
+
+        const auditMessages = [
+            { role: 'system', content: auditPrompt }
+        ];
+
+        // Add recent conversation context (last 4 messages for context)
+        const recentMessages = conversationHistory.slice(-4);
+        if (recentMessages.length > 0) {
+            const contextMessage = `Recent conversation context:\n${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
+            auditMessages.push({ role: 'user', content: contextMessage });
+        }
+
+        const auditCompletion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: auditMessages,
+            max_tokens: 200,
+            temperature: 0.3
+        });
+
+        const auditResponse = auditCompletion.choices[0].message.content;
+        
+        // Clean the response to handle markdown code blocks
+        let cleanedResponse = auditResponse.trim();
+        
+        // Remove markdown code blocks if present
+        if (cleanedResponse.startsWith('```json')) {
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleanedResponse.startsWith('```')) {
+            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        }
+        
+        // Parse the JSON response
+        try {
+            const auditResult = JSON.parse(cleanedResponse);
+            console.log(`Question Presence Audit Result: ${JSON.stringify(auditResult)}`);
+            return auditResult;
+        } catch (parseError) {
+            console.error('Failed to parse question presence audit response:', parseError);
+            console.log('Raw audit response:', auditResponse);
+            console.log('Cleaned response:', cleanedResponse);
+            return { hasQuestion: true, reason: 'Failed to parse audit response', confidence: 0.0, shouldRegenerate: false };
+        }
+
+    } catch (error) {
+        console.error('Question presence audit error:', error);
+        return { hasQuestion: true, reason: 'Audit LLM error: ' + error.message, confidence: 0.0, shouldRegenerate: false };
+    }
+}
+
+// Regenerate response with questions
+async function regenerateResponseWithQuestions(userMessage, originalResponse, currentQuestion, conversationHistory, isFinalQuestion, followUpMode) {
+    if (!openaiClient) {
+        console.log('⚠️  OpenAI client not available - skipping response regeneration');
+        return null;
+    }
+
+    try {
+        const regeneratePrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Your task is to regenerate a response that includes appropriate questions to engage the user.
+
+ORIGINAL USER MESSAGE: "${userMessage}"
+ORIGINAL AI RESPONSE: "${originalResponse}"
+CURRENT QUESTION: "${currentQuestion}"
+IS FINAL QUESTION: ${isFinalQuestion}
+FOLLOW-UP MODE: ${followUpMode}
+
+AUDIT FEEDBACK: The previous response was missing questions that would help continue the conversation and gather more information from the user.
+
+INSTRUCTIONS:
+1. Regenerate a response that includes at least one relevant question
+2. Make the question natural and conversational
+3. Ensure the question helps gather more information about the current topic
+4. Keep the response engaging and interactive
+5. Show genuine interest and curiosity
+6. Make the conversation feel warm and natural
+
+QUESTION GUIDELINES:
+- Ask follow-up questions that invite elaboration
+- Questions should be specific and relevant to what the user shared
+- Questions should help deepen the conversation
+- Use phrases like "I'm curious about...", "I'd love to hear more about...", "That's interesting! Can you tell me..."
+- Make questions feel natural and conversational, not robotic
+
+BACKGROUND QUESTION HANDLING:
+- For background questions (education, job, AI experience), be more concise but still ask relevant questions
+- Focus on getting basic information efficiently while maintaining engagement
+- Questions should help transition smoothly to more substantive topics
+
+FINAL QUESTION HANDLING:
+- For final questions, ask follow-up questions that lead to natural conversation conclusion
+- Questions should help summarize and reflect on the conversation
+- Focus on gathering final thoughts and experiences
+
+IMPORTANT: Your response should be a single, cohesive message that naturally incorporates questions. Do not include multiple separate questions or responses.
+
+Example of a good regenerated response with questions:
+"That's fascinating! I can see how your computer science background at MIT would give you a great foundation for understanding AI tools. I'm curious about your first experience with ChatGPT - what made you decide to try it for interview preparation? And what specific aspects of your interview prep did you find it most helpful for?"
+
+Please provide a regenerated response that includes appropriate questions:`;
+
+        const regenerateMessages = [
+            { role: 'system', content: regeneratePrompt }
+        ];
+
+        // Add recent conversation context for better understanding
+        const recentMessages = conversationHistory.slice(-4);
+        if (recentMessages.length > 0) {
+            const contextMessage = `Recent conversation context:\n${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
+            regenerateMessages.push({ role: 'user', content: contextMessage });
+        }
+
+        const regenerateCompletion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: regenerateMessages,
+            max_tokens: 400,
+            temperature: 0.8
+        });
+
+        const regeneratedResponse = regenerateCompletion.choices[0].message.content.trim();
+        
+        // Validate the regenerated response
+        if (regeneratedResponse && regeneratedResponse.length > 0 && regeneratedResponse.length < 600) {
+            // Check if the regenerated response actually contains a question
+            const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
+            const endsWithQuestionMark = /\?$/;
+            
+            if (questionWords.test(regeneratedResponse) || endsWithQuestionMark.test(regeneratedResponse)) {
+                console.log(`Response regenerated successfully with questions: "${regeneratedResponse}"`);
+                return regeneratedResponse;
+            } else {
+                console.log('Regenerated response does not contain questions, using fallback');
+                return null;
+            }
+        } else {
+            console.log('Regenerated response validation failed, using original response');
+            return null;
+        }
+
+    } catch (error) {
+        console.error('Response regeneration error:', error);
+        return null;
     }
 }
 

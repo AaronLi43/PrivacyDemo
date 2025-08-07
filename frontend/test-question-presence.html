@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Question Presence Audit</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .info {
+            color: blue;
+        }
+        .warning {
+            color: orange;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .audit-result {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .presence-result {
+            background: #e7f3ff;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Question Presence Audit</h1>
+    
+    <div class="test-container">
+        <h2>Test Question Presence Audit Functionality</h2>
+        <p>This page tests the new question presence audit functionality to ensure chatbot responses include appropriate questions.</p>
+        
+        <button onclick="testQuestionPresence()">Test Question Presence Audit</button>
+        <button onclick="testResponseRegeneration()">Test Response Regeneration</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'https://privacydemo.onrender.com';
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultElement = document.createElement('div');
+            resultElement.className = type;
+            resultElement.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            resultsDiv.appendChild(resultElement);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testQuestionPresence() {
+            addResult('Testing question presence audit functionality...', 'info');
+            
+            try {
+                // Test 1: Check if audit LLM is enabled
+                const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+                const configData = await configResponse.json();
+                
+                if (configData.audit_llm_enabled) {
+                    addResult('✅ Audit LLM is enabled in configuration', 'success');
+                } else {
+                    addResult('❌ Audit LLM is disabled in configuration', 'error');
+                    return;
+                }
+
+                // Test 2: Send a test message that might generate a response without questions
+                const testMessage = "I studied computer science at MIT.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 0,
+                        questionMode: true,
+                        currentQuestion: "Tell me about your educational background - what did you study in college or university?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        ],
+                        isFinalQuestion: false,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Chat API responded successfully', 'success');
+                    
+                    if (chatData.question_presence_audit) {
+                        addResult('✅ Question presence audit result received', 'success');
+                        
+                        const presenceDiv = document.createElement('div');
+                        presenceDiv.className = 'presence-result';
+                        presenceDiv.innerHTML = `
+                            <h4>Question Presence Audit Result:</h4>
+                            <p><strong>Has Question:</strong> ${chatData.question_presence_audit.hasQuestion}</p>
+                            <p><strong>Should Regenerate:</strong> ${chatData.question_presence_audit.shouldRegenerate}</p>
+                            <p><strong>Confidence:</strong> ${chatData.question_presence_audit.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.question_presence_audit.reason}</p>
+                        `;
+                        document.getElementById('results').appendChild(presenceDiv);
+                        
+                        if (chatData.question_presence_audit.shouldRegenerate) {
+                            addResult('⚠️ Question presence audit recommends response regeneration', 'warning');
+                        } else {
+                            addResult('✅ Question presence audit indicates response is appropriate', 'success');
+                        }
+                    } else {
+                        addResult('⚠️ No question presence audit result in response', 'info');
+                    }
+                    
+                    if (chatData.audit_result) {
+                        const auditDiv = document.createElement('div');
+                        auditDiv.className = 'audit-result';
+                        auditDiv.innerHTML = `
+                            <h4>Question Completion Audit Result:</h4>
+                            <p><strong>Should Proceed:</strong> ${chatData.audit_result.shouldProceed}</p>
+                            <p><strong>Confidence:</strong> ${chatData.audit_result.confidence}</p>
+                            <p><strong>Reason:</strong> ${chatData.audit_result.reason}</p>
+                            ${chatData.audit_result.followUpQuestions ? `<p><strong>Follow-up Questions:</strong> ${chatData.audit_result.followUpQuestions.join(', ')}</p>` : ''}
+                        `;
+                        document.getElementById('results').appendChild(auditDiv);
+                    }
+                    
+                    addResult(`Bot Response: ${chatData.bot_response.substring(0, 100)}...`, 'info');
+                } else {
+                    addResult(`❌ Chat API failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing question presence audit: ${error.message}`, 'error');
+            }
+        }
+
+        async function testResponseRegeneration() {
+            addResult('Testing response regeneration functionality...', 'info');
+            
+            try {
+                // Test with a message that might generate a response without questions
+                const testMessage = "I work as a software engineer.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 1,
+                        questionMode: true,
+                        currentQuestion: "I'd love to hear about your current work and how you got into it by job interviews?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        ],
+                        isFinalQuestion: false,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Response regeneration test completed', 'success');
+                    
+                    // Check if the response was regenerated
+                    const hasQuestion = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i.test(chatData.bot_response) || 
+                                       /\?$/.test(chatData.bot_response);
+                    
+                    if (hasQuestion) {
+                        addResult('✅ Response contains questions', 'success');
+                    } else {
+                        addResult('⚠️ Response does not contain questions', 'warning');
+                    }
+                    
+                    if (chatData.question_presence_audit && chatData.question_presence_audit.shouldRegenerate) {
+                        addResult('⚠️ Question presence audit recommended regeneration', 'warning');
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ Response regeneration test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing response regeneration: ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            addResult('Page loaded. Ready to test question presence audit functionality.', 'info');
+        });
+    </script>
+</body>
+</html>
