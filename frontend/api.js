@@ -54,8 +54,14 @@ class API {
             },
         };
 
+        console.log('🌐 Making API request to:', url);
+        console.log('📋 Request config:', config);
+
         try {
             const response = await fetch(url, config);
+            
+            console.log('📥 Response status:', response.status);
+            console.log('📥 Response headers:', response.headers);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -63,12 +69,24 @@ class API {
             
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
-                return await response.json();
+                const data = await response.json();
+                console.log('📥 Response data:', data);
+                return data;
             } else {
-                return await response.text();
+                const text = await response.text();
+                console.log('📥 Response text:', text);
+                return text;
             }
         } catch (error) {
-            console.error('API request failed:', error);
+            console.error('❌ API request failed:', error);
+            console.error('❌ Request URL:', url);
+            console.error('❌ Request config:', config);
+            
+            // Provide more specific error information
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                throw new Error(`Network error: Unable to connect to ${API_BASE_URL}. Please check if the server is running and accessible.`);
+            }
+            
             throw error;
         }
     }
@@ -162,9 +180,17 @@ class API {
 
     // Test API Connection
     static async testConnection() {
-        return this.request(API_ENDPOINTS.TEST_API, {
-            method: 'GET'
-        });
+        console.log('🔍 Testing API connection to:', API_BASE_URL);
+        try {
+            const response = await this.request(API_ENDPOINTS.TEST_API, {
+                method: 'GET'
+            });
+            console.log('✅ API connection test successful:', response);
+            return response;
+        } catch (error) {
+            console.error('❌ API connection test failed:', error);
+            throw error;
+        }
     }
 
     // Set Mode

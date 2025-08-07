@@ -37,6 +37,9 @@
                     <button id="clear-btn" class="btn btn-warning">
                         <i class="fas fa-trash"></i> Clear Chat
                     </button>
+                    <button id="test-api-btn" class="btn btn-secondary">
+                        <i class="fas fa-wifi"></i> Test API
+                    </button>
                 </div>
             </div>
             
@@ -89,6 +92,14 @@
                 if (clearBtn) {
                     clearBtn.addEventListener('click', () => {
                         this.clearChat();
+                    });
+                }
+                
+                // Test API button
+                const testApiBtn = document.getElementById('test-api-btn');
+                if (testApiBtn) {
+                    testApiBtn.addEventListener('click', () => {
+                        this.testApiConnection();
                     });
                 }
                 
@@ -279,6 +290,23 @@
             clearChat() {
                 this.state.conversationLog = [];
                 this.updateUI();
+            }
+            
+            async testApiConnection() {
+                try {
+                    this.showNotification('🔍 Testing API connection...', 'info');
+                    const response = await fetch('https://privacydemo.onrender.com/api/test_connection');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.showNotification('✅ API connection successful!', 'success');
+                        console.log('API test response:', data);
+                    } else {
+                        this.showNotification(`❌ API connection failed: ${response.status}`, 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`❌ API connection error: ${error.message}`, 'error');
+                    console.error('API test error:', error);
+                }
             }
             
             updateUI() {

@@ -1655,12 +1655,17 @@ class PrivacyDemoApp {
         try {
             API.validateMessage(message);
             
-            // Add user message to log
-            this.state.conversationLog.push({
-                user: message,
-                bot: '',
-                timestamp: new Date().toISOString()
-            });
+            // Add user message to log (with duplicate prevention)
+            const lastEntry = this.state.conversationLog[this.state.conversationLog.length - 1];
+            if (!lastEntry || lastEntry.user !== message) {
+                this.state.conversationLog.push({
+                    user: message,
+                    bot: '',
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                console.log('Prevented duplicate user message entry');
+            }
 
             this.state.currentStep++;
             input.value = '';
@@ -1686,11 +1691,11 @@ class PrivacyDemoApp {
                         console.log('Raw bot response from server (follow-up):', response.bot_response);
                         let botResponse = response.bot_response;
                         
-                        this.state.conversationLog.push({
-                            user: '',
-                            bot: botResponse,
-                            timestamp: new Date().toISOString()
-                        });
+                        // Update the existing message entry instead of creating a new one
+                        const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
+                        if (lastMessage) {
+                            lastMessage.bot = botResponse;
+                        }
                         
                         // Check if follow-up questions are completed
                         if (response.question_completed) {
@@ -3027,6 +3032,14 @@ class PrivacyDemoApp {
         // Debug logging to track duplication issues
         console.log(`updateConversationDisplay called with analysisMode=${analysisMode}, conversationLog.length=${this.state.conversationLog.length}`);
         
+        // Log conversation structure to help debug duplication issues
+        if (this.state.conversationLog.length > 0) {
+            console.log('Conversation log structure:');
+            this.state.conversationLog.forEach((entry, index) => {
+                console.log(`  [${index}] user: "${entry.user}", bot: "${entry.bot}"`);
+            });
+        }
+        
         // Prevent rapid successive calls that might cause duplication
         if (this._lastUpdateTime && Date.now() - this._lastUpdateTime < 100) {
             console.log('Skipping updateConversationDisplay due to rapid successive calls');
@@ -3237,7 +3250,7 @@ class PrivacyDemoApp {
                     </div>`;
                 }
                 
-                // Show bot message if it exists, or show loading state
+                // Show bot message if it exists
                 if (turn.bot && turn.bot.trim()) {
                     html += `<div class="message message-bot" id="log-entry-bot-${i}">
                         <div class="message-header">
@@ -3245,17 +3258,6 @@ class PrivacyDemoApp {
                             <span>Chatbot</span>
                         </div>
                         <div class="message-content">${this.escapeHtml(turn.bot)}</div>
-                    </div>`;
-                } else if (turn.user && turn.user.trim()) {
-                    // Show loading state for bot response
-                    html += `<div class="message message-bot" id="log-entry-bot-${i}">
-                        <div class="message-header">
-                            <i class="fas fa-robot"></i>
-                            <span>Chatbot</span>
-                        </div>
-                        <div class="message-content">
-                            <i class="fas fa-spinner fa-spin"></i> Thinking...
-                        </div>
                     </div>`;
                 }
                 
