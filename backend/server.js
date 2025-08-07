@@ -98,28 +98,29 @@ function getSession(sessionId) {
             uploadedQuestions: [],
             uploadedReturnLog: [],
             activeChatSession: null,
-            globalPiiCounters: {
-                ADDRESS: 0,
-                IP_ADDRESS: 0,
-                URL: 0,
-                SSN: 0,
-                PHONE_NUMBER: 0,
-                EMAIL: 0,
-                DRIVERS_LICENSE: 0,
-                PASSPORT_NUMBER: 0,
-                TAXPAYER_IDENTIFICATION_NUMBER: 0,
-                ID_NUMBER: 0,
-                NAME: 0,
-                USERNAME: 0,
-                KEYS: 0,
-                GEOLOCATION: 0,
-                AFFILIATION: 0,
-                DEMOGRAPHIC_ATTRIBUTE: 0,
-                TIME: 0,
-                HEALTH_INFORMATION: 0,
-                FINANCIAL_INFORMATION: 0,
-                EDUCATIONAL_RECORD: 0
-            }
+                    globalPiiCounters: {
+            ADDRESS: 0,
+            IP_ADDRESS: 0,
+            URL: 0,
+            SSN: 0,
+            PHONE_NUMBER: 0,
+            EMAIL: 0,
+            DRIVERS_LICENSE: 0,
+            PASSPORT_NUMBER: 0,
+            TAXPAYER_IDENTIFICATION_NUMBER: 0,
+            ID_NUMBER: 0,
+            NAME: 0,
+            USERNAME: 0,
+            KEYS: 0,
+            GEOLOCATION: 0,
+            AFFILIATION: 0,
+            DEMOGRAPHIC_ATTRIBUTE: 0,
+            TIME: 0,
+            HEALTH_INFORMATION: 0,
+            FINANCIAL_INFORMATION: 0,
+            EDUCATIONAL_RECORD: 0
+        },
+        detectedEntities: {} // Track detected entities to ensure consistent placeholders
         });
     }
     return sessions.get(sessionId);
@@ -154,9 +155,6 @@ let globalPiiCounters = {
     FINANCIAL_INFORMATION: 0,
     EDUCATIONAL_RECORD: 0
 };
-
-// Track detected entities to ensure consistent placeholders across conversation
-const detectedEntities = new Map(); // Map of entity text -> {type, placeholder, sessionId}
 
 // Background questions (first 3 questions - no follow-ups needed)
 const backgroundQuestions = [
@@ -234,43 +232,6 @@ function getNextUncompletedQuestionIndex(sessionId) {
 }
 
 // Helper function to get the next placeholder number for a PII category
-// Function to track detected entities and ensure consistent placeholders
-function trackDetectedEntity(entityText, entityType, placeholder, sessionId) {
-    const key = `${entityText.toLowerCase().trim()}_${entityType}`;
-    detectedEntities.set(key, {
-        entityText: entityText,
-        type: entityType,
-        placeholder: placeholder,
-        sessionId: sessionId,
-        timestamp: Date.now()
-    });
-}
-
-// Function to get previously detected entity placeholder
-function getPreviouslyDetectedEntity(entityText, entityType, sessionId) {
-    const key = `${entityText.toLowerCase().trim()}_${entityType}`;
-    const detected = detectedEntities.get(key);
-    if (detected && detected.sessionId === sessionId) {
-        return detected.placeholder;
-    }
-    return null;
-}
-
-// Function to get all previously detected entities for a session
-function getPreviouslyDetectedEntities(sessionId) {
-    const entities = [];
-    for (const [key, value] of detectedEntities.entries()) {
-        if (value.sessionId === sessionId) {
-            entities.push({
-                entityText: value.entityText,
-                type: value.type,
-                placeholder: value.placeholder
-            });
-        }
-    }
-    return entities;
-}
-
 function getNextPlaceholderNumber(piiCategory, sessionId) {
     const session = getSession(sessionId);
     if (session.globalPiiCounters.hasOwnProperty(piiCategory)) {
@@ -743,8 +704,14 @@ Remember to be conversational and ask follow-up questions based on what the user
                     }
                 }
 
-                // Final decision: use main LLM's decision if it made one
-                if (mainLLMCompleted) {
+                // Final decision: prioritize audit LLM decision over main LLM decision
+                if (auditResult && auditResult.shouldProceed === false && auditResult.confidence >= 0.7) {
+                    // Audit LLM explicitly says not to proceed - respect this decision
+                    console.log(`Audit LLM decision takes precedence: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
+                    questionCompleted = false;
+                } else if (mainLLMCompleted) {
+                    // Only use main LLM's decision if audit LLM didn't explicitly say not to proceed
+                    console.log('Using main LLM decision to proceed to next question');
                     questionCompleted = true;
                 }
                 
@@ -1526,7 +1493,7 @@ DRIVERS_LICENSE
 PASSPORT_NUMBER
 TAXPAYER_IDENTIFICATION_NUMBER
 ID_NUMBER
-NAME: Only actual person names (first names, last names, full names). NOT academic fields, majors, or subjects.
+NAME
 USERNAME
 KEYS: Passwords, passkeys, API keys, encryption keys, and any
 other form of security keys.
@@ -1534,7 +1501,7 @@ GEOLOCATION: Places and locations, such as cities, provinces,
 countries, international regions, or named infrastructures
 (e.g., bus stops, bridges, etc.).
 AFFILIATION: Names of organizations, such as public and private companies, schools, universities, public institutions,
-prisons, healthcare institutions, non-governmental organizations, churches, etc.
+prisons, healthcare institutions, non-governmental organizations, churches, etc. This includes university names like "Carnegie Mellon", "MIT", "Stanford", etc.
 DEMOGRAPHIC_ATTRIBUTE: Demographic attributes of a
 person, such as native language, descent, heritage, ethnicity,
 nationality, religious or political group, birthmarks, ages,
@@ -1545,13 +1512,7 @@ health status, medical conditions, treatment records, and
 health insurance information.
 FINANCIAL_INFORMATION: Financial details such as bank account numbers, credit card numbers, investment records,
 salary information, and other financial statuses or activities.
-EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, certifications, majors, fields of study, and academic subjects (e.g., "Computer Science", "Mathematics", "Engineering").
-
-CRITICAL CLASSIFICATION RULES:
-- "Computer Science", "Mathematics", "Engineering", etc. should be classified as EDUCATIONAL_RECORD, not NAME
-- Academic fields, majors, and subjects are EDUCATIONAL_RECORD
-- Only actual person names (like "John Smith", "Sarah Johnson") should be classified as NAME
-- Universities and organizations (like "Carnegie Mellon", "MIT", "Google") should be classified as AFFILIATION
+EDUCATIONAL_RECORD: Educational background details, including academic records, transcripts, degrees, and certifications.
 
 For the given message that a user sends to a chatbot, identify all the personally identifiable information using the above taxonomy only.
 Note that the information should be related to a real person not in a public context, but okay if not uniquely identifiable.
@@ -1560,6 +1521,12 @@ Result should be in its minimum possible unit.
 IMPORTANT: For each detected PII, assign a numbered placeholder (e.g., NAME1, NAME2, EMAIL1, etc.) that counts across the entire conversation history. The numbering should be sequential across all conversations, not just within a single message. For example, if NAME1 was used in a previous message, the next name should be NAME2.
 
 DUPLICATE ENTITY DETECTION: If you detect the same entity (e.g., "Carnegie Mellon") that was mentioned before, use the same placeholder number. For example, if "Carnegie Mellon" was previously assigned AFFILIATION1, use AFFILIATION1 again for the same entity.
+
+CRITICAL CLASSIFICATION RULES:
+- "Carnegie Mellon", "MIT", "Stanford", etc. should be classified as AFFILIATION, not NAME
+- Academic fields, majors, and subjects are EDUCATIONAL_RECORD
+- Only actual person names (like "John Smith", "Sarah Johnson") should be classified as NAME
+- Universities and organizations should be classified as AFFILIATION
 
 Use this exact format:
 {
@@ -1586,25 +1553,12 @@ If no privacy issues found, respond with:
 
 Current user message: "${userMessage}"${contextInfo}`;
 
-        // Get previously detected entities for duplicate detection
-        let previouslyDetectedEntities = '';
-        const currentSessionId = null; // Use default session for now
-        const previousEntities = getPreviouslyDetectedEntities(currentSessionId);
-        
-        if (previousEntities.length > 0) {
-            previouslyDetectedEntities = '\n\nPREVIOUSLY DETECTED ENTITIES (use same placeholder for duplicates):\n';
-            previousEntities.forEach(entity => {
-                previouslyDetectedEntities += `- "${entity.entityText}" (${entity.type}) -> ${entity.placeholder}\n`;
-            });
-            previouslyDetectedEntities += '\nIMPORTANT: If you detect the same entity again, use the EXACT SAME placeholder number.\n';
-        }
-
         // Step 1: Detection LLM - Identify PII and create numbered placeholders
         const detectionCompletion = await openaiClient.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues considering conversation context and respond with ONLY valid JSON." },
-                { role: "user", content: detectionPrompt + previouslyDetectedEntities }
+                { role: "user", content: detectionPrompt }
             ],
             max_tokens: 800,
             temperature: 0.1
@@ -1644,27 +1598,36 @@ Current user message: "${userMessage}"${contextInfo}`;
             };
         }
         
-        // Update placeholders with conversation-wide numbering and track entities
+        // Update placeholders with conversation-wide numbering and duplicate detection
         let updatedTextWithPlaceholders = detectionData.text_with_placeholders;
         const updatedDetectedPii = [];
-        const entitySessionId = null; // Use default session for now
+        const session = getSession(null); // Use default session for now
         
         for (const pii of detectionData.detected_pii) {
-            // Check if this entity was previously detected
-            const previousPlaceholder = getPreviouslyDetectedEntity(pii.original_text, pii.type, entitySessionId);
+            // Check if this entity was previously detected in the conversation
+            const entityKey = `${pii.original_text.toLowerCase().trim()}_${pii.type}`;
+            let existingPlaceholder = null;
+            
+            // Check if we've seen this entity before in the current session
+            if (session.detectedEntities && session.detectedEntities[entityKey]) {
+                existingPlaceholder = session.detectedEntities[entityKey];
+                console.log(`Reusing placeholder ${existingPlaceholder} for duplicate entity: "${pii.original_text}"`);
+            }
             
             let newPlaceholder;
-            if (previousPlaceholder) {
+            if (existingPlaceholder) {
                 // Use the same placeholder for duplicate entities
-                newPlaceholder = previousPlaceholder;
-                console.log(`Reusing placeholder ${newPlaceholder} for duplicate entity: "${pii.original_text}"`);
+                newPlaceholder = existingPlaceholder;
             } else {
                 // Generate new placeholder for new entity
-                const nextNumber = getNextPlaceholderNumber(pii.type, entitySessionId);
+                const nextNumber = getNextPlaceholderNumber(pii.type);
                 newPlaceholder = `${pii.type}${nextNumber}`;
                 
                 // Track this new entity
-                trackDetectedEntity(pii.original_text, pii.type, newPlaceholder, entitySessionId);
+                if (!session.detectedEntities) {
+                    session.detectedEntities = {};
+                }
+                session.detectedEntities[entityKey] = newPlaceholder;
                 console.log(`Tracking new entity: "${pii.original_text}" -> ${newPlaceholder}`);
             }
             
@@ -2253,6 +2216,9 @@ app.post('/api/reset', (req, res) => {
             Object.keys(session.globalPiiCounters).forEach(key => {
                 session.globalPiiCounters[key] = 0;
             });
+            
+            // Reset detected entities tracking
+            session.detectedEntities = {};
             
             console.log(`Reset session: ${sessionId}`);
         } else {

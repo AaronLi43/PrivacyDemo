@@ -1998,8 +1998,13 @@ class PrivacyDemoApp {
                         this.state.currentFollowUpQuestionIndex = 0;
                     }
                     
+                    // Check if audit LLM explicitly says not to proceed
+                    const auditSaysNotToProceed = response && response.audit_result && 
+                        response.audit_result.shouldProceed === false && 
+                        response.audit_result.confidence >= 0.7;
+                    
                     // For background questions, be more lenient about completion
-                    const shouldCompleteQuestion = response && (
+                    const shouldCompleteQuestion = response && !auditSaysNotToProceed && (
                         response.question_completed || 
                         hasNextQuestionSignal || 
                         hasEndingPattern ||
@@ -2012,7 +2017,12 @@ class PrivacyDemoApp {
                     console.log('- hasEndingPattern:', hasEndingPattern);
                     console.log('- isBackgroundQuestion:', isBackgroundQuestion);
                     console.log('- conversationLog.length:', this.state.conversationLog.length);
+                    console.log('- auditSaysNotToProceed:', auditSaysNotToProceed);
                     console.log('- shouldCompleteQuestion:', shouldCompleteQuestion);
+                    
+                    if (auditSaysNotToProceed) {
+                        console.log('🛑 Audit LLM preventing question completion:', response.audit_result.reason);
+                    }
                     
                     if (shouldCompleteQuestion) {
                         // Mark the current question as completed
@@ -2052,10 +2062,15 @@ class PrivacyDemoApp {
                         
                         console.log(`After completion - Current index: ${this.state.currentQuestionIndex}, Completed: [${this.state.completedQuestionIndices.join(', ')}]`);
                     } else {
-                        console.log(`Question not completed yet - letting LLM decide when to move to next question`);
+                        if (auditSaysNotToProceed) {
+                            console.log(`🛑 Question not completed - Audit LLM says not to proceed: ${response.audit_result.reason}`);
+                        } else {
+                            console.log(`Question not completed yet - letting LLM decide when to move to next question`);
+                        }
                         
                         // Fallback: If this is the final question and we've had enough exchanges, auto-complete
-                        if (isFinalQuestion) {
+                        // But only if audit LLM doesn't explicitly say not to proceed
+                        if (isFinalQuestion && !auditSaysNotToProceed) {
                             // Count exchanges since the last question completion
                             const lastCompletionIndex = this.state.completedQuestionIndices.length > 0 ? 
                                 Math.max(...this.state.completedQuestionIndices) : -1;

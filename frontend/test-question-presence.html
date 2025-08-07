@@ -86,7 +86,8 @@
         <button onclick="testFinalFollowUpQuestion()">Test Final Follow-Up Question</button>
         <button onclick="testFollowUpMode()">Test Follow-Up Mode</button>
         <button onclick="testFinalFollowUpWithWrappingUp()">Test Final Follow-Up with Wrapping-Up</button>
-        <button onclick="testPrivacyDetection()">Test Privacy Detection</button>
+        <button onclick="testPrivacyDetection()">Test Privacy Detection Fixes</button>
+        <button onclick="testAuditLLMPrecedence()">Test Audit LLM Precedence</button>
         <button onclick="clearResults()">Clear Results</button>
     </div>
 
@@ -684,123 +685,190 @@
         }
 
         async function testPrivacyDetection() {
-            addResult('Testing privacy detection improvements...', 'info');
+            addResult('Testing privacy detection fixes (Carnegie Mellon classification and duplicate detection)...', 'info');
             
             try {
-                // Test 1: Check if "Computer Science" is classified as EDUCATIONAL_RECORD, not NAME
-                const testMessage1 = "I studied Computer Science at Carnegie Mellon University.";
-                addResult(`Testing message 1: "${testMessage1}"`, 'info');
-                
+                // Test 1: Check if Carnegie Mellon is classified as AFFILIATION, not NAME
+                const testMessage1 = "I graduated from Carnegie Mellon University with a degree in Computer Science.";
                 const privacyResponse1 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        user_message: testMessage1
+                        message: testMessage1
                     })
                 });
 
                 const privacyData1 = await privacyResponse1.json();
                 
-                if (privacyData1.privacy_issue) {
-                    addResult('✅ Privacy issue detected in message 1', 'success');
-                    
-                    // Check if Computer Science is classified as EDUCATIONAL_RECORD
-                    const hasComputerScienceAsEducational = privacyData1.safer_versions && 
-                        privacyData1.safer_versions.replacing.includes('EDUCATIONAL_RECORD');
-                    
-                    if (hasComputerScienceAsEducational) {
-                        addResult('✅ Computer Science correctly classified as EDUCATIONAL_RECORD', 'success');
-                    } else {
-                        addResult('⚠️ Computer Science may be incorrectly classified', 'warning');
-                    }
+                if (privacyData1.success) {
+                    addResult('✅ Privacy detection test 1 completed', 'success');
                     
                     // Check if Carnegie Mellon is classified as AFFILIATION
-                    const hasCarnegieMellonAsAffiliation = privacyData1.safer_versions && 
-                        privacyData1.safer_versions.replacing.includes('AFFILIATION');
+                    const hasAffiliation = privacyData1.privacy_detection && 
+                        privacyData1.privacy_detection.safer_versions && 
+                        privacyData1.privacy_detection.safer_versions.replacing &&
+                        /AFFILIATION\d+/.test(privacyData1.privacy_detection.safer_versions.replacing);
                     
-                    if (hasCarnegieMellonAsAffiliation) {
+                    if (hasAffiliation) {
                         addResult('✅ Carnegie Mellon correctly classified as AFFILIATION', 'success');
                     } else {
-                        addResult('⚠️ Carnegie Mellon may be incorrectly classified', 'warning');
+                        addResult('⚠️ Carnegie Mellon not classified as AFFILIATION', 'warning');
                     }
                     
-                    addResult(`Message 1 result: ${privacyData1.safer_versions.replacing}`, 'info');
+                    addResult(`Test 1 Result: ${JSON.stringify(privacyData1.privacy_detection, null, 2)}`, 'info');
                 } else {
-                    addResult('⚠️ No privacy issue detected in message 1', 'warning');
+                    addResult(`❌ Privacy detection test 1 failed: ${privacyData1.error}`, 'error');
                 }
-                
-                // Test 2: Check duplicate entity detection - mention Carnegie Mellon again
-                const testMessage2 = "I graduated from Carnegie Mellon with a degree in Computer Science.";
-                addResult(`Testing message 2: "${testMessage2}"`, 'info');
-                
+
+                // Test 2: Check duplicate detection - same entity should get same placeholder
+                const testMessage2 = "I went to Carnegie Mellon for my undergraduate degree, and then I worked at Carnegie Mellon for a few years.";
                 const privacyResponse2 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        user_message: testMessage2
+                        message: testMessage2
                     })
                 });
 
                 const privacyData2 = await privacyResponse2.json();
                 
-                if (privacyData2.privacy_issue) {
-                    addResult('✅ Privacy issue detected in message 2', 'success');
+                if (privacyData2.success) {
+                    addResult('✅ Privacy detection test 2 completed', 'success');
                     
-                    // Check if Carnegie Mellon gets the same placeholder (should be AFFILIATION1)
-                    const hasSameCarnegieMellonPlaceholder = privacyData2.safer_versions && 
-                        privacyData2.safer_versions.replacing.includes('AFFILIATION1');
+                    // Check if both instances of Carnegie Mellon get the same placeholder
+                    const replacingText = privacyData2.privacy_detection.safer_versions.replacing;
+                    const affiliationMatches = replacingText.match(/AFFILIATION\d+/g);
                     
-                    if (hasSameCarnegieMellonPlaceholder) {
-                        addResult('✅ Carnegie Mellon correctly reuses same placeholder (AFFILIATION1)', 'success');
+                    if (affiliationMatches && affiliationMatches.length >= 2) {
+                        const uniquePlaceholders = [...new Set(affiliationMatches)];
+                        if (uniquePlaceholders.length === 1) {
+                            addResult('✅ Duplicate detection working: Both Carnegie Mellon instances got same placeholder', 'success');
+                        } else {
+                            addResult('⚠️ Duplicate detection issue: Different placeholders for same entity', 'warning');
+                        }
                     } else {
-                        addResult('⚠️ Carnegie Mellon may have different placeholder', 'warning');
+                        addResult('⚠️ No AFFILIATION placeholders found in duplicate test', 'warning');
                     }
                     
-                    addResult(`Message 2 result: ${privacyData2.safer_versions.replacing}`, 'info');
+                    addResult(`Test 2 Result: ${JSON.stringify(privacyData2.privacy_detection, null, 2)}`, 'info');
                 } else {
-                    addResult('⚠️ No privacy issue detected in message 2', 'warning');
+                    addResult(`❌ Privacy detection test 2 failed: ${privacyData2.error}`, 'error');
                 }
-                
-                // Test 3: Check if Computer Science is still classified as EDUCATIONAL_RECORD
-                const testMessage3 = "My major was Computer Science and I loved it.";
-                addResult(`Testing message 3: "${testMessage3}"`, 'info');
-                
+
+                // Test 3: Check that person names are still classified as NAME
+                const testMessage3 = "My name is John Smith and I work at Google.";
                 const privacyResponse3 = await fetch(`${API_BASE_URL}/api/privacy_detection`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        user_message: testMessage3
+                        message: testMessage3
                     })
                 });
 
                 const privacyData3 = await privacyResponse3.json();
                 
-                if (privacyData3.privacy_issue) {
-                    addResult('✅ Privacy issue detected in message 3', 'success');
+                if (privacyData3.success) {
+                    addResult('✅ Privacy detection test 3 completed', 'success');
                     
-                    // Check if Computer Science is classified as EDUCATIONAL_RECORD
-                    const hasComputerScienceAsEducational = privacyData3.safer_versions && 
-                        privacyData3.safer_versions.replacing.includes('EDUCATIONAL_RECORD');
+                    // Check if John Smith is classified as NAME
+                    const hasName = privacyData3.privacy_detection && 
+                        privacyData3.privacy_detection.safer_versions && 
+                        privacyData3.privacy_detection.safer_versions.replacing &&
+                        /NAME\d+/.test(privacyData3.privacy_detection.safer_versions.replacing);
                     
-                    if (hasComputerScienceAsEducational) {
-                        addResult('✅ Computer Science correctly classified as EDUCATIONAL_RECORD in message 3', 'success');
+                    if (hasName) {
+                        addResult('✅ Person name correctly classified as NAME', 'success');
                     } else {
-                        addResult('⚠️ Computer Science may be incorrectly classified in message 3', 'warning');
+                        addResult('⚠️ Person name not classified as NAME', 'warning');
                     }
                     
-                    addResult(`Message 3 result: ${privacyData3.safer_versions.replacing}`, 'info');
+                    addResult(`Test 3 Result: ${JSON.stringify(privacyData3.privacy_detection, null, 2)}`, 'info');
                 } else {
-                    addResult('⚠️ No privacy issue detected in message 3', 'warning');
+                    addResult(`❌ Privacy detection test 3 failed: ${privacyData3.error}`, 'error');
                 }
                 
             } catch (error) {
-                addResult(`❌ Error testing privacy detection: ${error.message}`, 'error');
+                addResult(`❌ Error testing privacy detection fixes: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuditLLMPrecedence() {
+            addResult('Testing audit LLM precedence over main LLM decision...', 'info');
+            
+            try {
+                // Test with a response that should trigger audit LLM to say "shouldProceed: false"
+                const testMessage = "I used AI once for interview prep.";
+                const chatResponse = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: testMessage,
+                        step: 6,
+                        questionMode: true,
+                        currentQuestion: "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+                        predefinedQuestions: [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?",
+                            "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
+                            "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
+                            "Have you ever considered or actually used GenAI during a live interview? What happened?",
+                            "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+                        ],
+                        isFinalQuestion: true,
+                        followUpMode: false
+                    })
+                });
+
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    addResult('✅ Audit LLM precedence test completed', 'success');
+                    
+                    // Check if audit result is present
+                    if (chatData.audit_result) {
+                        addResult(`✅ Audit result received: ${JSON.stringify(chatData.audit_result, null, 2)}`, 'info');
+                        
+                        // Check if audit says not to proceed
+                        if (chatData.audit_result.shouldProceed === false) {
+                            addResult('✅ Audit LLM correctly says shouldProceed: false', 'success');
+                            
+                            // Check if question_completed respects audit decision
+                            if (chatData.question_completed === false) {
+                                addResult('✅ Question completion respects audit LLM decision (question_completed: false)', 'success');
+                            } else {
+                                addResult('⚠️ Question completion does not respect audit LLM decision (question_completed: true)', 'warning');
+                            }
+                        } else {
+                            addResult('⚠️ Audit LLM says shouldProceed: true (unexpected for brief response)', 'warning');
+                        }
+                    } else {
+                        addResult('⚠️ No audit result received', 'warning');
+                    }
+                    
+                    // Check if follow-up questions are provided
+                    if (chatData.follow_up_questions && chatData.follow_up_questions.length > 0) {
+                        addResult('✅ Follow-up questions provided by audit LLM', 'success');
+                        addResult(`Follow-up questions: ${chatData.follow_up_questions.join(', ')}`, 'info');
+                    } else {
+                        addResult('⚠️ No follow-up questions provided', 'warning');
+                    }
+                    
+                    addResult(`Final Bot Response: ${chatData.bot_response}`, 'info');
+                } else {
+                    addResult(`❌ Audit LLM precedence test failed: ${chatData.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Error testing audit LLM precedence: ${error.message}`, 'error');
             }
         }
 

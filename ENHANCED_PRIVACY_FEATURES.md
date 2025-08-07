@@ -12,24 +12,6 @@ The privacy detection system has been significantly enhanced to consider convers
 
 **Solution**: Enhanced privacy detection now considers the entire conversation history when analyzing each message.
 
-### 2. Improved Entity Classification
-
-**Problem Solved**: The system was incorrectly classifying academic fields like "Computer Science" as names instead of educational records.
-
-**Solution**: Enhanced classification rules ensure proper categorization:
-- Academic fields, majors, and subjects → `EDUCATIONAL_RECORD`
-- Universities and organizations → `AFFILIATION`
-- Only actual person names → `NAME`
-
-### 3. Duplicate Entity Detection
-
-**Problem Solved**: The same entity (e.g., "Carnegie Mellon") was getting different placeholders (`[Name2]`, `[Name3]`) instead of reusing the same placeholder.
-
-**Solution**: Implemented entity tracking system that:
-- Tracks all detected entities across the conversation
-- Reuses the same placeholder for duplicate entities
-- Provides conversation context to the AI for better detection
-
 #### Features:
 - **Conversation Context Analysis**: Each message is analyzed in the context of previous messages
 - **Cumulative Risk Detection**: Identifies when multiple pieces of information create a more complete profile
@@ -40,7 +22,7 @@ The privacy detection system has been significantly enhanced to consider convers
 The AI-based privacy detection now includes:
 
 ```javascript
-// Enhanced system prompt with context awareness and entity tracking
+// Enhanced system prompt with context awareness
 const contextAnalysis = `
 IMPORTANT: Analyze this message in the context of the entire conversation. Consider:
 1. Cumulative privacy risks from combining information across multiple messages
@@ -48,30 +30,12 @@ IMPORTANT: Analyze this message in the context of the entire conversation. Consi
 3. Contextual privacy issues that might not be obvious from the single message alone
 4. Patterns of information sharing that could lead to identification
 5. Whether this message reveals additional details about previously mentioned information
-
-CRITICAL CLASSIFICATION RULES:
-- "Computer Science", "Mathematics", "Engineering", etc. should be classified as EDUCATIONAL_RECORD, not NAME
-- Academic fields, majors, and subjects are EDUCATIONAL_RECORD
-- Only actual person names (like "John Smith", "Sarah Johnson") should be classified as NAME
-- Universities and organizations (like "Carnegie Mellon", "MIT", "Google") should be classified as AFFILIATION
-
-DUPLICATE ENTITY DETECTION: If you detect the same entity (e.g., "Carnegie Mellon") that was mentioned before, use the same placeholder number.
 `;
 ```
 
 #### Contextual Risk Examples:
 - **Location + Company**: "I work at Google" + "I live in Mountain View" = more identifiable
 - **Education + Age + Job**: "Graduated from Stanford" + "I'm 25" + "software engineer" = detailed profile
-
-#### Entity Classification Examples:
-- **Correct**: "Computer Science" → `EDUCATIONAL_RECORD`
-- **Correct**: "Carnegie Mellon" → `AFFILIATION`
-- **Correct**: "John Smith" → `NAME`
-- **Incorrect (Fixed)**: "Computer Science" → `NAME` (was happening before)
-
-#### Duplicate Entity Examples:
-- **Before**: "Carnegie Mellon" → `[Name2]`, then "Carnegie Mellon" → `[Name3]`
-- **After**: "Carnegie Mellon" → `[AFFILIATION1]`, then "Carnegie Mellon" → `[AFFILIATION1]` (same placeholder)
 - **Salary + Location + Company**: "I earn $150k" + previous location/company info = financial privacy risk
 
 ### 3. Pattern-Based Contextual Detection
@@ -295,18 +259,6 @@ The test script includes:
 - Provides better privacy protection recommendations
 
 ## Implementation Notes
-
-### Entity Tracking System
-- **Entity Storage**: Uses Map data structure to track detected entities across conversation
-- **Duplicate Detection**: Compares entity text and type to identify duplicates
-- **Placeholder Consistency**: Ensures same entity gets same placeholder throughout conversation
-- **Session Management**: Tracks entities per conversation session
-
-### Enhanced Classification Rules
-- **Academic Fields**: "Computer Science", "Mathematics", "Engineering" → `EDUCATIONAL_RECORD`
-- **Organizations**: "Carnegie Mellon", "MIT", "Google" → `AFFILIATION`
-- **Person Names**: Only actual names like "John Smith" → `NAME`
-- **AI Prompt Enhancement**: Explicit rules in detection prompts prevent misclassification
 
 ### Backward Compatibility
 - All existing API endpoints remain functional

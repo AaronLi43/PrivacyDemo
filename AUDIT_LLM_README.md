@@ -132,6 +132,20 @@ The system only regenerates responses if:
 - `shouldRegenerate` is `true`
 - `confidence` is >= 0.7
 
+## Decision Precedence
+
+### Audit LLM Authority
+The audit LLM has final authority over question completion decisions:
+- **Backend**: If audit LLM says `shouldProceed: false` with confidence >= 0.7, the question is NOT completed
+- **Frontend**: Respects audit LLM decision and prevents premature conversation ending
+- **Override**: Main LLM decisions are only used if audit LLM doesn't explicitly say not to proceed
+
+### Implementation
+- **Backend Logic**: Prioritizes audit LLM decision over main LLM decision
+- **Frontend Logic**: Checks `audit_result.shouldProceed` before completing questions
+- **Logging**: Clear logging when audit LLM prevents completion
+- **Fallback Prevention**: Prevents auto-completion when audit LLM says not to proceed
+
 ## Frontend Integration
 
 The frontend displays audit LLM status in the sidebar and logs audit decisions in the console.
@@ -255,3 +269,30 @@ Check server logs for:
 - **Audit Logic**: Special detection for wrapping-up sentences in final follow-up responses
 - **Regeneration**: Includes examples of proper wrapping-up responses in regeneration prompts
 - **Testing**: New test function `testFinalFollowUpWithWrappingUp()` added to verify functionality
+
+## Privacy Detection Fixes
+
+### Issue Resolution: Carnegie Mellon Classification
+- **Problem**: Carnegie Mellon was being classified as NAME instead of AFFILIATION
+- **Solution**: Enhanced detection prompt with specific classification rules
+- **Rules**: Universities and organizations should be classified as AFFILIATION, not NAME
+- **Examples**: "Carnegie Mellon", "MIT", "Stanford" are all AFFILIATION
+
+### Issue Resolution: Duplicate Entity Detection
+- **Problem**: Same entities (like "Carnegie Mellon") were getting different placeholders
+- **Solution**: Implemented session-based entity tracking with consistent placeholders
+- **Logic**: First occurrence gets new placeholder, subsequent occurrences reuse same placeholder
+- **Storage**: Entities tracked in session.detectedEntities with entityKey format
+
+### Implementation Details
+- **Session Tracking**: Added detectedEntities object to session management
+- **Entity Keys**: Format: `${entityText.toLowerCase().trim()}_${entityType}`
+- **Placeholder Reuse**: Check existing entities before generating new placeholders
+- **Reset Handling**: Clear detectedEntities when session is reset
+- **Testing**: New test function `testPrivacyDetection()` added to verify fixes
+
+### Classification Rules
+- **AFFILIATION**: Universities, companies, organizations (Carnegie Mellon, MIT, Google)
+- **NAME**: Only actual person names (John Smith, Sarah Johnson)
+- **EDUCATIONAL_RECORD**: Academic fields, majors, subjects (Computer Science, Mathematics)
+- **Duplicate Detection**: Same entity gets same placeholder across conversation
