@@ -20,11 +20,11 @@ class PrivacyDemoApp {
         //
         // EXAMPLE CONFIGURATIONS:
         // 
-        // 1. Hide sidebar by default (for cleaner UI):
+        // 1. Hide sidebar by default (current default - for cleaner UI):
         // this.config = {
         //     sidebarHiddenByDefault: true,
-        //     enableSidebarToggle: true,
-        //     persistSidebarState: true
+        //     enableSidebarToggle: false,
+        //     persistSidebarState: false
         // };
         //
         // 2. Disable sidebar toggle completely (for locked UI):
@@ -34,17 +34,24 @@ class PrivacyDemoApp {
         //     persistSidebarState: false
         // };
         //
-        // 3. Always show sidebar (current default):
+        // 3. Always show sidebar (previous default):
         // this.config = {
         //     sidebarHiddenByDefault: false,
         //     enableSidebarToggle: true,
         //     persistSidebarState: true
         // };
+        //
+        // 4. Hide sidebar by default (current default):
+        // this.config = {
+        //     sidebarHiddenByDefault: true,
+        //     enableSidebarToggle: false,
+        //     persistSidebarState: false
+        // };
         
         this.config = {
-            sidebarHiddenByDefault: false, // Set to true to hide sidebar by default
-            enableSidebarToggle: true,     // Set to false to disable sidebar toggle functionality
-            persistSidebarState: true      // Set to false to not persist sidebar state
+            sidebarHiddenByDefault: true,  // Hide sidebar by default
+            enableSidebarToggle: false,    // Disable sidebar toggle functionality
+            persistSidebarState: false     // Don't persist sidebar state
         };
 
         this.state = {
