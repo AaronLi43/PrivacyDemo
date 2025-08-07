@@ -11,6 +11,42 @@ if (window.location.hostname.includes('vercel.app')) {
 // Main Application Class
 class PrivacyDemoApp {
     constructor() {
+        // Configuration object for app settings
+        // 
+        // SIDEBAR CONFIGURATION OPTIONS:
+        // - sidebarHiddenByDefault: Set to true to hide sidebar by default
+        // - enableSidebarToggle: Set to false to disable sidebar toggle functionality
+        // - persistSidebarState: Set to false to not persist sidebar state
+        //
+        // EXAMPLE CONFIGURATIONS:
+        // 
+        // 1. Hide sidebar by default (for cleaner UI):
+        // this.config = {
+        //     sidebarHiddenByDefault: true,
+        //     enableSidebarToggle: true,
+        //     persistSidebarState: true
+        // };
+        //
+        // 2. Disable sidebar toggle completely (for locked UI):
+        // this.config = {
+        //     sidebarHiddenByDefault: false,
+        //     enableSidebarToggle: false,
+        //     persistSidebarState: false
+        // };
+        //
+        // 3. Always show sidebar (current default):
+        // this.config = {
+        //     sidebarHiddenByDefault: false,
+        //     enableSidebarToggle: true,
+        //     persistSidebarState: true
+        // };
+        
+        this.config = {
+            sidebarHiddenByDefault: false, // Set to true to hide sidebar by default
+            enableSidebarToggle: true,     // Set to false to disable sidebar toggle functionality
+            persistSidebarState: true      // Set to false to not persist sidebar state
+        };
+
         this.state = {
             mode: 'naive',
             conversationLog: [],
@@ -60,7 +96,9 @@ class PrivacyDemoApp {
             userAgentEnabled: false,
             userAgentResponding: false,
             // Privacy choices for analysis mode
-            privacyChoices: {}
+            privacyChoices: {},
+            // Sidebar state
+            sidebarHidden: this.config.sidebarHiddenByDefault
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -74,6 +112,7 @@ class PrivacyDemoApp {
         this.bindEvents();
         this.updateUI();
         this.updateSidebarToggle();
+        this.updateConfigurationUI();
         this.updateCopyPasteToggle();
         this.checkAPIStatus();
         this.loadFromLocalStorage();
@@ -781,6 +820,28 @@ class PrivacyDemoApp {
                 this.updateConversationDisplay(true);
             });
         }
+
+        // Configuration event handlers
+        const sidebarConfigToggle = document.getElementById('sidebar-config-toggle');
+        if (sidebarConfigToggle) {
+            sidebarConfigToggle.addEventListener('click', () => {
+                this.toggleSidebarConfig();
+            });
+        }
+
+        const sidebarDefaultState = document.getElementById('sidebar-default-state');
+        if (sidebarDefaultState) {
+            sidebarDefaultState.addEventListener('click', () => {
+                this.toggleSidebarDefaultState();
+            });
+        }
+
+        const sidebarPersistState = document.getElementById('sidebar-persist-state');
+        if (sidebarPersistState) {
+            sidebarPersistState.addEventListener('click', () => {
+                this.toggleSidebarPersistState();
+            });
+        }
     }
 
     // Set application mode
@@ -1253,9 +1314,17 @@ class PrivacyDemoApp {
 
     // Toggle sidebar visibility
     toggleSidebar() {
+        if (!this.config.enableSidebarToggle) {
+            console.log('Sidebar toggle is disabled in configuration');
+            return;
+        }
+        
         this.state.sidebarHidden = !this.state.sidebarHidden;
         this.updateSidebarToggle();
-        this.saveToLocalStorage();
+        
+        if (this.config.persistSidebarState) {
+            this.saveToLocalStorage();
+        }
     }
 
     // Update sidebar toggle button and container state
@@ -1265,12 +1334,90 @@ class PrivacyDemoApp {
         
         if (!toggleBtn) return;
         
+        // Hide toggle button if sidebar toggle is disabled
+        if (!this.config.enableSidebarToggle) {
+            toggleBtn.style.display = 'none';
+            return;
+        } else {
+            toggleBtn.style.display = 'block';
+        }
+        
         if (this.state.sidebarHidden) {
             container.classList.add('sidebar-hidden');
             toggleBtn.innerHTML = '<i class="fas fa-eye"></i><span> Show Config</span>';
         } else {
             container.classList.remove('sidebar-hidden');
             toggleBtn.innerHTML = '<i class="fas fa-bars"></i><span> Hide Config</span>';
+        }
+    }
+
+    // Configuration toggle functions
+    toggleSidebarConfig() {
+        this.config.enableSidebarToggle = !this.config.enableSidebarToggle;
+        this.updateSidebarToggle();
+        this.updateConfigurationUI();
+        this.saveToLocalStorage();
+        this.showNotification(
+            this.config.enableSidebarToggle ? '✅ Sidebar toggle enabled' : '❌ Sidebar toggle disabled', 
+            'info'
+        );
+    }
+
+    toggleSidebarDefaultState() {
+        this.config.sidebarHiddenByDefault = !this.config.sidebarHiddenByDefault;
+        this.updateConfigurationUI();
+        this.saveToLocalStorage();
+        this.showNotification(
+            this.config.sidebarHiddenByDefault ? '✅ Sidebar will be hidden by default' : '✅ Sidebar will be visible by default', 
+            'info'
+        );
+    }
+
+    toggleSidebarPersistState() {
+        this.config.persistSidebarState = !this.config.persistSidebarState;
+        this.updateConfigurationUI();
+        this.saveToLocalStorage();
+        this.showNotification(
+            this.config.persistSidebarState ? '✅ Sidebar state will be persisted' : '❌ Sidebar state will not be persisted', 
+            'info'
+        );
+    }
+
+    updateConfigurationUI() {
+        // Update sidebar config toggle button
+        const sidebarConfigToggle = document.getElementById('sidebar-config-toggle');
+        if (sidebarConfigToggle) {
+            if (this.config.enableSidebarToggle) {
+                sidebarConfigToggle.innerHTML = '<i class="fas fa-toggle-on"></i> Enabled';
+                sidebarConfigToggle.className = 'btn btn-success';
+            } else {
+                sidebarConfigToggle.innerHTML = '<i class="fas fa-toggle-off"></i> Disabled';
+                sidebarConfigToggle.className = 'btn btn-secondary';
+            }
+        }
+
+        // Update sidebar default state button
+        const sidebarDefaultState = document.getElementById('sidebar-default-state');
+        if (sidebarDefaultState) {
+            if (this.config.sidebarHiddenByDefault) {
+                sidebarDefaultState.innerHTML = '<i class="fas fa-eye-slash"></i> Hidden';
+                sidebarDefaultState.className = 'btn btn-warning';
+            } else {
+                sidebarDefaultState.innerHTML = '<i class="fas fa-eye"></i> Visible';
+                sidebarDefaultState.className = 'btn btn-success';
+            }
+        }
+
+        // Update sidebar persist state button
+        const sidebarPersistState = document.getElementById('sidebar-persist-state');
+        if (sidebarPersistState) {
+            if (this.config.persistSidebarState) {
+                sidebarPersistState.innerHTML = '<i class="fas fa-save"></i> Enabled';
+                sidebarPersistState.className = 'btn btn-success';
+            } else {
+                sidebarPersistState.innerHTML = '<i class="fas fa-times"></i> Disabled';
+                sidebarPersistState.className = 'btn btn-secondary';
+            }
         }
     }
 
@@ -4107,6 +4254,9 @@ class PrivacyDemoApp {
                 qualificationAnswers: this.state.qualificationAnswers
             };
             localStorage.setItem('privacyDemoState', JSON.stringify(stateToSave));
+            
+            // Save configuration separately
+            localStorage.setItem('privacyDemoConfig', JSON.stringify(this.config));
         } catch (error) {
             console.error('Failed to save to localStorage:', error);
         }
@@ -4115,10 +4265,22 @@ class PrivacyDemoApp {
     // Load from localStorage
     loadFromLocalStorage() {
         try {
+            // Load configuration first
+            const savedConfig = localStorage.getItem('privacyDemoConfig');
+            if (savedConfig) {
+                const parsedConfig = JSON.parse(savedConfig);
+                this.config = { ...this.config, ...parsedConfig };
+            }
+            
             const saved = localStorage.getItem('privacyDemoState');
             if (saved) {
                 const savedState = JSON.parse(saved);
                 this.state = { ...this.state, ...savedState };
+                
+                // Respect configuration for sidebar state
+                if (!this.config.persistSidebarState) {
+                    this.state.sidebarHidden = this.config.sidebarHiddenByDefault;
+                }
                 
                 // Ensure background mode is properly restored for ongoing conversations
                 if (this.state.conversationLog.length > 0) {
@@ -4132,12 +4294,14 @@ class PrivacyDemoApp {
                     // but ensure the UI is properly initialized
                     this.updateUI();
                     this.updateSidebarToggle();
+                    this.updateConfigurationUI();
                     this.updateCopyPasteToggle();
                     this.applyCopyPasteSettings();
                     this.updateUserAgentButton();
                 } else {
                     this.updateUI();
                     this.updateSidebarToggle();
+                    this.updateConfigurationUI();
                     this.updateCopyPasteToggle();
                     this.applyCopyPasteSettings();
                     this.updateUserAgentButton();
