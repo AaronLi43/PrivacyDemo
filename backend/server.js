@@ -402,21 +402,23 @@ app.post('/api/chat', async (req, res) => {
                         "";
                     
                     if (isFirstExchange) {
-                        systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+                        systemPrompt = `You are a helpful, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
 
 Your role is to:
 1. Provide a warm, welcoming introduction
 2. Explain that you'll be asking questions about their experiences with AI and job interviews
 3. Then naturally transition to asking the first question in an interactive, conversational way
 
-IMPORTANT: Do NOT immediately jump into asking the first question. Start with a proper introduction and welcome.
+IMPORTANT: Do NOT immediately jump into asking the first question. Start with a proper and concise introduction and welcome.
 
-CRITICAL: When asking the predefined questions, be INTERACTIVE and CONVERSATIONAL. Don't just ask the question directly. Instead:
+CRITICAL: When asking the predefined questions, be CONCISE and CONVERSATIONAL. Don't just ask the question directly. Instead:
 - Show genuine curiosity and interest
 - Provide context about why you're asking
 - Make it feel like a natural conversation, not an interview
-- Ask follow-up questions based on their responses
-- Engage with what they share before moving to the next topic
+- Ask follow-up questions based on their responses but not too many
+- Keep responses shorter and more direct
+- Engage with what they share BRIEFLY before moving to the next topic but not to verbose
+- When users share a sensitive and controversial story, you could show your concern and not always agree with them.
 
 Example of a good first response:
 "Hello! Thank you for joining me today. I'm here to have a conversation with you about your experiences with AI and job interviews. I'll be asking you some questions to learn more about how you've used AI tools in your interview preparation process. 
@@ -470,7 +472,7 @@ Your role is to ask the predefined questions naturally and engage in follow-up c
 
 1. Ask the predefined questions naturally and engage in follow-up conversation based on the user's responses
 2. Gradually ask more specific and personal follow-up questions to gather concrete, real stories
-3. Show genuine interest in their answers
+3. Show genuine interest in their answers and not too verbose
 4. Keep responses concise but engaging
 5. Move to the next predefined question when you feel the current topic has been sufficiently explored
 
@@ -902,13 +904,14 @@ DECISION GUIDELINES:
 - If user response is moderate (3-4 sentences with some detail): 
   * For background questions: shouldProceed = true (sufficient for background)
   * For main questions: shouldProceed = false, suggest follow-up questions
-- If user response is comprehensive (5+ sentences with specific examples): shouldProceed = true
+- If user response is comprehensive (3-4 sentences with specific examples): shouldProceed = true
 - For final questions: require more follow-up conversation before concluding
 
 FOLLOW-UP MODE GUIDELINES:
 When in follow-up mode (Follow-up Mode: true):
 - Be more lenient about completing follow-up questions
 - Allow completion after 1-2 exchanges for follow-up questions
+- be concise and to the point, reduce repetition
 - Focus on whether the specific follow-up question has been adequately addressed
 - Do not suggest additional follow-up questions (since we're already in follow-up mode)
 
@@ -1085,7 +1088,7 @@ QUESTION PRESENCE GUIDELINES:
 - Questions should be natural and conversational
 - Questions should be relevant to the current topic or help transition to the next topic
 - For background questions: Questions should be efficient and move quickly to main topics
-- For main questions: Questions should be engaging and encourage detailed responses
+- For main questions: Questions should be engaging and encourage detailed responses but be concise and to the point
 - For final questions: The AI MUST include the final question in the response before concluding
 
 CRITICAL RULES:
@@ -1276,7 +1279,7 @@ INSTRUCTIONS:
 3. Ensure the question helps gather more information about the current topic
 4. Keep the response engaging and interactive
 5. Show genuine interest and curiosity
-6. Make the conversation feel warm and natural
+6. Make the conversation feel natural, concise, and to the point
 
 QUESTION GUIDELINES:
 - Ask follow-up questions that invite elaboration
@@ -1408,7 +1411,7 @@ AUDIT EVALUATION:
 INSTRUCTIONS:
 1. If the audit suggests follow-up questions, incorporate them naturally into your response
 2. Make the response more interactive, conversational, and engaging
-3. Show genuine interest and curiosity
+3. Show genuine interest and curiosity but be concise and to the point
 4. Keep the response concise but warm and natural
 5. If the audit indicates the user provided minimal information, ask for more details in a friendly way
 6. If the audit suggests continuing the conversation, make your response more engaging
