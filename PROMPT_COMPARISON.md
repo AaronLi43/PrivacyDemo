@@ -288,16 +288,18 @@ DECISION GUIDELINES:
   * For main questions: shouldProceed = false, suggest follow-up questions
 - If user response is moderate (3-4 sentences with some detail): 
   * For background questions: shouldProceed = true (sufficient for background)
-  * For main questions: shouldProceed = false, suggest follow-up questions
+  * For main questions: shouldProceed = true (user has shared sufficient information)
 - If user response is comprehensive (3-4 sentences with specific examples): shouldProceed = true
-- For final questions: require more follow-up conversation before concluding
+- If user has shared a personal story or specific experience, proceed to next question
+- For final questions: allow completion after 2-3 exchanges if user has shared personal stories
 
 FOLLOW-UP MODE GUIDELINES:
 When in follow-up mode (Follow-up Mode: true):
 - Be more lenient about completing follow-up questions
 - Allow completion after 1-2 exchanges for follow-up questions
-- be concise and to the point, reduce repetition
+- Be concise and to the point, reduce repetition
 - Focus on whether the specific follow-up question has been adequately addressed
+- If user has shared a personal story or specific experience, proceed to next question
 - Do not suggest additional follow-up questions (since we're already in follow-up mode)
 
 FOLLOW-UP QUESTION GUIDELINES:
@@ -333,9 +335,10 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
 EXAMPLES:
 - Brief response (background question): {"shouldProceed": true, "reason": "Background question adequately answered with basic information, ready to proceed", "confidence": 0.8}
 - Brief response (main question): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up questions", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
+- Moderate response with personal story: {"shouldProceed": true, "reason": "User shared personal story, ready to proceed", "confidence": 0.9}
 - Moderate response (background question): {"shouldProceed": true, "reason": "Background question sufficiently answered, ready to move to more substantive topics", "confidence": 0.9}
 - Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples, topic sufficiently explored", "confidence": 0.9}
-- Final question needs more discussion: {"shouldProceed": false, "reason": "Final question needs more follow-up conversation before concluding", "confidence": 0.7, "followUpQuestions": ["What specific outcomes did you achieve from using AI?", "Can you share another example of how you used AI in your preparation?"]}
+- Final question with personal story: {"shouldProceed": true, "reason": "User shared personal experience, ready to conclude", "confidence": 0.8}
 - Follow-up mode brief response: {"shouldProceed": true, "reason": "Follow-up question adequately addressed, ready to proceed", "confidence": 0.8}
 - Follow-up mode comprehensive response: {"shouldProceed": true, "reason": "Follow-up question thoroughly addressed", "confidence": 0.9}
 - Background question with minimal response: {"shouldProceed": true, "reason": "Background question completed efficiently, no follow-up needed", "confidence": 0.8}
