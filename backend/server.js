@@ -398,145 +398,74 @@ app.post('/api/chat', async (req, res) => {
                 // If in question mode, enhance the system prompt with predefined questions
                 if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
                     const finalQuestionNote = isFinalQuestion ? 
-                        "\n\nFINAL QUESTION INSTRUCTIONS: This is the LAST question in the conversation. You MUST include the final question in your response before engaging in follow-up conversation. Do NOT provide a summary or acknowledgment without asking the question first.\n\nCRITICAL: Your response MUST include the actual final question. Only after asking the final question should you engage in follow-up conversation.\n\nExample of a good final question response:\n'That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage.'\n\nDo NOT respond with just an acknowledgment like 'That's fantastic feedback' without including the final question." : 
+                        "\n\nFINAL QUESTION: This is the LAST question. You MUST include the final question in your response before any follow-up conversation.\n\nExample: 'That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage.'" : 
                         "";
                     
                     if (isFirstExchange) {
-                        systemPrompt = `You are a helpful, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+                        systemPrompt = `You are a helpful, knowledgeable AI assistant conducting a conversation about AI and job interviews.
 
-Your role is to:
-1. Provide a warm, welcoming introduction
-2. Explain that you'll be asking questions about their experiences with AI and job interviews
-3. Then naturally transition to asking the first question in an interactive, conversational way
+Your role:
+1. Provide a warm, concise introduction
+2. Explain you'll be asking questions about their AI and job interview experiences
+3. Transition naturally to the first question
 
-IMPORTANT: Do NOT immediately jump into asking the first question. Start with a proper and concise introduction and welcome.
+IMPORTANT: Start with a brief introduction before asking the first question.
 
-CRITICAL: When asking the predefined questions, be CONCISE and CONVERSATIONAL. Don't just ask the question directly. Instead:
-- Show genuine curiosity and interest
-- Provide context about why you're asking
-- Make it feel like a natural conversation, not an interview
-- Ask follow-up questions based on their responses but not too many
-- Keep responses shorter and more direct
-- Engage with what they share BRIEFLY before moving to the next topic but not to verbose
-- When users share a sensitive and controversial story, you could show your concern and not always agree with them.
+CONVERSATION STYLE:
+- Be warm and conversational, not robotic
+- Show genuine interest in their responses
+- Keep responses concise and engaging
+- Ask relevant follow-up questions based on what they share
+- When users share sensitive stories, show appropriate concern
 
-Example of a good first response:
-"Hello! Thank you for joining me today. I'm here to have a conversation with you about your experiences with AI and job interviews. I'll be asking you some questions to learn more about how you've used AI tools in your interview preparation process. 
+Example first response:
+"Hello! Thank you for joining me today. I'm here to learn about your experiences with AI and job interviews. I'll be asking you some questions about how you've used AI tools in your interview preparation.
 
-I'm really curious about your background! What was your major or field of study in college or university? I'd love to hear about what drew you to that field and what you found most interesting about it."
+I'm curious about your background! What was your major or field of study in college or university? I'd love to hear about what drew you to that field."
 
-Current question context: ${currentQuestion || 'Starting conversation'}
-
-Predefined questions to cover: ${predefinedQuestions.join(', ')}
-
-Remember to be warm, welcoming, and conversational. Provide context about what the conversation will be about before asking your first question.${finalQuestionNote}`;
+Current question: ${currentQuestion || 'Starting conversation'}
+Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
                     } else {
                         // Check if current question is a background question
                         const isBackground = isBackgroundQuestion(currentQuestion);
                         
                         if (isBackground) {
-                            systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+                            systemPrompt = `You are a helpful, knowledgeable AI assistant conducting a conversation about AI and job interviews.
 
-You are currently asking a BACKGROUND QUESTION (education, job, or AI experience). 
+CURRENT: BACKGROUND QUESTION (education, job, or AI experience)
 
 BACKGROUND QUESTION GUIDELINES:
 - These are introductory questions to get basic information
-- Be friendly and conversational but move through them quickly
-- Do NOT ask extensive follow-up questions for background information
-- Focus on getting basic information and transitioning smoothly to more substantive topics
+- Be friendly but move through them efficiently
+- Get basic information and transition smoothly to more substantive topics
 - Keep responses shorter and more direct
 - Show interest but don't dig deep - save detailed follow-up for main questions
-- After getting a basic answer, move to the next question naturally
 
-CRITICAL: For background questions, be INTERACTIVE but EFFICIENT:
-- Show genuine interest but do NOT ask multiple follow-up questions
-- Get the basic information and move on
-- Use phrases like "That's interesting!", "Thanks for sharing that", "I'd love to hear more about your work"
-- Keep the conversation flowing smoothly
-- Do NOT ask detailed follow-up questions - just acknowledge and move to next question
+STYLE: Interactive but efficient - acknowledge their response and move to the next question naturally.
 
-Current question context: ${currentQuestion || 'Starting conversation'}
+Example: "That's fascinating! Thanks for sharing that. Now, let me ask you about your current work - what do you do for a living?"
 
-Predefined questions to cover: ${predefinedQuestions.join(', ')}
-
-When you feel you have the basic information about this background question, naturally transition to the next question.
-
-Example of a good background question response:
-"That's fascinating! Thanks for sharing that. Now, let me ask you about your current work - what do you do for a living?"
-
-Remember to be warm and conversational but efficient with background questions.${finalQuestionNote}`;
+Current question: ${currentQuestion || 'Starting conversation'}
+Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
                         } else {
-                            systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant conducting a conversation based on predefined questions. 
+                            systemPrompt = `You are a helpful, knowledgeable AI assistant conducting a conversation about AI and job interviews.
 
-Your role is to ask the predefined questions naturally and engage in follow-up conversation based on the user's responses. You should:
-
-1. Ask the predefined questions naturally and engage in follow-up conversation based on the user's responses
-2. Gradually ask more specific and personal follow-up questions to gather concrete, real stories
-3. Show genuine interest in their answers and not too verbose
+Your role:
+1. Ask predefined questions naturally and engage in follow-up conversation
+2. Ask specific follow-up questions to gather concrete stories and experiences
+3. Show genuine interest in their responses
 4. Keep responses concise but engaging
-5. Move to the next predefined question when you feel the current topic has been sufficiently explored
+5. Move to the next question when the current topic has been sufficiently explored
 
-CRITICAL: When asking predefined questions, be INTERACTIVE and CONVERSATIONAL:
-- Show genuine curiosity and interest in their responses
-- Provide context about why you're asking the question
-- Make it feel like a natural conversation, not an interview
+CONVERSATION STYLE:
+- Be interactive and conversational, not formal
+- Show genuine curiosity and interest
 - Ask follow-up questions based on what they share
-- Engage with their responses before moving to the next topic
 - Use phrases like "I'm curious about...", "I'd love to hear more about...", "That's interesting! Can you tell me..."
-- Don't just ask the question directly - build up to it naturally
-- Show enthusiasm and genuine interest in learning about their experiences
-- Make the conversation feel warm and engaging, not robotic or formal
+- Build up to questions naturally, don't ask them directly
 
-Current question context: ${currentQuestion || 'Starting conversation'}
-
-Predefined questions to cover: ${predefinedQuestions.join(', ')}
-
-CONVERSATION FLOW INSTRUCTIONS:
-- Always start with the general topic from the predefined question
-- Gradually ask more specific and personal follow-up questions to gather concrete, real stories
-- The follow-up questions should be more generic and focused on concrete, real experiences
-- Example flow: From General topic to Specific experience then to Personal story finally to Real examples
-- Generate your own follow-up questions based on the user's responses to gather more specific and personal information
-
-CRITICAL INSTRUCTION: You should naturally engage in conversation about the current question and ask relevant follow-up questions based on the user's responses. 
-
-IMPORTANT: The "NEXT_QUESTION:" prefix is ONLY for internal use to signal question transitions. It should NEVER appear in the final response sent to the user.
-
-When you feel you have gathered sufficient information about the current question and the conversation about this topic feels complete, you MUST indicate that you're moving to the next question by starting your response with "NEXT_QUESTION:" followed by your response.
-
-IMPORTANT: When using "NEXT_QUESTION:", your response should ONLY contain:
-- A brief acknowledgment of what the user shared
-- A smooth transition to the next question
-- The actual next question
-
-DO NOT include any additional follow-up questions or commentary after asking the next question. The "NEXT_QUESTION:" response should be a clean transition to the new topic.
-
-CRITICAL: Your "NEXT_QUESTION:" response must end with the main question. Do not add any additional questions, clarifications, or follow-ups after the main question.
-
-CRITICAL: The "NEXT_QUESTION:" prefix will be automatically removed from the response before it is sent to the user. Do not worry about the prefix appearing in the final output.
-
-Guidelines for when to move to the next question:
-- When the user has provided substantial information about the current question
-- When the conversation about the current question feels complete and natural
-- When you have a good understanding of the user's response to the current question
-- When you've had enough meaningful discussion about the current topic
-- Trust your judgment - you can move on after just one exchange if the user has given a comprehensive answer, or continue longer if they seem to want to elaborate
-
-Example of a proper "NEXT_QUESTION:" response:
-"Thanks for sharing that! Now, let me ask you, what is your occupation?"
-
-NOT like this (which would cause double questions):
-"Thanks for sharing that! Now, let me ask you, what is your occupation? Do you enjoy your work?"
-
-CONVERSATION FLOW EXAMPLES:
-- Start: "How to use GenAI to prepare for a job interview" (general topic)
-- Follow-up: Ask about their specific experiences, such as "What was the first time that you used AI to prepare for a job interview?" or "Can you tell me about a specific tool you've used for interview preparation?"
-- Continue with more specific questions about their experience, tools used, outcomes, etc.
-- Generate follow-up questions that ask for concrete, personal stories and real examples
-
-The response should be exactly ONE transition sentence followed by ONE main question, nothing more.
-
-Remember to be conversational and ask follow-up questions based on what the user shares. Don't rush through questions, but also don't artificially extend conversations that feel complete.${finalQuestionNote}`;
+Current question: ${currentQuestion || 'Starting conversation'}
+Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
                         }
                     }
                 }
@@ -884,57 +813,37 @@ EVALUATION CRITERIA:
 3. Would moving to the next question feel natural and appropriate?
 4. Has the AI gathered enough meaningful information about this topic?
 
-For the final question only:
-- Has the AI engaged in sufficient follow-up conversation (3-4 exchanges)?
-- Is the conversation ready to conclude naturally?
-
-BACKGROUND QUESTION GUIDELINES:
-- Background questions are about: education, current job, and AI experience
-- For background questions, be more lenient and allow faster progression
-- Brief responses (1-2 sentences) are often sufficient for background questions
-- NEVER suggest follow-up questions for background questions - always proceed to next question
-- Focus on getting basic information quickly to move to more substantive topics
-- Allow proceeding even with moderate responses (2-3 sentences)
-- Background questions should be completed efficiently without extensive follow-up
-
 DECISION GUIDELINES:
-- If user response is brief (1-2 sentences): 
-  * For background questions: shouldProceed = true (allow quick progression)
-  * For main questions: shouldProceed = false, suggest follow-up questions
-- If user response is moderate (3-4 sentences with some detail): 
-  * For background questions: shouldProceed = true (sufficient for background)
-  * For main questions: shouldProceed = false, suggest follow-up questions
-- If user response is comprehensive (3-4 sentences with specific examples): shouldProceed = true
-- For final questions: require more follow-up conversation before concluding
 
-FOLLOW-UP MODE GUIDELINES:
-When in follow-up mode (Follow-up Mode: true):
-- Be more lenient about completing follow-up questions
-- Allow completion after 1-2 exchanges for follow-up questions
-- be concise and to the point, reduce repetition
+Background Questions (education, job, AI experience):
+- Allow faster progression - brief responses (1-2 sentences) are sufficient
+- NEVER suggest follow-up questions - always proceed to next question
+- Allow proceeding even with moderate responses (2-3 sentences)
+
+Main Questions:
+- Brief response (1-2 sentences): shouldProceed = false, suggest follow-up questions
+- Moderate response (3-4 sentences with some detail): shouldProceed = false, suggest follow-up questions  
+- Comprehensive response (3-4 sentences with specific examples): shouldProceed = true
+
+Follow-up Mode:
+- Be more lenient - allow completion after 1-2 exchanges
 - Focus on whether the specific follow-up question has been adequately addressed
-- Do not suggest additional follow-up questions (since we're already in follow-up mode)
+- Do not suggest additional follow-up questions
+
+Final Questions:
+- Require more follow-up conversation before concluding
+- Has the AI engaged in sufficient follow-up conversation (3-4 exchanges)?
 
 FOLLOW-UP QUESTION GUIDELINES:
-When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, you should suggest 1-2 specific follow-up questions that would help gather more information about the current topic. These questions should:
-- Be specific and relevant to what the user just shared
+When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, suggest 1-2 specific follow-up questions that:
+- Are specific and relevant to what the user just shared
 - Ask for concrete examples, details, or experiences
 - Help deepen the conversation about the current topic
-- Be natural and conversational in tone
-- Focus on practical experiences and actions rather than personal opinions or feelings
-- keep it interactive and engaging
-- Ask about specific tools, methods, outcomes, or concrete situations
-
+- Are natural and conversational in tone
+- Focus on practical experiences and actions
 - MUST be actual questions that start with question words (What, How, Why, When, Where, Who, Did, Do, Can, Are, Is, Could, Would, Will, Have, Has, Was, Were)
 - MUST end with a question mark (?)
 - MUST NOT contain any reasoning, explanations, or audit decision text
-- MUST NOT contain phrases like "User has not yet provided", "need more follow-up questions", "should proceed", "confidence", "reason", etc.
-
-CRITICAL: The followUpQuestions array should contain ONLY actual questions that will be asked to the user. Do NOT include any reasoning, explanations, or audit decision text in the followUpQuestions array.
-
-CRITICAL: NEVER suggest follow-up questions for background questions. Background questions should always proceed to the next question without follow-up.
-
-NOTE: When in follow-up mode, do NOT suggest additional follow-up questions since we're already asking follow-up questions.
 
 RESPONSE FORMAT:
 Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
@@ -946,20 +855,12 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
 }
 
 EXAMPLES:
-- Brief response (background question): {"shouldProceed": true, "reason": "Background question adequately answered with basic information, ready to proceed", "confidence": 0.8}
-- Brief response (main question): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up questions", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
-- Moderate response (background question): {"shouldProceed": true, "reason": "Background question sufficiently answered, ready to move to more substantive topics", "confidence": 0.9}
-- Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples, topic sufficiently explored", "confidence": 0.9}
-- Final question needs more discussion: {"shouldProceed": false, "reason": "Final question needs more follow-up conversation before concluding", "confidence": 0.7, "followUpQuestions": ["What specific outcomes did you achieve from using AI?", "Can you share another example of how you used AI in your preparation?"]}
-- Follow-up mode brief response: {"shouldProceed": true, "reason": "Follow-up question adequately addressed, ready to proceed", "confidence": 0.8}
-- Follow-up mode comprehensive response: {"shouldProceed": true, "reason": "Follow-up question thoroughly addressed", "confidence": 0.9}
-- Background question with minimal response: {"shouldProceed": true, "reason": "Background question completed efficiently, no follow-up needed", "confidence": 0.8}
+- Brief response (background): {"shouldProceed": true, "reason": "Background question adequately answered, ready to proceed", "confidence": 0.8}
+- Brief response (main): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
+- Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples", "confidence": 0.9}
+- Follow-up mode: {"shouldProceed": true, "reason": "Follow-up question adequately addressed", "confidence": 0.8}
 
-IMPORTANT: Notice that the "reason" field contains the explanation, while the "followUpQuestions" array contains ONLY actual questions that will be asked to the user.
-
-IMPORTANT: Never generate follow-up questions that ask about skepticism, doubts, concerns, or negative feelings. Always focus on positive experiences, practical applications, and concrete outcomes.
-
-IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
+IMPORTANT: Never generate follow-up questions that ask about skepticism, doubts, concerns, or negative feelings. Always focus on positive experiences, practical applications, and concrete outcomes.`;
 
         const auditMessages = [
             { role: 'system', content: auditPrompt }
@@ -1086,29 +987,20 @@ EVALUATION CRITERIA:
 QUESTION PRESENCE GUIDELINES:
 - The AI should ask questions to engage the user and gather information
 - Questions should be natural and conversational
-- Questions should be relevant to the current topic or help transition to the next topic
 - For background questions: Questions should be efficient and move quickly to main topics
-- For main questions: Questions should be engaging and encourage detailed responses but be concise and to the point
+- For main questions: Questions should be engaging and encourage detailed responses
 - For final questions: The AI MUST include the final question in the response before concluding
 
 CRITICAL RULES:
-- If followUpMode = true, the response MUST contain questions to guide the conversation forward
+- If followUpMode = true, the response MUST contain questions to guide the conversation
 - If isFinalQuestion = true AND followUpMode = false AND the response does not contain the final question, it MUST be regenerated
 - If isFinalQuestion = true AND followUpMode = true, this is the final follow-up question for a topic, not the final question of the conversation
-- For final follow-up questions (followUpMode = true), the AI should still ask follow-up questions to gather more information
-- Only for the actual final question of the conversation (followUpMode = false) should summaries be allowed after the question is asked
 
 EXCEPTIONS (when questions are NOT required):
 - When the AI is providing a final summary or conclusion AFTER the final question of the entire conversation has been asked (isFinalQuestion = true AND followUpMode = false)
 - When the AI is providing wrapping-up sentences in the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true) with explicit thank you and study completion statements
 - When the AI is acknowledging information without needing more details (ONLY when NOT in followUpMode)
 - When the AI is transitioning between topics without needing user input (ONLY when NOT in followUpMode)
-
-IMPORTANT: 
-- If followUpMode = true, questions are ALWAYS required to guide the conversation
-- For final questions of the entire conversation (isFinalQuestion = true AND followUpMode = false), the AI MUST still ask the final question before concluding
-- For final follow-up questions of a topic (isFinalQuestion = true AND followUpMode = true), the AI should still ask follow-up questions to gather more information
-- Only after the final question of the entire conversation has been asked and the user has responded should the AI provide a summary without questions
 
 RESPONSE FORMAT:
 Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
@@ -1129,12 +1021,7 @@ EXAMPLES:
 - Response without question (needs regeneration): {"hasQuestion": false, "reason": "Response lacks engaging questions to continue conversation", "confidence": 0.8, "shouldRegenerate": true}
 - Response without question (final question not asked): {"hasQuestion": false, "reason": "Final question not yet asked, should include the final question", "confidence": 0.9, "shouldRegenerate": true}
 - Response without question (follow-up mode): {"hasQuestion": false, "reason": "Follow-up mode requires questions to guide conversation", "confidence": 0.95, "shouldRegenerate": true}
-- Response without question (final follow-up question): {"hasQuestion": false, "reason": "Final follow-up question should still include questions to gather more information", "confidence": 0.9, "shouldRegenerate": true}
-- Response without question (exception - after final question): {"hasQuestion": false, "reason": "Final summary response after final question was asked, no questions needed", "confidence": 0.9, "shouldRegenerate": false}
-- Response without question (exception - final follow-up with wrapping-up): {"hasQuestion": false, "reason": "Final follow-up of final question with proper wrapping-up sentences - study completion allowed", "confidence": 0.9, "shouldRegenerate": false}
-- Response with irrelevant question: {"hasQuestion": true, "reason": "Response has question but it's not relevant to current topic", "confidence": 0.7, "shouldRegenerate": true}
-
-IMPORTANT: Respond with ONLY the JSON object, no markdown formatting, no code blocks.`;
+- Response without question (exception - after final question): {"hasQuestion": false, "reason": "Final summary response after final question was asked, no questions needed", "confidence": 0.9, "shouldRegenerate": false}`;
 
         const auditMessages = [
             { role: 'system', content: auditPrompt }
@@ -1263,7 +1150,7 @@ async function regenerateResponseWithQuestions(userMessage, originalResponse, cu
     }
 
     try {
-        const regeneratePrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Your task is to regenerate a response that includes appropriate questions to engage the user.
+        const regeneratePrompt = `You are a helpful, knowledgeable AI assistant. Your task is to regenerate a response that includes appropriate questions to engage the user.
 
 ORIGINAL USER MESSAGE: "${userMessage}"
 ORIGINAL AI RESPONSE: "${originalResponse}"
@@ -1288,58 +1175,37 @@ QUESTION GUIDELINES:
 - Use phrases like "I'm curious about...", "I'd love to hear more about...", "That's interesting! Can you tell me..."
 - Make questions feel natural and conversational, not robotic
 
-FOLLOW-UP MODE HANDLING:
-- When in follow-up mode, you MUST include questions to guide the conversation
-- Questions are ALWAYS required in follow-up mode to keep the conversation flowing
-- Questions should help gather more detailed information about the current topic
-- Keep the conversation engaging and interactive
-- Questions should be specific to the user's previous response
-- Users need guidance on what to say next - provide clear questions
+SPECIAL HANDLING:
 
-BACKGROUND QUESTION HANDLING:
-- For background questions (education, job, AI experience), be more concise but still ask relevant questions
+Background Questions (education, job, AI experience):
+- Be more concise but still ask relevant questions
 - Focus on getting basic information efficiently while maintaining engagement
 - Questions should help transition smoothly to more substantive topics
 
-FINAL QUESTION HANDLING (7th Question):
-- For the final question of the entire conversation (7th question), you MUST include the final question in your response
-- The final question should be the main question that was supposed to be asked
+Follow-up Mode:
+- You MUST include questions to guide the conversation
+- Questions are ALWAYS required in follow-up mode to keep the conversation flowing
+- Questions should help gather more detailed information about the current topic
+- Questions should be specific to the user's previous response
+
+Final Question (7th Question):
+- You MUST include the final question in your response
 - Do NOT provide just an acknowledgment or summary - you MUST ask the question
 - After asking the final question, you can include follow-up questions to gather more information
-- Questions should help gather comprehensive information before concluding
-- Focus on getting detailed responses about the final topic
-- CRITICAL: The 7th question is the final question - always include it in your response
 
-FINAL FOLLOW-UP QUESTION HANDLING:
-- For final follow-up questions of a topic (followUpMode = true), you should still ask follow-up questions
+Final Follow-up Question:
 - These are not the final questions of the conversation, just the final follow-up for the current topic
 - Ask engaging follow-up questions to gather more information about the current topic
-- Questions should help deepen the conversation about the current subject
-- Focus on getting comprehensive information about the current topic before moving to the next main question
 
-FINAL FOLLOW-UP OF FINAL QUESTION HANDLING:
-- For the final follow-up of the final question (isFinalQuestion = true AND followUpMode = true), you MUST include wrapping-up sentences
-- After asking your follow-up question, you MUST include explicit wrapping-up sentences that tell the user the study is over
-- You MUST thank the user for their participation and explicitly state that the conversation is concluding
-- CRITICAL: DO NOT end the response without these wrapping-up sentences
+Final Follow-up of Final Question:
+- You MUST include wrapping-up sentences after asking your follow-up question
+- Thank the user for their participation and explicitly state that the conversation is concluding
 - Example: "Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
 
 IMPORTANT: Your response should be a single, cohesive message that naturally incorporates questions. Do not include multiple separate questions or responses.
 
 Example of a good regenerated response with questions:
 "That's fascinating! I can see how your computer science background at MIT would give you a great foundation for understanding AI tools. I'm curious about your first experience with ChatGPT - what made you decide to try it for interview preparation? And what specific aspects of your interview prep did you find it most helpful for?"
-
-Example of a good follow-up mode response:
-"It's amazing how that experience with AI during your interview has influenced your day-to-day work. It really highlights how versatile and beneficial these tools can be, not just in interviews, but across various aspects of professional life. I'm curious - what specific ways have you found yourself using AI tools in your daily work routine? And have you noticed any particular improvements in your productivity or problem-solving approach since incorporating AI into your workflow?"
-
-Example of a good final question response (7th question):
-"That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage."
-
-Example of a good final follow-up question response:
-"That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style?"
-
-Example of a good final follow-up of final question response (with wrapping-up):
-"That's really interesting! I can see how using AI for interview prep has been quite effective for you. For this final follow-up about your interview preparation, I'd love to hear more about the specific outcomes - what kind of feedback did you receive from interviewers about your responses? And did you notice any particular improvements in your confidence or communication style? Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!"
 
 Please provide a regenerated response that includes appropriate questions:`;
 
@@ -1395,7 +1261,7 @@ async function polishResponseWithAuditFeedback(userMessage, originalResponse, au
     }
 
     try {
-        const polishPrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Your task is to polish and improve a response based on audit feedback.
+        const polishPrompt = `You are a helpful, knowledgeable AI assistant. Your task is to polish and improve a response based on audit feedback.
 
 ORIGINAL USER MESSAGE: "${userMessage}"
 ORIGINAL AI RESPONSE: "${originalResponse}"
@@ -1556,7 +1422,7 @@ Result should be in its minimum possible unit.
 
 IMPORTANT: For each detected PII, assign a numbered placeholder (e.g., NAME1, NAME2, EMAIL1, etc.) that counts across the entire conversation history. The numbering should be sequential across all conversations, not just within a single message. For example, if NAME1 was used in a previous message, the next name should be NAME2.
 
-DUPLICATE ENTITY DETECTION: If you detect the same entity (e.g., "Carnegie Mellon") that was mentioned before, use the same placeholder number. For example, if "Carnegie Mellon" was previously assigned AFFILIATION1, use AFFILIATION1 again for the same entity.
+DUPLICATE ENTITY DETECTION: If you detect the same entity ("Carnegie Mellon") that was mentioned before, use the same placeholder number. For example, if "Carnegie Mellon" was previously assigned AFFILIATION1, use AFFILIATION1 again for the same entity.
 
 CRITICAL CLASSIFICATION RULES:
 - "Carnegie Mellon", "MIT", "Stanford", etc. should be classified as AFFILIATION, not NAME
