@@ -285,12 +285,13 @@ BACKGROUND QUESTION GUIDELINES:
 DECISION GUIDELINES:
 - If user response is brief (1-2 sentences): 
   * For background questions: shouldProceed = true (allow quick progression)
-  * For main questions: shouldProceed = false, suggest follow-up questions
+  * For main questions: shouldProceed = false, suggest follow-up questions (unless user clearly states they don't have experience)
 - If user response is moderate (3-4 sentences with some detail): 
   * For background questions: shouldProceed = true (sufficient for background)
   * For main questions: shouldProceed = true (user has shared sufficient information)
 - If user response is comprehensive (3-4 sentences with specific examples): shouldProceed = true
 - If user has shared a personal story or specific experience, proceed to next question
+- If user indicates they don't have experience with the topic, proceed to next question
 - For final questions: allow completion after 2-3 exchanges if user has shared personal stories
 
 FOLLOW-UP MODE GUIDELINES:
@@ -300,10 +301,11 @@ When in follow-up mode (Follow-up Mode: true):
 - Be concise and to the point, reduce repetition
 - Focus on whether the specific follow-up question has been adequately addressed
 - If user has shared a personal story or specific experience, proceed to next question
+- If user indicates they don't have experience with the follow-up question, proceed to next question
 - Do not suggest additional follow-up questions (since we're already in follow-up mode)
 
 FOLLOW-UP QUESTION GUIDELINES:
-When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, you should suggest 1-2 specific follow-up questions that would help gather more information about the current topic. These questions should:
+When shouldProceed = false AND NOT in follow-up mode AND NOT a background question AND user has not clearly stated they lack experience, you should suggest 1-2 specific follow-up questions that would help gather more information about the current topic. These questions should:
 - Be specific and relevant to what the user just shared
 - Ask for concrete examples, details, or experiences
 - Help deepen the conversation about the current topic
@@ -329,7 +331,7 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
     "shouldProceed": true/false,
     "reason": "Brief explanation of your decision",
     "confidence": 0.0-1.0,
-    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode)
+    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode AND user has not clearly stated they lack experience)
 }
 
 EXAMPLES:
@@ -339,8 +341,10 @@ EXAMPLES:
 - Moderate response (background question): {"shouldProceed": true, "reason": "Background question sufficiently answered, ready to move to more substantive topics", "confidence": 0.9}
 - Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples, topic sufficiently explored", "confidence": 0.9}
 - Final question with personal story: {"shouldProceed": true, "reason": "User shared personal experience, ready to conclude", "confidence": 0.8}
+- User without experience: {"shouldProceed": true, "reason": "User clearly stated they don't have experience with this topic, ready to proceed", "confidence": 0.9}
 - Follow-up mode brief response: {"shouldProceed": true, "reason": "Follow-up question adequately addressed, ready to proceed", "confidence": 0.8}
 - Follow-up mode comprehensive response: {"shouldProceed": true, "reason": "Follow-up question thoroughly addressed", "confidence": 0.9}
+- Follow-up mode without experience: {"shouldProceed": true, "reason": "User indicated they don't have experience with the follow-up question, ready to proceed", "confidence": 0.8}
 - Background question with minimal response: {"shouldProceed": true, "reason": "Background question completed efficiently, no follow-up needed", "confidence": 0.8}
 
 IMPORTANT: Notice that the "reason" field contains the explanation, while the "followUpQuestions" array contains ONLY actual questions that will be asked to the user.
@@ -406,7 +410,7 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
     "shouldProceed": true/false,
     "reason": "Brief explanation of your decision",
     "confidence": 0.0-1.0,
-    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode)
+    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode AND user has not clearly stated they lack experience)
 }
 
 EXAMPLES:

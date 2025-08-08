@@ -49,9 +49,9 @@ class PrivacyDemoApp {
         // };
         
         this.config = {
-            sidebarHiddenByDefault: true,  // Hide sidebar by default
-            enableSidebarToggle: false,    // Disable sidebar toggle functionality
-            persistSidebarState: false     // Don't persist sidebar state
+            sidebarHiddenByDefault: false, // Show sidebar by default for development
+            enableSidebarToggle: true,     // Enable sidebar toggle functionality for development
+            persistSidebarState: true      // Persist sidebar state for development
         };
 
         this.state = {

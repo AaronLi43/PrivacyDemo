@@ -827,6 +827,9 @@ EVALUATION CRITERIA:
 2. Has the conversation about this topic reached a natural conclusion?
 3. Would moving to the next question feel natural and appropriate?
 4. Has the AI gathered enough meaningful information about this topic?
+5. Has the user clearly indicated they don't have experience with the topic?
+
+IMPORTANT: If a user clearly states they don't have experience with a topic (e.g., "I don't have experience with that", "I haven't used AI for interviews", "I don't have those experiences"), this is a valid response and should allow them to proceed to the next question. Do not force follow-up questions on users who legitimately lack relevant experience.
 
 DECISION GUIDELINES:
 
@@ -840,12 +843,16 @@ Main Questions:
 - Moderate response (3-4 sentences with some detail): shouldProceed = true, ready to proceed to next question
 - Comprehensive response (3-4 sentences with specific examples): shouldProceed = true, user has shared sufficient personal story
 - If user has shared a personal story or specific experience, proceed to next question even with moderate detail
+- If user indicates they don't have experience with the topic (e.g., "I don't have experience with that", "I haven't used AI for interviews", "I don't have those experiences"), proceed to next question
+- If user clearly states they cannot answer or don't have relevant experience, allow them to proceed without forcing follow-up questions
 
 Follow-up Mode:
 - Be more lenient - allow completion after 1-2 exchanges
 - Focus on whether the specific follow-up question has been adequately addressed
 - If user has shared a personal story or specific experience, proceed to next question
+- If user indicates they don't have experience or cannot answer the follow-up question, proceed to next question
 - Avoid excessive follow-up questions that may overwhelm the user
+- Do not force users to elaborate if they clearly state they lack relevant experience
 
 Final Follow-up of Final Question:
 - If the AI response contains wrap-up language (thank you, concludes conversation, etc.), shouldProceed = true
@@ -859,7 +866,7 @@ Final Questions:
 - If this is the final follow-up of the final question AND the AI response contains wrap-up language (thank you, concludes conversation, etc.), shouldProceed = true
 
 FOLLOW-UP QUESTION GUIDELINES:
-When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, suggest 1-2 specific follow-up questions that:
+When shouldProceed = false AND NOT in follow-up mode AND NOT a background question AND user has not clearly stated they lack experience, suggest 1-2 specific follow-up questions that:
 - Are specific and relevant to what the user just shared
 - Ask for concrete examples, details, or experiences
 - Help deepen the conversation about the current topic
@@ -878,7 +885,7 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
     "shouldProceed": true/false,
     "reason": "Brief explanation of your decision",
     "confidence": 0.0-1.0,
-    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode, should provide 1-2 questions)
+    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode AND user has not clearly stated they lack experience, should provide 1-2 questions)
 }
 
 EXAMPLES:
@@ -886,7 +893,9 @@ EXAMPLES:
 - Brief response (main): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
 - Moderate response with personal story: {"shouldProceed": true, "reason": "User shared personal story, ready to proceed", "confidence": 0.9}
 - Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples", "confidence": 0.9}
+- User without experience: {"shouldProceed": true, "reason": "User clearly stated they don't have experience with this topic, ready to proceed", "confidence": 0.9}
 - Follow-up mode with story: {"shouldProceed": true, "reason": "User shared personal experience, ready to proceed", "confidence": 0.8}
+- Follow-up mode without experience: {"shouldProceed": true, "reason": "User indicated they don't have experience with the follow-up question, ready to proceed", "confidence": 0.8}
 
 IMPORTANT: Never generate follow-up questions that ask about skepticism, doubts, concerns, or negative feelings. Always focus on positive experiences, practical applications, and concrete outcomes.`;
 
