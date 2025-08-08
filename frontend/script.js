@@ -469,6 +469,62 @@ class PrivacyDemoApp {
         }
     }
 
+    // Update progress bar
+    updateProgressBar() {
+        const progressContainer = document.getElementById('progress-container');
+        const progressText = document.getElementById('progress-text');
+        const progressPercentage = document.getElementById('progress-percentage');
+        const progressFill = document.getElementById('progress-fill');
+
+        if (!progressContainer || !progressText || !progressPercentage || !progressFill) {
+            return;
+        }
+
+        // Only show progress bar when in question mode
+        if (!this.state.questionMode) {
+            progressContainer.style.display = 'none';
+            return;
+        }
+
+        const questions = this.state.predefinedQuestions[this.state.mode];
+        if (!questions || questions.length === 0) {
+            progressContainer.style.display = 'none';
+            return;
+        }
+
+        const totalQuestions = questions.length;
+        const completedQuestions = this.state.completedQuestionIndices.length;
+        const currentQuestionIndex = this.state.currentQuestionIndex !== null ? this.state.currentQuestionIndex : 0;
+        
+        // Calculate progress based on completed questions and current question
+        let progress = 0;
+        let progressTextContent = '';
+        
+        if (completedQuestions >= totalQuestions) {
+            // All questions completed
+            progress = 100;
+            progressTextContent = `All ${totalQuestions} questions completed!`;
+        } else {
+            // Calculate progress including current question
+            const currentProgress = completedQuestions + (currentQuestionIndex > completedQuestions ? 1 : 0);
+            progress = Math.round((currentProgress / totalQuestions) * 100);
+            progressTextContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions}`;
+        }
+
+        // Update progress bar
+        progressContainer.style.display = 'flex';
+        progressText.textContent = progressTextContent;
+        progressPercentage.textContent = `${progress}%`;
+        progressFill.style.width = `${progress}%`;
+
+        // Add visual feedback for completion
+        if (progress === 100) {
+            progressFill.style.background = 'linear-gradient(90deg, #28a745, #20c997)';
+        } else {
+            progressFill.style.background = 'linear-gradient(90deg, #ffffff, #f0f0f0)';
+        }
+    }
+
     // Bind all event listeners
     bindEvents() {
         // Mode selection
@@ -900,6 +956,7 @@ class PrivacyDemoApp {
         // Skip API call for mode setting - focus on frontend functionality
         this.updateModeInfo();
         this.updateUI();
+        this.updateProgressBar();
         this.saveToLocalStorage();
     }
 
@@ -1879,6 +1936,7 @@ class PrivacyDemoApp {
             await this.startQuestionConversation();
             
             this.updateUI();
+            this.updateProgressBar();
             this.saveToLocalStorage();
             this.showLoading(false);
             
@@ -2104,9 +2162,16 @@ class PrivacyDemoApp {
                         /concludes our conversation/i,
                         /conversation.*complete/i,
                         /enjoyed learning about you/i,
-                        /thank you.*time/i
+                        /thank you.*time/i,
+                        /thanks so much for sharing your journey/i,
+                        /been really insightful to learn about/i
                     ];
                     const hasEndingPattern = isFinalQuestion && response && response.bot_response && 
+                        endingPatterns.some(pattern => pattern.test(response.bot_response));
+                    
+                    // Check if this is the final follow-up of the final question and contains wrap-up language
+                    const isFinalFollowUpOfFinalQuestion = isFinalQuestion && this.state.inFollowUpMode;
+                    const hasWrapUpLanguage = isFinalFollowUpOfFinalQuestion && response && response.bot_response && 
                         endingPatterns.some(pattern => pattern.test(response.bot_response));
                     
                     // Log audit LLM information if available
@@ -2162,6 +2227,7 @@ class PrivacyDemoApp {
                         response.question_completed || 
                         hasNextQuestionSignal || 
                         hasEndingPattern ||
+                        hasWrapUpLanguage ||
                         (isBackgroundQuestion && this.state.conversationLog.length > 1) // Complete background questions after at least one exchange
                     );
                     
@@ -2169,6 +2235,7 @@ class PrivacyDemoApp {
                     console.log('- response.question_completed:', response?.question_completed);
                     console.log('- hasNextQuestionSignal:', hasNextQuestionSignal);
                     console.log('- hasEndingPattern:', hasEndingPattern);
+                    console.log('- hasWrapUpLanguage:', hasWrapUpLanguage);
                     console.log('- isBackgroundQuestion:', isBackgroundQuestion);
                     console.log('- conversationLog.length:', this.state.conversationLog.length);
                     console.log('- auditSaysNotToProceed:', auditSaysNotToProceed);
@@ -2196,6 +2263,12 @@ class PrivacyDemoApp {
                             this.state.questionsCompleted = true;
                             this.state.questionMode = false;
                             
+                            // If this was a wrap-up response, show special notification
+                            if (hasWrapUpLanguage) {
+                                console.log('Wrap-up response detected - conversation concluded with thank you message');
+                                this.showNotification('🎉 Conversation completed! Thank you for sharing your experiences.', 'success');
+                            }
+                            
                             // Show final completion notification
                             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                             this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
@@ -2215,6 +2288,9 @@ class PrivacyDemoApp {
                         }
                         
                         console.log(`After completion - Current index: ${this.state.currentQuestionIndex}, Completed: [${this.state.completedQuestionIndices.join(', ')}]`);
+                        
+                        // Update progress bar after question completion
+                        this.updateProgressBar();
                     } else {
                         if (auditSaysNotToProceed) {
                             console.log(`🛑 Question not completed - Audit LLM says not to proceed: ${response.audit_result.reason}`);
@@ -2235,7 +2311,7 @@ class PrivacyDemoApp {
                             
                             console.log(`Final question exchanges: ${currentQuestionExchanges}`);
                             
-                            if (currentQuestionExchanges >= 4) { // Allow 4 exchanges before auto-completing (increased from 2)
+                            if (currentQuestionExchanges >= 6) { // Allow 6 exchanges before auto-completing (increased to encourage more personal stories)
                                 console.log('Final question has had enough exchanges, auto-completing conversation...');
                                 
                                 // Mark the final question as completed
@@ -3189,6 +3265,7 @@ class PrivacyDemoApp {
             this.updateModeInfo();
             this.updateEditModeUI();
             this.updateUserAgentButton();
+            this.updateProgressBar();
         }
         
         // Update multi-step interface state
@@ -3645,7 +3722,7 @@ class PrivacyDemoApp {
         if (this.state.mode === 'naive') {
             if (this.state.editMode) {
                 // In edit mode, change button text and functionality
-                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Save & Export';
+                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Done!';
                 editExportBtnMain.className = 'btn btn-success';
             } else {
                 // Normal edit mode button
@@ -3715,7 +3792,7 @@ class PrivacyDemoApp {
             if (this.state.mode === 'naive') {
                 if (this.state.editMode) {
                     // In edit mode, change button text and functionality
-                    editExportBtn.innerHTML = '<i class="fas fa-save"></i> Save & Export';
+                    editExportBtn.innerHTML = '<i class="fas fa-save"></i> Done!';
                     editExportBtn.className = 'btn btn-success';
                 } else {
                     // Normal edit mode button

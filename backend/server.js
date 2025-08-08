@@ -455,14 +455,18 @@ Your role:
 2. Ask specific follow-up questions to gather concrete stories and experiences
 3. Show genuine interest in their responses
 4. Keep responses concise but engaging
-5. Move to the next question when the current topic has been sufficiently explored
+5. Encourage disclosure of personal stories and specific situations
+6. Ask about feelings, emotions, and personal impact of AI usage
+7. Move to the next question only after gathering substantial personal stories
 
 CONVERSATION STYLE:
 - Be interactive and conversational, not formal
 - Show genuine curiosity and interest
-- Ask follow-up questions based on what they share
+- Ask multiple follow-up questions to encourage detailed personal stories
 - Use phrases like "I'm curious about...", "I'd love to hear more about...", "That's interesting! Can you tell me..."
 - Build up to questions naturally, don't ask them directly
+- Focus on getting specific examples and personal experiences
+- Ask about emotional impact and personal feelings about AI usage
 
 Current question: ${currentQuestion || 'Starting conversation'}
 Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
@@ -493,7 +497,7 @@ Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
                     
                     const finalQuestionContext = isFinalQuestion ? 
                         (isFinalFollowUpOfFinalQuestion ? 
-                            " CRITICAL: This is the FINAL follow-up of the FINAL question - you MUST include wrapping-up sentences that explicitly tell the user the study is over and thank them for their participation. After asking your follow-up question, you MUST add: 'Thank you so much for sharing all of this with me! I've really enjoyed learning about your experiences with AI and job interviews. This concludes our conversation - thank you for your participation!' DO NOT end without these wrapping-up sentences." :
+                            " CRITICAL: This is the FINAL follow-up of the FINAL question - you MUST provide a wrap-up response that thanks the user and concludes the conversation. DO NOT ask any more questions. Your response should be something like: 'Thanks so much for sharing your journey with me today! It's been really insightful to learn about how AI has played a role in your career development. This concludes our conversation - thank you for your participation!'" :
                             " This is the FINAL question - engage in natural follow-up conversation with 3-4 questions before ending with a thank you and summary.") : 
                         "";
                     
@@ -546,13 +550,23 @@ Questions to cover: ${predefinedQuestions.join(', ')}${finalQuestionNote}`;
                         /concludes our conversation/i,
                         /conversation.*complete/i,
                         /enjoyed learning about you/i,
-                        /thank you.*time/i
+                        /thank you.*time/i,
+                        /thanks so much for sharing your journey/i,
+                        /been really insightful to learn about/i
                     ];
                     
                     const hasEndingPattern = endingPatterns.some(pattern => pattern.test(aiResponse));
                     if (hasEndingPattern) {
                         mainLLMCompleted = true;
                         console.log('Final question completed via conversation ending signal');
+                    }
+                    
+                    // Check if this is the final follow-up of the final question and the response contains wrap-up language
+                    const isFinalFollowUpOfFinalQuestion = isFinalQuestion && followUpMode;
+                    const hasWrapUpLanguage = isFinalFollowUpOfFinalQuestion && endingPatterns.some(pattern => pattern.test(aiResponse));
+                    if (hasWrapUpLanguage) {
+                        mainLLMCompleted = true;
+                        console.log('Final follow-up of final question completed via wrap-up language');
                     }
                 }
 
@@ -806,6 +820,7 @@ CURRENT CONTEXT:
 - Is Final Question: ${isFinalQuestion}
 - Follow-up Mode: ${followUpMode}
 - Is Background Question: ${isBackgroundQuestion(currentQuestion)}
+- Is Final Follow-up of Final Question: ${isFinalQuestion && followUpMode}
 
 EVALUATION CRITERIA:
 1. Has the user provided substantial information about the current question?
@@ -823,24 +838,36 @@ Background Questions (education, job, AI experience):
 Main Questions:
 - Brief response (1-2 sentences): shouldProceed = false, suggest follow-up questions
 - Moderate response (3-4 sentences with some detail): shouldProceed = false, suggest follow-up questions  
-- Comprehensive response (3-4 sentences with specific examples): shouldProceed = true
+- Comprehensive response (3-4 sentences with specific examples): shouldProceed = false, suggest additional follow-up questions to get more personal stories
+- Only proceed when user has shared multiple specific examples and personal experiences (5+ sentences with detailed stories)
 
 Follow-up Mode:
-- Be more lenient - allow completion after 1-2 exchanges
+- Be more lenient - allow completion after 2-3 exchanges
 - Focus on whether the specific follow-up question has been adequately addressed
-- Do not suggest additional follow-up questions
+- Suggest additional follow-up questions if the user hasn't shared enough personal stories
+- Encourage deeper exploration of personal experiences and emotions
+
+Final Follow-up of Final Question:
+- If the AI response contains wrap-up language (thank you, concludes conversation, etc.), shouldProceed = true
+- This indicates the conversation should end with the wrap-up response
+- No more questions should be asked after this point
 
 Final Questions:
 - Require more follow-up conversation before concluding
-- Has the AI engaged in sufficient follow-up conversation (3-4 exchanges)?
+- Has the AI engaged in sufficient follow-up conversation (4-5 exchanges)?
+- Encourage sharing of personal stories and emotional experiences
+- If this is the final follow-up of the final question AND the AI response contains wrap-up language (thank you, concludes conversation, etc.), shouldProceed = true
 
 FOLLOW-UP QUESTION GUIDELINES:
-When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, suggest 1-2 specific follow-up questions that:
+When shouldProceed = false AND NOT in follow-up mode AND NOT a background question, suggest 2-3 specific follow-up questions that:
 - Are specific and relevant to what the user just shared
 - Ask for concrete examples, details, or experiences
 - Help deepen the conversation about the current topic
 - Are natural and conversational in tone
 - Focus on practical experiences and actions
+- Encourage disclosure of personal stories and specific situations
+- Ask about feelings, emotions, and personal impact of AI usage
+- Request specific examples of how AI affected their interview outcomes
 - MUST be actual questions that start with question words (What, How, Why, When, Where, Who, Did, Do, Can, Are, Is, Could, Would, Will, Have, Has, Was, Were)
 - MUST end with a question mark (?)
 - MUST NOT contain any reasoning, explanations, or audit decision text
@@ -851,12 +878,12 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
     "shouldProceed": true/false,
     "reason": "Brief explanation of your decision",
     "confidence": 0.0-1.0,
-    "followUpQuestions": ["question1", "question2"] (only include when shouldProceed = false AND NOT in follow-up mode)
+    "followUpQuestions": ["question1", "question2", "question3"] (only include when shouldProceed = false AND NOT in follow-up mode, should provide 2-3 questions)
 }
 
 EXAMPLES:
 - Brief response (background): {"shouldProceed": true, "reason": "Background question adequately answered, ready to proceed", "confidence": 0.8}
-- Brief response (main): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?"]}
+- Brief response (main): {"shouldProceed": false, "reason": "User provided minimal information, need more follow-up", "confidence": 0.8, "followUpQuestions": ["Can you tell me about a specific time when you used AI for interview prep?", "What specific tools or methods did you use?", "How did using AI make you feel about the interview process?"]}
 - Comprehensive response: {"shouldProceed": true, "reason": "User provided detailed response with specific examples", "confidence": 0.9}
 - Follow-up mode: {"shouldProceed": true, "reason": "Follow-up question adequately addressed", "confidence": 0.8}
 
