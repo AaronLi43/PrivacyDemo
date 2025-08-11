@@ -1,6 +1,6 @@
-        // orchestrator.js
-        // Lightweight FSM: background → main → done
-        // Responsibilities: decide current question, allowed actions, follow-up count, whether to advance
+// orchestrator.js
+// Lightweight FSM: background → main → done
+// Responsibilities: decide current question, allowed actions, follow-up count, whether to advance
 
 export function initState(session, { maxFollowups = { background: 1, main: 3 } } = {}) {
     if (!session.state) {
