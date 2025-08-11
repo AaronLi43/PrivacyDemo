@@ -1433,6 +1433,66 @@ class PrivacyDemoApp {
         return -1;
     }
 
+    // Ask the next question automatically (used for background questions)
+    askNextQuestion() {
+        console.log('🔄 Automatically asking next question...');
+        
+        // Get the next uncompleted question
+        const nextQuestionIndex = this.getNextUncompletedQuestionIndex();
+        
+        if (nextQuestionIndex === -1) {
+            console.log('All questions completed');
+            this.state.questionsCompleted = true;
+            this.state.questionMode = false;
+            this.stopConversationAndShowCongratulation();
+            return;
+        }
+        
+        // Update current question index
+        this.state.currentQuestionIndex = nextQuestionIndex;
+        console.log(`Moved to next question: ${this.state.currentQuestionIndex + 1}`);
+        
+        // Get the question text
+        const questions = this.state.predefinedQuestions[this.state.mode];
+        const currentQuestion = questions[this.state.currentQuestionIndex];
+        
+        if (!currentQuestion) {
+            console.error('❌ Next question is undefined!');
+            return;
+        }
+        
+        // Check if this is a background question
+        const backgroundQuestions = this.state.backgroundQuestions && this.state.backgroundQuestions.length > 0 
+            ? this.state.backgroundQuestions 
+            : [
+                "Tell me about your educational background - what did you study in college or university?",
+                "I'd love to hear about your current work and how you got into it by job interviews?",
+                "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+            ];
+        const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+        
+        console.log(`Asking next question: ${this.state.currentQuestionIndex + 1}/${questions.length}`);
+        console.log(`Question text: "${currentQuestion}"`);
+        console.log(`Question type: ${isBackgroundQuestion ? 'Background' : 'Main'}`);
+        
+        // Add the question to the conversation log
+        this.state.conversationLog.push({
+            user: '',
+            bot: currentQuestion,
+            timestamp: new Date().toISOString(),
+            step: this.state.currentStep
+        });
+        
+        // Update UI
+        this.updateUI();
+        this.scrollToBottom();
+        
+        // Reset the justCompletedQuestion flag
+        this.state.justCompletedQuestion = false;
+        
+        console.log('✅ Next question asked automatically');
+    }
+
     // Clean up question transition responses to prevent double questions
     cleanupQuestionTransition(response) {
         // Split the response into sentences
@@ -2528,6 +2588,16 @@ class PrivacyDemoApp {
                         this.state.justCompletedQuestion = false;
                     }
                     
+                    // Check if current question is a background question (for logging purposes)
+                    const backgroundQuestions = this.state.backgroundQuestions && this.state.backgroundQuestions.length > 0 
+                        ? this.state.backgroundQuestions 
+                        : [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        ];
+                    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+                    
                     console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
                     console.log(`Question type: ${isBackgroundQuestion ? 'Background' : 'Main'}`);
                     console.log(`Background questions completed: ${this.state.completedQuestionIndices.filter(index => index < backgroundQuestionsCount).length}/${backgroundQuestionsCount}`);
@@ -2612,16 +2682,6 @@ class PrivacyDemoApp {
                         console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
                     }
                     
-                    // Check if current question is a background question using stored background questions
-                    const backgroundQuestions = this.state.backgroundQuestions && this.state.backgroundQuestions.length > 0 
-                        ? this.state.backgroundQuestions 
-                        : [
-                            "Tell me about your educational background - what did you study in college or university?",
-                            "I'd love to hear about your current work and how you got into it by job interviews?",
-                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
-                        ];
-                    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
-                    
                     console.log('Current question details:');
                     console.log('- Current question index:', this.state.currentQuestionIndex);
                     console.log('- Current question text:', currentQuestion);
@@ -2652,15 +2712,22 @@ class PrivacyDemoApp {
                             console.log('All background questions completed - transitioning to main questions');
                         }
                         
+                        // Force the question to be marked as completed so the normal flow continues
+                        response.question_completed = true;
+                        
                         // Update progress bar and UI
                         this.updateProgressBar();
                         this.updateUI();
                         this.saveToLocalStorage();
                         this.scrollToBottom();
-                        this.showLoading(false);
                         
-                        // Continue to next question immediately
-                        return;
+                        // Don't return here - let the normal question completion flow handle the next question
+                        console.log('Background question marked as completed, continuing with normal flow');
+                        
+                        // After updating UI, automatically ask the next question
+                        setTimeout(() => {
+                            this.askNextQuestion();
+                        }, 1000); // Small delay to make the transition feel natural
                     }
                     
                     // Handle follow-up questions from audit LLM (only for main questions)
