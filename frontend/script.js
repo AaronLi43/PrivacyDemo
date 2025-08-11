@@ -318,6 +318,10 @@ class PrivacyDemoApp {
         
         // Initialize multi-step interface - always start at introduction
         this.initializeMultiStepInterface();
+        
+        // Load questions for the default mode (naive) to ensure they're available
+        console.log('🔄 Initializing with default mode questions...');
+        await this.loadPredefinedQuestions(this.state.mode);
     }
 
     // Clear all state to ensure fresh start every time
@@ -1367,6 +1371,7 @@ class PrivacyDemoApp {
     async loadPredefinedQuestions(mode) {
         try {
             // Check if questions are already loaded to prevent duplicate API calls
+            // Only skip if questions exist AND have content (length > 0)
             if (this.areQuestionsLoaded(mode)) {
                 console.log(`✅ Questions already loaded for mode: ${mode}, skipping API call`);
                 return true;
