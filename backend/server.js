@@ -202,6 +202,10 @@ const predefinedQuestions = {
     ]
 };
 
+// Default main questions used for static mappings and prompts
+// Note: Dynamic per-request main questions are still computed later where needed
+const mainQuestions = predefinedQuestions.neutral;
+
 const requiredSlotsByQuestion = {
     // Q1
     [mainQuestions[0]]: ["when","where","who","what","action","result","reflection"],
