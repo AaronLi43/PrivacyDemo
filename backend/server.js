@@ -486,25 +486,31 @@ function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
 // Executor System Prompt
 export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
     const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
-    const isBackground = backgroundQuestions.includes(currentQuestion);
     const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
+    
+    // Check if current question is a background question
+    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
   
     return [
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
       `CURRENT QUESTION: "${currentQuestion || 'N/A'}"`,
-      `IS BACKGROUND QUESTION: ${isBackground}`,
       `REMAINING QUESTIONS: [${remaining.map(q => `"${q}"`).join("; ")}]`,
       `ALLOWED_ACTIONS: [${AA}]`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
-      `Hard rules:`,
+      ``,
+      `${isBackgroundQuestion ? 'BACKGROUND QUESTION RULES:' : 'MAIN QUESTION RULES:'}`,
+      `${isBackgroundQuestion ? 
+        '- This is a BACKGROUND QUESTION - complete it in ONE exchange and move to NEXT_QUESTION immediately' :
+        '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
+      }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
-      `- Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).`,
-      `- When you believe the bar is met, propose a 2-3 line summary before moving on.`,
-      `- BACKGROUND QUESTIONS: These are introductory questions that should be completed efficiently.`,
-      `  If this is a background question, prefer SUMMARIZE_QUESTION or NEXT_QUESTION over ASK_FOLLOWUP.`,
+      `${isBackgroundQuestion ? 
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
+        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
+      }`,
       ``,
       `Output JSON only:`,
       `{`,
@@ -1178,14 +1184,7 @@ app.post('/api/chat', async (req, res) => {
   
             // Convert execution results to user output text
             if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
-              // Prevent follow-ups for background questions
-              if (isBackgroundPhase(state)) {
-                console.log('Background question - converting follow-up to summary');
-                parsedExec.action = "SUMMARIZE_QUESTION";
-                parsedExec.utterance = "Thank you for sharing that background information. Let me ask you about your experiences with GenAI tools.";
-              } else {
-                registerFollowup(state, qNow);
-              }
+              registerFollowup(state, qNow);
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
@@ -1199,17 +1198,14 @@ app.post('/api/chat', async (req, res) => {
           // ====== Completion Audit (PSS) ======
           const compT0 = Date.now();
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
-          const isBackgroundQuestionValue = isBackgroundPhase(state);
           console.log('isFinalQuestionValue', isFinalQuestionValue);
-          console.log('isBackgroundQuestionValue', isBackgroundQuestionValue);
           completionAudit = await auditQuestionCompletion(
             message,
             aiResponse,
             qNow,
             session.conversationHistory,
             isFinalQuestionValue,
-            followUpMode,
-            isBackgroundQuestionValue
+            followUpMode
           );
           const compDur = Date.now() - compT0;
   
@@ -1292,7 +1288,20 @@ app.post('/api/chat', async (req, res) => {
           }
   
           // ====== Final gating by completion audit ======
-          if (shouldAdvance(completionAudit?.verdict)) {
+          // Check if this is a background question and force completion
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+          
+          if (isBackgroundQuestion) {
+            // Force background questions to complete immediately
+            questionCompleted = true;
+            gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+            log.info('background question forced to complete', {
+              phase: state.phase,
+              bgIdx: state.bgIdx,
+              mainIdx: state.mainIdx,
+              newAllowed: Array.from(state.allowedActions)
+            });
+          } else if (shouldAdvance(completionAudit?.verdict)) {
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             log.info('advanced to next', {
@@ -1335,13 +1344,6 @@ app.post('/api/chat', async (req, res) => {
       // Save audits in state (for debugging/UI)
       storeAudits(state, { completionAudit, presenceAudit });
   
-      // Ensure background questions don't return follow-up questions
-      let followUpQuestions = completionAudit?.followUpQuestions || null;
-      if (isBackgroundPhase(state)) {
-        followUpQuestions = null;
-        console.log('Background question - removing follow-up questions from response');
-      }
-  
       log.info('finalize response', {
         questionCompleted,
         usedRegenerate,
@@ -1358,7 +1360,7 @@ app.post('/api/chat', async (req, res) => {
         privacy_detection: null,
         question_completed: questionCompleted,
         audit_result: completionAudit || null,
-        follow_up_questions: followUpQuestions,
+        follow_up_questions: completionAudit?.followUpQuestions || null,
         question_presence_audit: presenceAudit || null,
         allowed_actions: Array.from(state.allowedActions),
         session_id: currentSessionId,
@@ -1428,8 +1430,7 @@ async function auditQuestionCompletion(
     currentQuestion,
     conversationHistory,
     isFinalQuestionFlag = false,   // Keep parameter, no longer dependent on prompt
-    followUpMode = false,      // Keep parameter, no longer dependent on prompt
-    isBackgroundQuestion = false   // New parameter to handle background questions
+    followUpMode = false       // Keep parameter, no longer dependent on prompt
   ) {
     if (!openaiClient) {
       console.log('⚠️  Audit LLM not available - skipping question completion audit');
@@ -1437,22 +1438,6 @@ async function auditQuestionCompletion(
     }
   
     try {
-      // Special handling for background questions - they should proceed without follow-ups
-      if (isBackgroundQuestion) {
-        console.log('Background question detected - allowing progression without follow-ups');
-        return {
-          question_id: currentQuestion || 'N/A',
-          verdict: 'ALLOW_NEXT_QUESTION',
-          scores: { structure: 1, specificity: 1, depth: 1 },
-          missing: [],
-          notes: 'Background question - proceeding to next question',
-          confidence: 0.9,
-          followUpQuestions: null,
-          shouldProceed: true,
-          reason: 'Background question completed efficiently, no follow-up needed'
-        };
-      }
-
       const auditPrompt = `
   You are the Auditor. Decide if the CURRENT QUESTION has obtained a sufficient personal story (PSS).
   

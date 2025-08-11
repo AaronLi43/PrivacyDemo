@@ -2,7 +2,7 @@
 // Lightweight FSM: background → main → done
 // Responsibilities: decide current question, allowed actions, follow-up count, whether to advance
 
-export function initState(session, { maxFollowups = { background: 0, main: 3 } } = {}) {
+export function initState(session, { maxFollowups = { background: 1, main: 3 } } = {}) {
     if (!session.state) {
       session.state = {
         phase: "background",        // "background" | "main" | "done"
@@ -35,10 +35,6 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   export function atFollowupCap(state, question) {
     const cap = isBackgroundPhase(state) ? state.maxFollowups.background : state.maxFollowups.main;
     const cur = state.perQuestion[question]?.followups || 0;
-    // Background questions should never allow follow-ups
-    if (isBackgroundPhase(state)) {
-      return true; // Always at cap for background questions
-    }
     return cur >= cap;
   }
   

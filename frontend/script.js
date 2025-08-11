@@ -79,6 +79,8 @@ class PrivacyDemoApp {
                 neutral: [],
                 featured: []
             },
+            backgroundQuestions: [],
+            mainQuestions: [],
             // Multi-step interface properties
             currentStepPage: 'introduction',
             consentChecked: false,
@@ -1375,9 +1377,21 @@ class PrivacyDemoApp {
             const data = await response.json();
             
             if (data.success && data.questions && Array.isArray(data.questions)) {
+                // Store the combined questions array (for backward compatibility)
                 this.state.predefinedQuestions[mode] = data.questions;
+                
+                // Also store background and main questions separately for proper handling
+                if (data.backgroundQuestions && Array.isArray(data.backgroundQuestions)) {
+                    this.state.backgroundQuestions = data.backgroundQuestions;
+                }
+                if (data.mainQuestions && Array.isArray(data.mainQuestions)) {
+                    this.state.mainQuestions = data.mainQuestions;
+                }
+                
                 console.log(`✅ Successfully loaded ${data.questions.length} questions for mode: ${mode}`);
-                console.log('📋 Questions loaded:', data.questions);
+                console.log(`📋 Background questions: ${data.backgroundQuestions ? data.backgroundQuestions.length : 0}`);
+                console.log(`📋 Main questions: ${data.mainQuestions ? data.mainQuestions.length : 0}`);
+                console.log('📋 All questions loaded:', data.questions);
                 return true;
             } else {
                 console.error('❌ Failed to load predefined questions:', data.error || 'Invalid response format');
@@ -2501,12 +2515,22 @@ class PrivacyDemoApp {
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
                     
+                    // Check if we're transitioning from background to main questions
+                    const backgroundQuestionsCount = this.state.backgroundQuestions.length;
+                    const isTransitioningToMain = this.state.currentQuestionIndex === backgroundQuestionsCount;
+                    
+                    if (isTransitioningToMain) {
+                        console.log('🔄 Transitioning from background questions to main questions');
+                    }
+                    
                     // Let LLM decide when to move to next question - no turn counting
                     if (this.state.justCompletedQuestion) {
                         this.state.justCompletedQuestion = false;
                     }
                     
                     console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
+                    console.log(`Question type: ${isBackgroundQuestion ? 'Background' : 'Main'}`);
+                    console.log(`Background questions completed: ${this.state.completedQuestionIndices.filter(index => index < backgroundQuestionsCount).length}/${backgroundQuestionsCount}`);
                     
                     const response = await API.sendMessage(message, this.state.currentStep, {
                         questionMode: true,
@@ -2588,12 +2612,14 @@ class PrivacyDemoApp {
                         console.log(`Audit LLM Result: ${JSON.stringify(response.audit_result)}`);
                     }
                     
-                    // Check if current question is a background question
-                    const backgroundQuestions = [
-                        "Tell me about your educational background - what did you study in college or university?",
-                        "I'd love to hear about your current work - what do you do for a living?",
-                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
-                    ];
+                    // Check if current question is a background question using stored background questions
+                    const backgroundQuestions = this.state.backgroundQuestions && this.state.backgroundQuestions.length > 0 
+                        ? this.state.backgroundQuestions 
+                        : [
+                            "Tell me about your educational background - what did you study in college or university?",
+                            "I'd love to hear about your current work and how you got into it by job interviews?",
+                            "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        ];
                     const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
                     
                     console.log('Current question details:');
@@ -2603,17 +2629,47 @@ class PrivacyDemoApp {
                     console.log('- Response object keys:', Object.keys(response || {}));
                     console.log('- Full response:', response);
                     
-                    // Handle follow-up questions from audit LLM (but not for background questions)
-                    if (response.follow_up_questions && response.follow_up_questions.length > 0) {
-                        if (!isBackgroundQuestion) {
-                            console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
-                            this.state.followUpQuestions = response.follow_up_questions;
-                            this.state.currentFollowUpQuestionIndex = 0;
-                            this.state.inFollowUpMode = true;
-                            console.log('Entered follow-up question mode');
-                        } else {
-                            console.log('Background question - ignoring follow-up questions and proceeding to next question');
+                    // For background questions, always complete after one exchange and move to next
+                    if (isBackgroundQuestion) {
+                        console.log('Background question detected - completing immediately and moving to next question');
+                        
+                        // Mark the current question as completed
+                        if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
+                            this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
                         }
+                        
+                        this.state.predefinedQuestionsCompleted++;
+                        this.state.justCompletedQuestion = true;
+                        console.log(`Background question ${this.state.currentQuestionIndex + 1} completed. Moving to next question.`);
+                        
+                        // Check if we've completed all background questions and should transition to main questions
+                        const backgroundQuestionsCount = this.state.backgroundQuestions.length;
+                        const completedBackgroundCount = this.state.completedQuestionIndices.filter(index => 
+                            index < backgroundQuestionsCount
+                        ).length;
+                        
+                        if (completedBackgroundCount >= backgroundQuestionsCount) {
+                            console.log('All background questions completed - transitioning to main questions');
+                        }
+                        
+                        // Update progress bar and UI
+                        this.updateProgressBar();
+                        this.updateUI();
+                        this.saveToLocalStorage();
+                        this.scrollToBottom();
+                        this.showLoading(false);
+                        
+                        // Continue to next question immediately
+                        return;
+                    }
+                    
+                    // Handle follow-up questions from audit LLM (only for main questions)
+                    if (response.follow_up_questions && response.follow_up_questions.length > 0) {
+                        console.log(`Received follow-up questions: ${response.follow_up_questions.join(', ')}`);
+                        this.state.followUpQuestions = response.follow_up_questions;
+                        this.state.currentFollowUpQuestionIndex = 0;
+                        this.state.inFollowUpMode = true;
+                        console.log('Entered follow-up question mode');
                     }
                     
                     console.log(`Question completion check - Backend: ${response.question_completed}, NEXT_QUESTION signal: ${hasNextQuestionSignal}, Ending pattern: ${hasEndingPattern}`);
