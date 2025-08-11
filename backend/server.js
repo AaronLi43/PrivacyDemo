@@ -7,6 +7,12 @@ import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Debug environment variables
+console.log('🔧 Environment variables loaded:');
+console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔧 PORT:', process.env.PORT);
+console.log('🔧 CORS_ORIGINS:', process.env.CORS_ORIGINS);
+
 import {
     initState, getCurrentQuestion, isBackgroundPhase, isFinalQuestion,
     atFollowupCap, registerFollowup, recordScores,
@@ -65,7 +71,7 @@ console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 let currentMode = 'chat';
 
 // CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS ? 
+let corsOrigins = process.env.CORS_ORIGINS ? 
     process.env.CORS_ORIGINS.split(',') : 
     [
         'https://privacy-demo-flame.vercel.app',
@@ -77,14 +83,80 @@ const corsOrigins = process.env.CORS_ORIGINS ?
     ];
 
 console.log('🔧 CORS origins configured:', corsOrigins);
+console.log('🔧 Environment CORS_ORIGINS:', process.env.CORS_ORIGINS);
+console.log('🔧 Request origin will be logged for debugging');
+
+// Ensure corsOrigins is always an array
+if (!Array.isArray(corsOrigins)) {
+    console.log('⚠️  CORS_ORIGINS is not an array, using default');
+    corsOrigins = [
+        'https://privacy-demo-flame.vercel.app',
+        'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
+        'http://localhost:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:8000',
+        'http://127.0.0.1:3000'
+    ];
+}
 
 // Middleware
 app.use(cors({
-    origin: corsOrigins,
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        console.log('🔧 Checking origin:', origin);
+        
+        if (corsOrigins.indexOf(origin) !== -1) {
+            console.log('✅ Origin allowed:', origin);
+            callback(null, true);
+        } else {
+            console.log('❌ Origin not allowed:', origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
 }));
+
+// Additional CORS handling for preflight requests
+app.options('*', cors());
+
+// Error handling for CORS
+app.use((err, req, res, next) => {
+    if (err.message === 'Not allowed by CORS') {
+        console.log('❌ CORS error:', err.message);
+        return res.status(403).json({
+            error: 'CORS policy violation',
+            message: 'Origin not allowed',
+            allowedOrigins: corsOrigins
+        });
+    }
+    next(err);
+});
+
+// Handle CORS preflight for all routes
+app.use((req, res, next) => {
+    console.log(`🔧 Request: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
+    console.log(`🔧 Request headers:`, req.headers);
+    
+    // Only set CORS headers if origin is present
+    if (req.headers.origin) {
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+        res.header('Access-Control-Allow-Credentials', true);
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    }
+    
+    if (req.method === 'OPTIONS') {
+        console.log('🔧 Handling OPTIONS preflight request');
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -92,6 +164,26 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 const upload = multer({ 
     dest: 'uploads/',
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Test route to verify CORS is working
+app.get('/api/test-cors', (req, res) => {
+    console.log('🔧 Test CORS route hit from origin:', req.headers.origin);
+    res.json({ 
+        message: 'CORS test successful', 
+        origin: req.headers.origin,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Health check route
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        message: 'Privacy Demo Backend API is running',
+        timestamp: new Date().toISOString(),
+        corsOrigins: corsOrigins
+    });
 });
 
 // Session-based conversation management
@@ -2706,6 +2798,8 @@ app.listen(PORT, () => {
     console.log(`🚀 Privacy Demo Backend API running on port ${PORT}`);
     console.log(`📡 API endpoints available at http://localhost:${PORT}/api/*`);
     console.log(`🔍 Health check: http://localhost:${PORT}/`);
+    console.log(`🔧 CORS origins configured:`, corsOrigins);
+    console.log(`🔧 Environment CORS_ORIGINS:`, process.env.CORS_ORIGINS);
 });
 
 // User Agent Response Generation API
