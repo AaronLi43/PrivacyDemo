@@ -1404,7 +1404,7 @@ async function auditQuestionCompletion(
     aiResponse,
     currentQuestion,
     conversationHistory,
-    isFinalQuestion = false,   // Keep parameter, no longer dependent on prompt
+    isFinalQuestionFlag = false,   // Keep parameter, no longer dependent on prompt
     followUpMode = false       // Keep parameter, no longer dependent on prompt
   ) {
     if (!openaiClient) {
@@ -1569,7 +1569,7 @@ async function auditQuestionPresence(
     aiResponse,
     currentQuestion,
     conversationHistory,
-    isFinalQuestion = false, // Keep but not rely on
+    isFinalQuestionFlag = false, // Keep but not rely on
     followUpMode = false
   ) {
     if (!openaiClient) {
@@ -1657,7 +1657,7 @@ async function regenerateResponseWithQuestions(
     originalResponse,
     currentQuestion,
     conversationHistory,
-    isFinalQuestion,
+    isFinalQuestionFlag,
     followUpMode
   ) {
     if (!openaiClient) {
@@ -1733,7 +1733,7 @@ async function regenerateResponseWithQuestions(
     auditResult,          // from completion audit (PSS)
     currentQuestion,
     conversationHistory,
-    isFinalQuestion,
+    isFinalQuestionFlag,
     followUpMode
   ) {
     if (!openaiClient) {
