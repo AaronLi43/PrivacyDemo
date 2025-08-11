@@ -506,10 +506,9 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
-      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
-        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action. NO follow-ups allowed.' :
+        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral. When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
       `Output JSON only:`,
@@ -1184,8 +1183,23 @@ app.post('/api/chat', async (req, res) => {
   
             // Convert execution results to user output text
             if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
-              registerFollowup(state, qNow);
-              aiResponse = parsedExec.utterance || aiResponse;
+              // Prevent follow-ups for background questions
+              const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+              if (isBackgroundQuestion) {
+                // Force background questions to complete immediately
+                aiResponse = "Thank you for sharing that information. Let's move on to the next question.";
+                questionCompleted = true;
+                gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+                log.info('background question follow-up blocked, forcing completion', {
+                  phase: state.phase,
+                  bgIdx: state.bgIdx,
+                  mainIdx: state.mainIdx
+                });
+              } else {
+                // Allow follow-ups for main questions
+                registerFollowup(state, qNow);
+                aiResponse = parsedExec.utterance || aiResponse;
+              }
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
@@ -1198,15 +1212,29 @@ app.post('/api/chat', async (req, res) => {
           // ====== Completion Audit (PSS) ======
           const compT0 = Date.now();
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
           console.log('isFinalQuestionValue', isFinalQuestionValue);
-          completionAudit = await auditQuestionCompletion(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
+          
+          // Skip completion audit for background questions - they complete immediately
+          if (isBackgroundQuestion) {
+            completionAudit = {
+              verdict: 'ALLOW_NEXT_QUESTION',
+              reason: 'Background question - automatic completion',
+              shouldProceed: true,
+              confidence: 1.0
+            };
+            log.info('background question - skipping completion audit, auto-completing');
+          } else {
+            completionAudit = await auditQuestionCompletion(
+              message,
+              aiResponse,
+              qNow,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+          }
+          
           const compDur = Date.now() - compT0;
   
           log.info('completion audit', {
@@ -1224,14 +1252,27 @@ app.post('/api/chat', async (req, res) => {
   
           // ====== Presence Audit ======
           const presT0 = Date.now();
-          presenceAudit = await auditQuestionPresence(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
+          
+          // Skip presence audit for background questions - they don't need follow-up questions
+          if (isBackgroundQuestion) {
+            presenceAudit = {
+              hasQuestion: false,
+              reason: 'Background question - no follow-up needed',
+              confidence: 1.0,
+              shouldRegenerate: false
+            };
+            log.info('background question - skipping presence audit, no follow-up needed');
+          } else {
+            presenceAudit = await auditQuestionPresence(
+              message,
+              aiResponse,
+              qNow,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+          }
+          
           const presDur = Date.now() - presT0;
   
           log.info('presence audit', {
@@ -1243,7 +1284,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           // ====== Regenerate if needed (presence) ======
-          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7 && !isBackgroundQuestion) {
             const regenT0 = Date.now();
             const regenerated = await regenerateResponseWithQuestions(
               message,
@@ -1254,7 +1295,7 @@ app.post('/api/chat', async (req, res) => {
               followUpMode
             );
             const regenDur = Date.now() - regenT0;
-  
+
             if (regenerated) {
               usedRegenerate = true;
               aiResponse = regenerated;
@@ -1262,10 +1303,12 @@ app.post('/api/chat', async (req, res) => {
             } else {
               log.warn('regenerate returned null; keep original');
             }
+          } else if (isBackgroundQuestion && presenceAudit?.shouldRegenerate) {
+            log.info('background question - regeneration blocked, keeping original response');
           }
   
           // ====== Polish if need more (completion) ======
-          if (completionAudit?.verdict === 'REQUIRE_MORE') {
+          if (completionAudit?.verdict === 'REQUIRE_MORE' && !isBackgroundQuestion) {
             const polT0 = Date.now();
             const polished = await polishResponseWithAuditFeedback(
               message,
@@ -1277,7 +1320,7 @@ app.post('/api/chat', async (req, res) => {
               followUpMode
             );
             const polDur = Date.now() - polT0;
-  
+
             if (polished) {
               usedPolish = true;
               aiResponse = polished;
@@ -1285,11 +1328,13 @@ app.post('/api/chat', async (req, res) => {
             } else {
               log.info('polish returned null (either passed or kept original)');
             }
+          } else if (isBackgroundQuestion && completionAudit?.verdict === 'REQUIRE_MORE') {
+            log.info('background question - polishing blocked, keeping original response');
           }
   
           // ====== Final gating by completion audit ======
           // Check if this is a background question and force completion
-          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+          // isBackgroundQuestion is already declared above
           
           if (isBackgroundQuestion) {
             // Force background questions to complete immediately
