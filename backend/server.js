@@ -482,7 +482,8 @@ function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
 }
 
 // Executor System Prompt
-export function buildExecutorSystemPrompt(currentQuestion, allowedActions = []) {
+export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
+    const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
     const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
   
@@ -1184,12 +1185,13 @@ app.post('/api/chat', async (req, res) => {
   
           // ====== Completion Audit (PSS) ======
           const compT0 = Date.now();
+          const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
           completionAudit = await auditQuestionCompletion(
             message,
             aiResponse,
             qNow,
             session.conversationHistory,
-            isFinalQuestion(state, mainQuestions),
+            isFinalQuestionValue,
             followUpMode
           );
           const compDur = Date.now() - compT0;
@@ -1214,7 +1216,7 @@ app.post('/api/chat', async (req, res) => {
             aiResponse,
             qNow,
             session.conversationHistory,
-            isFinalQuestion(state, mainQuestions),
+            isFinalQuestionValue,
             followUpMode
           );
           const presDur = Date.now() - presT0;
@@ -1235,7 +1237,7 @@ app.post('/api/chat', async (req, res) => {
               aiResponse,
               qNow,
               session.conversationHistory,
-              isFinalQuestion(state, mainQuestions),
+              isFinalQuestionValue,
               followUpMode
             );
             const regenDur = Date.now() - regenT0;
@@ -1258,7 +1260,7 @@ app.post('/api/chat', async (req, res) => {
               completionAudit,
               qNow,
               session.conversationHistory,
-              isFinalQuestion(state, mainQuestions),
+              isFinalQuestionValue,
               followUpMode
             );
             const polDur = Date.now() - polT0;
@@ -1294,7 +1296,7 @@ app.post('/api/chat', async (req, res) => {
   
         } catch (err) {
           log.error('executor/audit pipeline error', { error: err.message, stack: err.stack });
-          aiResponse = `I’m sorry—I hit an error. Please try again. (Error: ${err.message})`;
+          aiResponse = `I'm sorry—I hit an error. Please try again. (Error: ${err.message})`;
         }
       } else {
         // Fallback (no model)
@@ -1575,36 +1577,9 @@ async function auditQuestionPresence(
     }
   
     try {
-      // Topic keywords: current question vs other questions (for cross-question prevention)
-      const kw = {
-        // main questions
-        "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?":
-          ["specific time","walk me through","one time you used","story","episode"],
-        "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?":
-          ["kinds of tasks","resume","mock interview","brainstorm","edit","practice","prep tasks"],
-        "Have you ever considered or actually used GenAI during a live interview? What happened?":
-          ["live interview","during the interview","real-time","on the call","live usage"],
-        "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.":
-          ["competitive edge","advantage","stand out","outperformed","edge"],
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?":
-          ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?":
-          ["crossed a line","policy","ethics","boundary","rule"],
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?":
-          ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
-        // background questions
-        "Tell me about your educational background - what did you study in college or university?":
-          ["educational background","major","field of study","college","university"],
-        "I'd love to hear about your current work and how you got into it by job interviews?":
-          ["current work","job interviews","role","position","how you got into it"],
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?":
-          ["first got you interested","started using","why you used","motivation","genai tools","chatgpt","gemini"]
-      };
-  
-      const currentK = kw[currentQuestion] || [];
-      const otherK = Object.entries(kw)
-        .filter(([q]) => q !== currentQuestion)
-        .flatMap(([, arr]) => arr);
+      // Use centralized keyword configuration
+      const currentK = getQuestionKeywords(currentQuestion);
+      const otherK = getOtherQuestionKeywords(currentQuestion);
   
       const auditPrompt = `
   You are the Question-Form Auditor. Check the latest assistant message for (1) presence/form of questions and (2) topic alignment to the CURRENT QUESTION.
@@ -1690,31 +1665,8 @@ async function regenerateResponseWithQuestions(
     }
   
     try {
-      // 主题关键词（与 presence 审计一致；若你已集中管理，可注入进来）
-      const kw = {
-        "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?":
-          ["specific time","walk me through","one time you used","story","episode"],
-        "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?":
-          ["kinds of tasks","resume","mock interview","brainstorm","edit","practice","prep tasks"],
-        "Have you ever considered or actually used GenAI during a live interview? What happened?":
-          ["live interview","during the interview","real-time","on the call","live usage"],
-        "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.":
-          ["competitive edge","advantage","stand out","outperformed","edge"],
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?":
-          ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?":
-          ["crossed a line","policy","ethics","boundary","rule"],
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?":
-          ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
-        // background
-        "Tell me about your educational background - what did you study in college or university?":
-          ["educational background","major","field of study","college","university"],
-        "I'd love to hear about your current work and how you got into it by job interviews?":
-          ["current work","job interviews","role","position","how you got into it"],
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?":
-          ["first got you interested","started using","why you used","motivation","genai tools","chatgpt","gemini"]
-      };
-      const currentK = kw[currentQuestion] || [];
+      // Use centralized keyword configuration
+      const currentK = getQuestionKeywords(currentQuestion);
   
       const regeneratePrompt = `
   You are a rewriting assistant. Produce EXACTLY ONE interrogative sentence that:
@@ -1797,31 +1749,8 @@ async function regenerateResponseWithQuestions(
         ? auditResult.followUpQuestions[0]
         : null;
   
-      // 主题关键词（同上，建议共用一个模块）
-      const kw = {
-        "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?":
-          ["specific time","walk me through","one time you used","story","episode"],
-        "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?":
-          ["kinds of tasks","resume","mock interview","brainstorm","edit","practice","prep tasks"],
-        "Have you ever considered or actually used GenAI during a live interview? What happened?":
-          ["live interview","during the interview","real-time","on the call","live usage"],
-        "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.":
-          ["competitive edge","advantage","stand out","outperformed","edge"],
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?":
-          ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?":
-          ["crossed a line","policy","ethics","boundary","rule"],
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?":
-          ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
-        // background
-        "Tell me about your educational background - what did you study in college or university?":
-          ["educational background","major","field of study","college","university"],
-        "I'd love to hear about your current work and how you got into it by job interviews?":
-          ["current work","job interviews","role","position","how you got into it"],
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?":
-          ["first got you interested","started using","why you used","motivation","genai tools","chatgpt","gemini"]
-      };
-      const currentK = kw[currentQuestion] || [];
+      // Use centralized keyword configuration
+      const currentK = getQuestionKeywords(currentQuestion);
   
       const polishPrompt = `
   You rewrite the assistant's next message into EXACTLY ONE targeted question to address the audit's gap.
@@ -2987,3 +2916,41 @@ Response:`;
         throw error;
     }
 } 
+
+// Centralized keyword configuration for all audit functions
+const QUESTION_KEYWORDS = {
+  // main questions
+  "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?":
+    ["specific time","walk me through","one time you used","story","episode"],
+  "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?":
+    ["kinds of tasks","resume","mock interview","brainstorm","edit","practice","prep tasks"],
+  "Have you ever considered or actually used GenAI during a live interview? What happened?":
+    ["live interview","during the interview","real-time","on the call","live usage"],
+  "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.":
+    ["competitive edge","advantage","stand out","outperformed","edge"],
+  "Did you ever have a close call where your AI use almost got you in trouble? What was that like?":
+    ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
+  "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?":
+    ["crossed a line","policy","ethics","boundary","rule"],
+  "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?":
+    ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
+  // background questions
+  "Tell me about your educational background - what did you study in college or university?":
+    ["educational background","major","field of study","college","university"],
+  "I'd love to hear about your current work and how you got into it by job interviews?":
+    ["current work","job interviews","role","position","how you got into it"],
+  "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?":
+    ["first got you interested","started using","why you used","motivation","genai tools","chatgpt","gemini"]
+};
+
+// Helper function to get keywords for a question
+function getQuestionKeywords(question) {
+  return QUESTION_KEYWORDS[question] || [];
+}
+
+// Helper function to get other question keywords (for topic alignment)
+function getOtherQuestionKeywords(currentQuestion) {
+  return Object.entries(QUESTION_KEYWORDS)
+    .filter(([q]) => q !== currentQuestion)
+    .flatMap(([, arr]) => arr);
+}
