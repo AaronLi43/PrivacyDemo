@@ -146,6 +146,33 @@ class PrivacyDemoApp {
             console.log('🔄 Browser navigation detected - ensuring fresh start');
             this.ensureFreshStart();
         });
+        
+        // Global keyboard event listener to prevent Ctrl+C and other shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Prevent Ctrl+C (copy)
+            if (e.ctrlKey && e.key === 'c') {
+                e.preventDefault();
+                console.log('🔒 Ctrl+C blocked for security');
+                this.showNotification('Copy shortcut (Ctrl+C) is disabled for security reasons.', 'warning');
+                return false;
+            }
+            
+            // Prevent Ctrl+V (paste)
+            if (e.ctrlKey && e.key === 'v') {
+                e.preventDefault();
+                console.log('🔒 Ctrl+V blocked for security');
+                this.showNotification('Paste shortcut (Ctrl+V) is disabled for security reasons.', 'warning');
+                return false;
+            }
+            
+            // Prevent Ctrl+X (cut)
+            if (e.ctrlKey && e.key === 'x') {
+                e.preventDefault();
+                console.log('🔒 Ctrl+X blocked for security');
+                this.showNotification('Cut shortcut (Ctrl+X) is disabled for security reasons.', 'warning');
+                return false;
+            }
+        });
     }
 
     // Initialize the application
@@ -164,6 +191,14 @@ class PrivacyDemoApp {
         
         // Force disable copy/paste globally for security
         this.forceDisableCopyPasteOnAllElements();
+        
+        // Set up periodic check for new elements to disable copy/paste
+        setInterval(() => {
+            this.forceDisableCopyPasteOnAllElements();
+        }, 2000); // Check every 2 seconds
+        
+        // Set up mutation observer to catch dynamically added elements
+        this.setupCopyPasteMutationObserver();
         
         // Initialize multi-step interface - always start at introduction
         this.initializeMultiStepInterface();
@@ -338,16 +373,11 @@ class PrivacyDemoApp {
         }
     }
 
-    // Disable copy/paste functionality on input elements
+    // Disable copy/paste functionality on input elements - ENFORCED
     disableCopyPaste(element) {
         if (!element) return;
         
-        // If copy/paste is enabled, don't apply restrictions
-        if (this.state.copyPasteEnabled) {
-            return;
-        }
-        
-        // Add visual indicator class
+        // Always disable copy/paste regardless of state for security
         element.classList.add('copy-paste-disabled');
         
         // Prevent copy
@@ -371,16 +401,19 @@ class PrivacyDemoApp {
             return false;
         });
         
-        // Prevent context menu (right-click) for additional security
+        // Also prevent right-click context menu
         element.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            this.showNotification('Right-click context menu is disabled for security reasons.', 'warning');
             return false;
         });
+        
+        console.log('🔒 Copy/paste disabled on element:', element.tagName, element.id || element.className);
     }
 
     // Toggle copy/paste functionality - DISABLED
     toggleCopyPaste() {
-        // Copy/paste is permanently disabled
+        // Copy/paste is permanently disabled for security
         this.state.copyPasteEnabled = false;
         this.updateCopyPasteToggle();
         this.applyCopyPasteSettings();
@@ -451,6 +484,40 @@ class PrivacyDemoApp {
         });
         
         console.log('🔒 Global copy/paste prevention enabled');
+    }
+    
+    // Set up mutation observer to catch dynamically added elements
+    setupCopyPasteMutationObserver() {
+        // Create a mutation observer to watch for new elements
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                // Check for added nodes
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the added element is an input, textarea, or contenteditable
+                        if (node.matches && (node.matches('input, textarea, [contenteditable="true"]') || 
+                            node.querySelector && node.querySelector('input, textarea, [contenteditable="true"]'))) {
+                            console.log('🔒 New input element detected, disabling copy/paste');
+                            this.disableCopyPaste(node);
+                            
+                            // Also check for nested elements
+                            const nestedInputs = node.querySelectorAll('input, textarea, [contenteditable="true"]');
+                            nestedInputs.forEach(input => {
+                                this.disableCopyPaste(input);
+                            });
+                        }
+                    }
+                });
+            });
+        });
+        
+        // Start observing the document body for changes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        console.log('🔒 Copy/paste mutation observer enabled');
     }
 
     // Bind multi-step navigation events
@@ -1061,12 +1128,13 @@ class PrivacyDemoApp {
             }
         });
 
-        // Debug: Test consent and survey flow (Ctrl+C)
+        // Debug: Test consent and survey flow (Ctrl+C) - DISABLED
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'c') {
                 e.preventDefault();
-                console.log('Test consent and survey flow triggered');
-                this.showSurveyPopup('exportDirect');
+                console.log('Ctrl+C survey shortcut disabled for security');
+                this.showNotification('Ctrl+C survey shortcut is disabled for security reasons.', 'warning');
+                return;
             }
         });
 
@@ -4771,7 +4839,7 @@ class PrivacyDemoApp {
         popup.style.display = 'flex';
         console.log('🔍 Survey popup displayed');
         
-        // Apply copy/paste settings to all textarea elements in the survey
+        // Apply copy/paste settings to all textarea elements in the survey - DISABLED
         setTimeout(() => {
             const textareas = popup.querySelectorAll('textarea');
             textareas.forEach(textarea => {
