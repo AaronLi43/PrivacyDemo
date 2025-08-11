@@ -1186,6 +1186,7 @@ app.post('/api/chat', async (req, res) => {
           // ====== Completion Audit (PSS) ======
           const compT0 = Date.now();
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
+          console.log('isFinalQuestionValue', isFinalQuestionValue);
           completionAudit = await auditQuestionCompletion(
             message,
             aiResponse,
