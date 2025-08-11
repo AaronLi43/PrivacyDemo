@@ -87,6 +87,7 @@ class PrivacyDemoApp {
                 qual2: '',
                 qual3: ''
             },
+            hasNavigated: false, // Track if legitimate navigation has occurred
             // Audit LLM properties
             auditLLMEnabled: false,
             // Copy/paste functionality - DISABLED
@@ -141,10 +142,27 @@ class PrivacyDemoApp {
             }
         });
         
+        // Monitor for page visibility changes (Developer Tools can trigger this)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('🔄 Page hidden - might be Developer Tools opening');
+                this.isDevToolsOpening = true;
+                
+                // Reset flag after a delay
+                setTimeout(() => {
+                    this.isDevToolsOpening = false;
+                }, 300);
+            }
+        });
+        
         // Listen for browser navigation (back/forward buttons) to ensure fresh start
         // But ignore events that might be triggered by Developer Tools opening
         this.isDevToolsOpening = false;
+        this.lastPopstateTime = 0;
+        
         window.addEventListener('popstate', (event) => {
+            const now = Date.now();
+            
             // Check if this popstate event is likely caused by Developer Tools
             if (this.isDevToolsOpening) {
                 console.log('🔄 Ignoring popstate event from Developer Tools opening');
@@ -152,11 +170,26 @@ class PrivacyDemoApp {
                 return;
             }
             
+            // Check if this is a rapid popstate event (likely from Developer Tools)
+            if (now - this.lastPopstateTime < 100) {
+                console.log('🔄 Ignoring rapid popstate event (likely from Developer Tools)');
+                this.lastPopstateTime = now;
+                return;
+            }
+            
+            // Check if the popstate event has a null state (often indicates Developer Tools)
+            if (event.state === null && !this.state.hasNavigated) {
+                console.log('🔄 Ignoring popstate event with null state (likely from Developer Tools)');
+                return;
+            }
+            
+            this.lastPopstateTime = now;
+            this.state.hasNavigated = true; // Mark that we've had legitimate navigation
             console.log('🔄 Browser navigation detected - ensuring fresh start');
             this.ensureFreshStart();
         });
         
-        // Additional developer tools detection methods
+        // Enhanced developer tools detection methods
         // Monitor for window size changes that might indicate Developer Tools opening
         let lastWidth = window.innerWidth;
         let lastHeight = window.innerHeight;
@@ -171,14 +204,14 @@ class PrivacyDemoApp {
                 // Reset flag after a delay
                 setTimeout(() => {
                     this.isDevToolsOpening = false;
-                }, 200);
+                }, 300);
             }
             
             lastWidth = window.innerWidth;
             lastHeight = window.innerHeight;
         });
         
-        // Monitor for console opening (Developer Tools)
+        // Monitor for console opening (Developer Tools) - more sensitive detection
         let devtools = {
             open: false,
             orientation: null
@@ -199,32 +232,43 @@ class PrivacyDemoApp {
                     // Reset flag after a delay
                     setTimeout(() => {
                         this.isDevToolsOpening = false;
-                    }, 200);
+                    }, 300);
                 }
             } else {
                 devtools.open = false;
                 devtools.orientation = null;
             }
-        }, 500);
+        }, 300);
+        
+        // Additional detection: Monitor for console object changes
+        let consoleCheck = setInterval(() => {
+            const devtools = /./;
+            devtools.toString = function() {
+                this.isDevToolsOpening = true;
+                setTimeout(() => {
+                    this.isDevToolsOpening = false;
+                }, 300);
+                return 'dev tools';
+            }
+            console.log('%c', devtools);
+        }, 1000);
+        
+        // Monitor for F12 key press to set flag (but don't block it)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F12') {
+                console.log('🔍 F12 pressed - setting Developer Tools flag');
+                this.isDevToolsOpening = true;
+                
+                // Reset flag after a delay
+                setTimeout(() => {
+                    this.isDevToolsOpening = false;
+                }, 500);
+            }
+        });
         
         // Global keyboard event listener to prevent Ctrl+C and other shortcuts
         document.addEventListener('keydown', (e) => {
-            // Prevent F12 from triggering navigation reset
-            if (e.key === 'F12') {
-                e.preventDefault();
-                console.log('🔒 F12 blocked to prevent navigation reset');
-                this.showNotification('F12 (Developer Tools) is disabled to prevent navigation issues.', 'warning');
-                
-                // Set flag to ignore popstate events from Developer Tools
-                this.isDevToolsOpening = true;
-                
-                // Reset flag after a short delay in case popstate doesn't fire
-                setTimeout(() => {
-                    this.isDevToolsOpening = false;
-                }, 100);
-                
-                return false;
-            }
+            // F12 is now allowed for debugging - navigation prevention is handled by popstate event filtering
             
             // Prevent Ctrl+C (copy)
             if (e.ctrlKey && e.key === 'c') {
@@ -381,6 +425,7 @@ class PrivacyDemoApp {
         this.state.pendingExportAction = null;
         this.state.privacyChoices = {};
         this.state.editableLog = [];
+        this.state.hasNavigated = false; // Reset navigation flag
         
         // Show introduction page
         this.showStepPage('introduction');
@@ -1299,9 +1344,34 @@ class PrivacyDemoApp {
         this.saveToLocalStorage();
     }
 
+    // Check if questions are already loaded for a specific mode
+    areQuestionsLoaded(mode) {
+        const questions = this.state.predefinedQuestions[mode];
+        return questions && Array.isArray(questions) && questions.length > 0;
+    }
+
+    // Get questions status for debugging
+    getQuestionsStatus() {
+        const status = {};
+        Object.keys(this.state.predefinedQuestions).forEach(mode => {
+            status[mode] = {
+                loaded: this.areQuestionsLoaded(mode),
+                count: this.state.predefinedQuestions[mode]?.length || 0,
+                currentMode: mode === this.state.mode
+            };
+        });
+        return status;
+    }
+
     // Load predefined questions from server
     async loadPredefinedQuestions(mode) {
         try {
+            // Check if questions are already loaded to prevent duplicate API calls
+            if (this.areQuestionsLoaded(mode)) {
+                console.log(`✅ Questions already loaded for mode: ${mode}, skipping API call`);
+                return true;
+            }
+            
             console.log(`🔄 Loading predefined questions for mode: ${mode}`);
             const response = await fetch(`https://privacydemo.onrender.com/api/predefined_questions/${mode}`);
             
@@ -2270,8 +2340,15 @@ class PrivacyDemoApp {
             // Call backend reset API
             await API.resetConversation();
             
-            // Load predefined questions and start main conversation
-            await this.loadPredefinedQuestions(this.state.mode);
+            // Only load questions if they're not already loaded for the current mode
+            if (!this.areQuestionsLoaded(this.state.mode)) {
+                console.log('🔄 Questions not loaded for current mode, loading now...');
+                await this.loadPredefinedQuestions(this.state.mode);
+            } else {
+                console.log('✅ Questions already loaded for current mode, skipping reload');
+            }
+            
+            // Start fresh conversation with existing questions
             await this.startQuestionConversation();
             
             this.updateUI();
