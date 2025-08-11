@@ -12,6 +12,9 @@ console.log('🔧 Environment variables loaded:');
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 console.log('🔧 PORT:', process.env.PORT);
 console.log('🔧 CORS_ORIGINS:', process.env.CORS_ORIGINS);
+console.log('🔧 Process ID:', process.pid);
+console.log('🔧 Current working directory:', process.cwd());
+console.log('🔧 Node version:', process.version);
 
 import {
     initState, getCurrentQuestion, isBackgroundPhase, isFinalQuestion,
@@ -70,12 +73,54 @@ console.log(`🔍 Audit LLM: ${ENABLE_AUDIT_LLM ? 'ENABLED' : 'DISABLED'}`);
 // Global mode configuration
 let currentMode = 'chat';
 
+// Lightweight logger factory to standardize route/request logs
+function makeLogger({ route = 'unknown', requestId = '-' } = {}) {
+    function prefix() {
+        return `[${new Date().toISOString()}][${route}][${requestId}]`;
+    }
+    return {
+        info(message, meta) {
+            if (meta !== undefined) {
+                console.log('ℹ️', prefix(), message, meta);
+            } else {
+                console.log('ℹ️', prefix(), message);
+            }
+        },
+        warn(message, meta) {
+            if (meta !== undefined) {
+                console.warn('⚠️', prefix(), message, meta);
+            } else {
+                console.warn('⚠️', prefix(), message);
+            }
+        },
+        error(message, meta) {
+            if (meta !== undefined) {
+                console.error('❌', prefix(), message, meta);
+            } else {
+                console.error('❌', prefix(), message);
+            }
+        },
+        debug(message, meta) {
+            if (meta !== undefined) {
+                console.log('🐛', prefix(), message, meta);
+            } else {
+                console.log('🐛', prefix(), message);
+            }
+        }
+    };
+}
+
 // CORS configuration
 let corsOrigins = process.env.CORS_ORIGINS ? 
     process.env.CORS_ORIGINS.split(',') : 
     [
         'https://privacy-demo-flame.vercel.app',
         'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
+        'https://privacy-demo-flame.vercel.app',
+        'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
+        'https://privacy-demo-flame-git-main-privacy-demo-flame.vercel.app',
+        'https://privacy-demo-flame-git-feature-privacy-demo-flame.vercel.app',
+        'https://privacy-demo-flame-git-develop-privacy-demo-flame.vercel.app',
         'http://localhost:8000',
         'http://localhost:3000',
         'http://127.0.0.1:8000',
@@ -99,62 +144,59 @@ if (!Array.isArray(corsOrigins)) {
     ];
 }
 
-// Middleware
+// Enhanced CORS middleware with dynamic origin handling
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        console.log('🔧 Checking origin:', origin);
-        
-        if (corsOrigins.indexOf(origin) !== -1) {
-            console.log('✅ Origin allowed:', origin);
-            callback(null, true);
-        } else {
-            console.log('❌ Origin not allowed:', origin);
-            callback(new Error('Not allowed by CORS'));
+        if (!origin) {
+            console.log('🔧 CORS: Request with no origin, allowing');
+            return callback(null, true);
         }
+        
+        // Check if origin is in our allowed list
+        if (corsOrigins.includes(origin)) {
+            console.log('🔧 CORS: Origin allowed:', origin);
+            return callback(null, true);
+        }
+        
+        // Check for Vercel preview deployments (dynamic subdomains)
+        if (origin.includes('vercel.app') && origin.includes('privacy-demo')) {
+            console.log('🔧 CORS: Vercel preview deployment allowed:', origin);
+            return callback(null, true);
+        }
+        
+        console.log('🔧 CORS: Origin blocked:', origin);
+        console.log('🔧 CORS: Allowed origins:', corsOrigins);
+        return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+    optionsSuccessStatus: 200
 }));
 
-// Additional CORS handling for preflight requests
-app.options('*', cors());
-
-// Error handling for CORS
-app.use((err, req, res, next) => {
-    if (err.message === 'Not allowed by CORS') {
-        console.log('❌ CORS error:', err.message);
-        return res.status(403).json({
-            error: 'CORS policy violation',
-            message: 'Origin not allowed',
-            allowedOrigins: corsOrigins
-        });
-    }
-    next(err);
+console.log('🔧 CORS middleware applied with origins:', corsOrigins);
+console.log('🔧 CORS middleware configuration:', {
+    origin: 'Dynamic function-based origin checking',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+    optionsSuccessStatus: 200
 });
 
-// Handle CORS preflight for all routes
+// Handle preflight requests explicitly
+app.options('*', cors());
+
+// Log all requests for debugging
 app.use((req, res, next) => {
     console.log(`🔧 Request: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
-    console.log(`🔧 Request headers:`, req.headers);
-    
-    // Only set CORS headers if origin is present
-    if (req.headers.origin) {
-        res.header('Access-Control-Allow-Origin', req.headers.origin);
-        res.header('Access-Control-Allow-Credentials', true);
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
-    }
-    
-    if (req.method === 'OPTIONS') {
-        console.log('🔧 Handling OPTIONS preflight request');
-        res.sendStatus(200);
-    } else {
-        next();
-    }
+    console.log(`🔧 CORS Headers:`, {
+        origin: req.headers.origin,
+        'access-control-request-method': req.headers['access-control-request-method'],
+        'access-control-request-headers': req.headers['access-control-request-headers'],
+        'user-agent': req.headers['user-agent']
+    });
+    next();
 });
 
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -172,17 +214,34 @@ app.get('/api/test-cors', (req, res) => {
     res.json({ 
         message: 'CORS test successful', 
         origin: req.headers.origin,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        corsOrigins: corsOrigins,
+        serverTime: new Date().toISOString()
+    });
+});
+
+// CORS debug endpoint
+app.get('/api/cors-debug', (req, res) => {
+    res.json({
+        message: 'CORS Debug Information',
+        requestOrigin: req.headers.origin,
+        allowedOrigins: corsOrigins,
+        userAgent: req.headers['user-agent'],
+        timestamp: new Date().toISOString(),
+        serverTime: new Date().toISOString()
     });
 });
 
 // Health check route
 app.get('/', (req, res) => {
+    console.log('🔧 Health check request received');
     res.json({ 
         status: 'OK', 
         message: 'Privacy Demo Backend API is running',
         timestamp: new Date().toISOString(),
-        corsOrigins: corsOrigins
+        corsOrigins: corsOrigins,
+        serverTime: new Date().toISOString(),
+        uptime: process.uptime()
     });
 });
 
@@ -2794,12 +2853,16 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Privacy Demo Backend API running on port ${PORT}`);
     console.log(`📡 API endpoints available at http://localhost:${PORT}/api/*`);
     console.log(`🔍 Health check: http://localhost:${PORT}/`);
     console.log(`🔧 CORS origins configured:`, corsOrigins);
     console.log(`🔧 Environment CORS_ORIGINS:`, process.env.CORS_ORIGINS);
+    console.log(`🌐 Server listening on all interfaces (0.0.0.0)`);
+}).on('error', (err) => {
+    console.error('❌ Server failed to start:', err);
+    process.exit(1);
 });
 
 // User Agent Response Generation API
