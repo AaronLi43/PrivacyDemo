@@ -4747,32 +4747,27 @@ class PrivacyDemoApp {
     // Save to localStorage
     saveToLocalStorage() {
         try {
-            // Save configuration only - never save conversation state
-            localStorage.setItem('privacyDemoConfig', JSON.stringify(this.config));
+            // Save nothing - ensure complete fresh start every time
+            localStorage.removeItem('privacyDemoConfig');
             
-            // Never save conversation state - always start fresh
-            console.log('✅ Configuration saved, conversation state intentionally not saved');
+            // Never save any state - always start completely fresh
+            console.log('✅ No data saved to localStorage - fresh start enforced');
         } catch (error) {
-            console.error('Failed to save configuration to localStorage:', error);
+            console.error('Failed to clear localStorage:', error);
         }
     }
 
     // Load from localStorage
     loadFromLocalStorage() {
         try {
-            // Load configuration only - never restore conversation state
-            const savedConfig = localStorage.getItem('privacyDemoConfig');
-            if (savedConfig) {
-                const parsedConfig = JSON.parse(savedConfig);
-                this.config = { ...this.config, ...parsedConfig };
-                console.log('✅ Loaded configuration from localStorage');
-            }
+            // Load nothing - ensure complete fresh start every time
+            localStorage.removeItem('privacyDemoConfig');
             
-            // Never restore conversation state - always start fresh
-            console.log('✅ Skipping conversation state restoration - fresh start enforced');
+            // Never restore any state - always start completely fresh
+            console.log('✅ No data loaded from localStorage - fresh start enforced');
             
         } catch (error) {
-            console.error('Failed to load configuration from localStorage:', error);
+            console.error('Failed to clear localStorage:', error);
         }
     }
 
