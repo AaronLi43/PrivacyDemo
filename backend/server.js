@@ -1,10 +1,11 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const bodyParser = require('body-parser');
-const fs = require('fs-extra');
-const path = require('path');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import bodyParser from 'body-parser';
+import fs from 'fs-extra';
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config();
 
 import {
     initState, getCurrentQuestion, isBackgroundPhase, isFinalQuestion,
@@ -14,10 +15,10 @@ import {
   } from './orchestrator.js';
 
 // OpenAI API
-const OpenAI = require('openai');
+import OpenAI from 'openai';
 
 // AWS SDK
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 // Initialize OpenAI
 let openaiClient;

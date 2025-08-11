@@ -1,6 +1,7 @@
 // Test script for S3 upload functionality
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-require('dotenv').config();
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function testS3Upload() {
     console.log('🧪 Testing S3 Upload Functionality...\n');
