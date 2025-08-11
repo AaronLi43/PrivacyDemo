@@ -142,13 +142,90 @@ class PrivacyDemoApp {
         });
         
         // Listen for browser navigation (back/forward buttons) to ensure fresh start
-        window.addEventListener('popstate', () => {
+        // But ignore events that might be triggered by Developer Tools opening
+        this.isDevToolsOpening = false;
+        window.addEventListener('popstate', (event) => {
+            // Check if this popstate event is likely caused by Developer Tools
+            if (this.isDevToolsOpening) {
+                console.log('🔄 Ignoring popstate event from Developer Tools opening');
+                this.isDevToolsOpening = false;
+                return;
+            }
+            
             console.log('🔄 Browser navigation detected - ensuring fresh start');
             this.ensureFreshStart();
         });
         
+        // Additional developer tools detection methods
+        // Monitor for window size changes that might indicate Developer Tools opening
+        let lastWidth = window.innerWidth;
+        let lastHeight = window.innerHeight;
+        
+        window.addEventListener('resize', () => {
+            // If the window size changes significantly, it might be Developer Tools
+            if (Math.abs(window.innerWidth - lastWidth) > 100 || 
+                Math.abs(window.innerHeight - lastHeight) > 100) {
+                console.log('🔄 Significant window resize detected - might be Developer Tools');
+                this.isDevToolsOpening = true;
+                
+                // Reset flag after a delay
+                setTimeout(() => {
+                    this.isDevToolsOpening = false;
+                }, 200);
+            }
+            
+            lastWidth = window.innerWidth;
+            lastHeight = window.innerHeight;
+        });
+        
+        // Monitor for console opening (Developer Tools)
+        let devtools = {
+            open: false,
+            orientation: null
+        };
+        
+        setInterval(() => {
+            const threshold = 160;
+            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+            
+            if (widthThreshold || heightThreshold) {
+                if (!devtools.open) {
+                    devtools.open = true;
+                    devtools.orientation = widthThreshold ? 'vertical' : 'horizontal';
+                    console.log('🔄 Developer Tools detected opening');
+                    this.isDevToolsOpening = true;
+                    
+                    // Reset flag after a delay
+                    setTimeout(() => {
+                        this.isDevToolsOpening = false;
+                    }, 200);
+                }
+            } else {
+                devtools.open = false;
+                devtools.orientation = null;
+            }
+        }, 500);
+        
         // Global keyboard event listener to prevent Ctrl+C and other shortcuts
         document.addEventListener('keydown', (e) => {
+            // Prevent F12 from triggering navigation reset
+            if (e.key === 'F12') {
+                e.preventDefault();
+                console.log('🔒 F12 blocked to prevent navigation reset');
+                this.showNotification('F12 (Developer Tools) is disabled to prevent navigation issues.', 'warning');
+                
+                // Set flag to ignore popstate events from Developer Tools
+                this.isDevToolsOpening = true;
+                
+                // Reset flag after a short delay in case popstate doesn't fire
+                setTimeout(() => {
+                    this.isDevToolsOpening = false;
+                }, 100);
+                
+                return false;
+            }
+            
             // Prevent Ctrl+C (copy)
             if (e.ctrlKey && e.key === 'c') {
                 e.preventDefault();
@@ -189,15 +266,10 @@ class PrivacyDemoApp {
         this.updateCopyPasteToggle();
         this.checkAPIStatus();
         
-        // Force disable copy/paste globally for security
-        this.forceDisableCopyPasteOnAllElements();
+        // Apply copy/paste settings once per page load instead of continuously
+        this.applyCopyPasteSettings();
         
-        // Set up periodic check for new elements to disable copy/paste
-        setInterval(() => {
-            this.forceDisableCopyPasteOnAllElements();
-        }, 2000); // Check every 2 seconds
-        
-        // Set up mutation observer to catch dynamically added elements
+        // Set up mutation observer to catch dynamically added elements (but don't re-apply to existing ones)
         this.setupCopyPasteMutationObserver();
         
         // Initialize multi-step interface - always start at introduction
@@ -452,38 +524,15 @@ class PrivacyDemoApp {
         
         console.log('🔒 Copy/paste permanently disabled on all input elements');
         
-        // Force disable copy/paste on any new elements that might be added
-        this.forceDisableCopyPasteOnAllElements();
+        // No need to force disable - copy/paste is now applied once per page load
     }
     
-    // Force disable copy/paste on all elements (additional security)
+    // Force disable copy/paste on all elements (additional security) - REMOVED
+    // This function was causing continuous disabling and has been removed
+    // Copy/paste is now only applied once per page load and to new elements
     forceDisableCopyPasteOnAllElements() {
-        // Disable on all input elements
-        const allInputs = document.querySelectorAll('input, textarea, [contenteditable="true"]');
-        allInputs.forEach(input => {
-            this.disableCopyPaste(input);
-        });
-        
-        // Disable on document body to catch any new elements
-        document.body.addEventListener('copy', (e) => {
-            e.preventDefault();
-            this.showNotification('Copy is disabled for security reasons.', 'warning');
-            return false;
-        });
-        
-        document.body.addEventListener('paste', (e) => {
-            e.preventDefault();
-            this.showNotification('Paste is disabled for security reasons.', 'warning');
-            return false;
-        });
-        
-        document.body.addEventListener('cut', (e) => {
-            e.preventDefault();
-            this.showNotification('Cut is disabled for security reasons.', 'warning');
-            return false;
-        });
-        
-        console.log('🔒 Global copy/paste prevention enabled');
+        // Function removed to prevent continuous copy/paste disabling
+        console.log('🔒 Copy/paste function removed - no longer continuously disabling');
     }
     
     // Set up mutation observer to catch dynamically added elements
@@ -497,13 +546,19 @@ class PrivacyDemoApp {
                         // Check if the added element is an input, textarea, or contenteditable
                         if (node.matches && (node.matches('input, textarea, [contenteditable="true"]') || 
                             node.querySelector && node.querySelector('input, textarea, [contenteditable="true"]'))) {
-                            console.log('🔒 New input element detected, disabling copy/paste');
-                            this.disableCopyPaste(node);
+                            // Only apply to elements that don't already have the class
+                            if (!node.classList.contains('copy-paste-disabled')) {
+                                console.log('🔒 New input element detected, disabling copy/paste');
+                                this.disableCopyPaste(node);
+                            }
                             
                             // Also check for nested elements
                             const nestedInputs = node.querySelectorAll('input, textarea, [contenteditable="true"]');
                             nestedInputs.forEach(input => {
-                                this.disableCopyPaste(input);
+                                // Only apply to elements that don't already have the class
+                                if (!input.classList.contains('copy-paste-disabled')) {
+                                    this.disableCopyPaste(input);
+                                }
                             });
                         }
                     }
@@ -755,6 +810,15 @@ class PrivacyDemoApp {
         const completedQuestions = this.state.completedQuestionIndices.length;
         const currentQuestionIndex = this.state.currentQuestionIndex !== null ? this.state.currentQuestionIndex : 0;
         
+        // Debug logging for progress calculation
+        console.log('📊 Progress Bar Debug:', {
+            totalQuestions,
+            completedQuestions,
+            currentQuestionIndex,
+            completedIndices: this.state.completedQuestionIndices,
+            mode: this.state.mode
+        });
+        
         // Calculate progress based on completed questions and current question
         let progress = 0;
         let progressTextContent = '';
@@ -765,10 +829,22 @@ class PrivacyDemoApp {
             progressTextContent = `All ${totalQuestions} questions completed!`;
         } else {
             // Calculate progress including current question
-            const currentProgress = completedQuestions + (currentQuestionIndex > completedQuestions ? 1 : 0);
+            // Progress should be based on completed questions plus current question if it's in progress
+            let currentProgress = completedQuestions;
+            
+            // If current question is not completed yet, add it to progress
+            if (!this.state.completedQuestionIndices.includes(currentQuestionIndex)) {
+                currentProgress += 1;
+            }
+            
             progress = Math.round((currentProgress / totalQuestions) * 100);
             progressTextContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions}`;
         }
+        
+        console.log('📊 Progress Calculation:', {
+            currentProgress: progress,
+            progressText: progressTextContent
+        });
 
         // Update progress bar
         progressContainer.style.display = 'flex';
@@ -1115,6 +1191,7 @@ class PrivacyDemoApp {
                     this.showNotification('Manual: Moved to next question', 'info');
                 }
                 this.updateUI();
+                this.updateProgressBar(); // Update progress bar after manual question completion
             }
         });
 
@@ -2595,6 +2672,7 @@ class PrivacyDemoApp {
                     }
                     
                     this.updateUI();
+                    this.updateProgressBar(); // Ensure progress bar is updated
                     this.saveToLocalStorage();
                     this.scrollToBottom();
                     this.showLoading(false);
