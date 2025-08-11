@@ -452,10 +452,6 @@ class PrivacyDemoApp {
         setTimeout(async () => {
             if (this.state.conversationLog.length === 0) {
                 console.log('Initiating chatbot conversation...');
-                // Load questions first if not already loaded
-                if (!this.state.predefinedQuestions[this.state.mode] || this.state.predefinedQuestions[this.state.mode].length === 0) {
-                    await this.loadPredefinedQuestions(this.state.mode);
-                }
                 await this.startQuestionConversation();
             }
         }, 500);
@@ -4596,12 +4592,6 @@ class PrivacyDemoApp {
         this.state.completedQuestionIndices = [];
         this.state.justCompletedQuestion = false;
         console.log('✅ Initialized background mode for direct conversation start');
-        
-        // Load questions for the current mode if not already loaded
-        if (!this.state.predefinedQuestions[this.state.mode] || this.state.predefinedQuestions[this.state.mode].length === 0) {
-            console.log('Loading questions for mode:', this.state.mode);
-            await this.loadPredefinedQuestions(this.state.mode);
-        }
         
         // Update UI to reflect the current mode
         this.updateModeInfo();

@@ -23,6 +23,8 @@ import {
     shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction
   } from './orchestrator.js';
 
+
+
 // OpenAI API
 import OpenAI from 'openai';
 
@@ -1059,14 +1061,14 @@ app.post('/api/chat', async (req, res) => {
         questionMode = true,               // New process default to enable question mode
         currentQuestion = null,            // Can be decided by orchestrator
         predefinedQuestions = [],          // 7 main questions
-        isFinalQuestion = false,           // Reserved field (not involved in pass judgment)
+        isFinalQuestionFlag = false,       // Reserved field (not involved in pass judgment)
         followUpMode = true,               // We default to follow-up mode, requiring "exactly one question"
         sessionId
       } = req.body || {};
   
       log.info('incoming params', {
         hasMessage: !!message,
-        step, questionMode, isFinalQuestion, followUpMode,
+        step, questionMode, isFinalQuestionFlag, followUpMode,
         currentQuestionProvided: !!currentQuestion,
         predefinedCount: Array.isArray(predefinedQuestions) ? predefinedQuestions.length : 0,
         sessionIdProvided: !!sessionId
