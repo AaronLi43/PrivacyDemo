@@ -116,19 +116,7 @@ class PrivacyDemoApp {
             console.error('Failed to initialize app:', error);
         });
         
-        // Listen for page visibility changes to ensure fresh start when returning to the page
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                console.log('🔄 Page became visible - ensuring fresh start');
-                this.ensureFreshStart();
-            }
-        });
-        
-        // Also listen for window focus to catch tab switching
-        window.addEventListener('focus', () => {
-            console.log('🔄 Window focused - ensuring fresh start');
-            this.ensureFreshStart();
-        });
+
         
         // Listen for page reload to ensure fresh start
         window.addEventListener('beforeunload', () => {
@@ -4747,27 +4735,32 @@ class PrivacyDemoApp {
     // Save to localStorage
     saveToLocalStorage() {
         try {
-            // Save nothing - ensure complete fresh start every time
-            localStorage.removeItem('privacyDemoConfig');
+            // Save configuration only - never save conversation state
+            localStorage.setItem('privacyDemoConfig', JSON.stringify(this.config));
             
-            // Never save any state - always start completely fresh
-            console.log('✅ No data saved to localStorage - fresh start enforced');
+            // Never save conversation state - always start fresh
+            console.log('✅ Configuration saved, conversation state intentionally not saved');
         } catch (error) {
-            console.error('Failed to clear localStorage:', error);
+            console.error('Failed to save configuration to localStorage:', error);
         }
     }
 
     // Load from localStorage
     loadFromLocalStorage() {
         try {
-            // Load nothing - ensure complete fresh start every time
-            localStorage.removeItem('privacyDemoConfig');
+            // Load configuration only - never restore conversation state
+            const savedConfig = localStorage.getItem('privacyDemoConfig');
+            if (savedConfig) {
+                const parsedConfig = JSON.parse(savedConfig);
+                this.config = { ...this.config, ...parsedConfig };
+                console.log('✅ Loaded configuration from localStorage');
+            }
             
-            // Never restore any state - always start completely fresh
-            console.log('✅ No data loaded from localStorage - fresh start enforced');
+            // Never restore conversation state - always start fresh
+            console.log('✅ Skipping conversation state restoration - fresh start enforced');
             
         } catch (error) {
-            console.error('Failed to clear localStorage:', error);
+            console.error('Failed to load configuration from localStorage:', error);
         }
     }
 
