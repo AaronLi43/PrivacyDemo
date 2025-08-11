@@ -238,7 +238,7 @@ class PrivacyDemoApp {
                 }, 300);
                 return 'dev tools';
             }
-            console.log('%c', devtools);
+            // console.log('%c', devtools);
         }, 1000);
         
         // Monitor for F12 key press to set flag (but don't block it)
