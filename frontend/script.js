@@ -89,7 +89,7 @@ class PrivacyDemoApp {
             },
             // Audit LLM properties
             auditLLMEnabled: false,
-            // Copy/paste functionality
+            // Copy/paste functionality - DISABLED
             copyPasteEnabled: false,
             // Follow-up questions properties
             followUpQuestions: [],
@@ -110,22 +110,176 @@ class PrivacyDemoApp {
 
         // Removed turn counting constants - letting LLM decide when to move to next question
 
-        this.init();
+        // Initialize asynchronously to handle backend reset
+        this.init().catch(error => {
+            console.error('Failed to initialize app:', error);
+        });
+        
+        // Listen for page visibility changes to ensure fresh start when returning to the page
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                console.log('🔄 Page became visible - ensuring fresh start');
+                this.ensureFreshStart();
+            }
+        });
+        
+        // Also listen for window focus to catch tab switching
+        window.addEventListener('focus', () => {
+            console.log('🔄 Window focused - ensuring fresh start');
+            this.ensureFreshStart();
+        });
+        
+        // Listen for page reload to ensure fresh start
+        window.addEventListener('beforeunload', () => {
+            console.log('🔄 Page unloading - clearing state for fresh start');
+            // Clear localStorage before page reloads
+            try {
+                localStorage.removeItem('privacyDemoState');
+                console.log('✅ localStorage cleared before page reload');
+            } catch (error) {
+                console.warn('⚠️ Could not clear localStorage before reload:', error);
+            }
+        });
+        
+        // Listen for browser navigation (back/forward buttons) to ensure fresh start
+        window.addEventListener('popstate', () => {
+            console.log('🔄 Browser navigation detected - ensuring fresh start');
+            this.ensureFreshStart();
+        });
     }
 
     // Initialize the application
-    init() {
+    async init() {
         this.extractProlificId();
         this.bindEvents();
+        
+        // Always start fresh - clear any previous state
+        await this.clearAllState();
+        
         this.updateUI();
         this.updateSidebarToggle();
         this.updateConfigurationUI();
         this.updateCopyPasteToggle();
         this.checkAPIStatus();
-        this.loadFromLocalStorage();
         
-        // Initialize multi-step interface
+        // Force disable copy/paste globally for security
+        this.forceDisableCopyPasteOnAllElements();
+        
+        // Initialize multi-step interface - always start at introduction
         this.initializeMultiStepInterface();
+    }
+
+    // Clear all state to ensure fresh start every time
+    async clearAllState() {
+        console.log('🔄 Starting complete state reset for fresh start...');
+        
+        // Reset all conversation and state variables
+        this.state.conversationLog = [];
+        this.state.originalLog = [];
+        this.state.analyzedLog = [];
+        this.state.currentStep = 0;
+        this.state.editMode = false;
+        this.state.showPrivacyAnalysis = false;
+        this.state.consentGiven = false;
+        this.state.questionMode = false;
+        this.state.currentQuestionIndex = 0;
+        this.state.questionsCompleted = false;
+        this.state.predefinedQuestionsCompleted = 0;
+        this.state.completedQuestionIndices = [];
+        this.state.justCompletedQuestion = false;
+        this.state.surveyData = {};
+        this.state.surveyCompleted = false;
+        this.state.followUpQuestions = [];
+        this.state.currentFollowUpQuestionIndex = 0;
+        this.state.inFollowUpMode = false;
+        this.state.backgroundMode = false;
+        this.state.pendingExportAction = null;
+        this.state.privacyChoices = {};
+        this.state.editableLog = [];
+        
+        // Always start at introduction page
+        this.state.currentStepPage = 'introduction';
+        this.state.consentChecked = false;
+        this.state.qualificationAnswers = {
+            qual1: '',
+            qual2: '',
+            qual3: ''
+        };
+        
+        console.log('✅ Frontend state variables reset');
+        
+        // Clear localStorage to prevent persistence
+        try {
+            localStorage.removeItem('privacyDemoState');
+            console.log('✅ Cleared localStorage to ensure fresh start');
+        } catch (error) {
+            console.warn('⚠️ Could not clear localStorage:', error);
+        }
+        
+        // Reset backend session to ensure fresh start
+        try {
+            await API.resetConversation();
+            console.log('✅ Backend session reset successfully');
+        } catch (error) {
+            console.warn('⚠️ Could not reset backend session:', error);
+        }
+        
+        // Reset frontend session ID for completely fresh start
+        if (typeof resetSessionId === 'function') {
+            resetSessionId();
+            console.log('✅ Frontend session ID reset successfully');
+        }
+        
+        console.log('🎉 Complete state reset completed - fresh start ready!');
+    }
+
+    // Ensure fresh start when returning to the page
+    async ensureFreshStart() {
+        // Only reset if we're not already at the introduction page with no conversation
+        if (this.state.currentStepPage === 'introduction' && this.state.conversationLog.length === 0) {
+            console.log('✅ Already at fresh start, no action needed');
+            return;
+        }
+        
+        console.log('🔄 Ensuring fresh start - resetting to introduction page');
+        
+        // Reset to introduction page
+        this.state.currentStepPage = 'introduction';
+        this.state.consentChecked = false;
+        this.state.qualificationAnswers = {
+            qual1: '',
+            qual2: '',
+            qual3: ''
+        };
+        
+        // Clear conversation state
+        this.state.conversationLog = [];
+        this.state.currentStep = 0;
+        this.state.questionMode = false;
+        this.state.currentQuestionIndex = 0;
+        this.state.questionsCompleted = false;
+        this.state.predefinedQuestionsCompleted = 0;
+        this.state.completedQuestionIndices = [];
+        this.state.justCompletedQuestion = false;
+        
+        // Clear any other state that might persist
+        this.state.analyzedLog = [];
+        this.state.originalLog = [];
+        this.state.editMode = false;
+        this.state.showPrivacyAnalysis = false;
+        this.state.followUpQuestions = [];
+        this.state.currentFollowUpQuestionIndex = 0;
+        this.state.inFollowUpMode = false;
+        this.state.backgroundMode = false;
+        this.state.pendingExportAction = null;
+        this.state.privacyChoices = {};
+        this.state.editableLog = [];
+        
+        // Show introduction page
+        this.showStepPage('introduction');
+        this.updateUI();
+        
+        console.log('✅ Fresh start ensured - reset to introduction page');
     }
 
     // Extract PROLIFIC_PID from URL parameters
@@ -224,52 +378,79 @@ class PrivacyDemoApp {
         });
     }
 
-    // Toggle copy/paste functionality
+    // Toggle copy/paste functionality - DISABLED
     toggleCopyPaste() {
-        this.state.copyPasteEnabled = !this.state.copyPasteEnabled;
+        // Copy/paste is permanently disabled
+        this.state.copyPasteEnabled = false;
         this.updateCopyPasteToggle();
         this.applyCopyPasteSettings();
         this.saveToLocalStorage();
         
-        // Show notification about the change
-        const status = this.state.copyPasteEnabled ? 'enabled' : 'disabled';
-        this.showNotification(`Copy & paste has been ${status}.`, 'info');
+        // Show notification that copy/paste is permanently disabled
+        this.showNotification('Copy & paste is permanently disabled for security reasons.', 'warning');
     }
 
-    // Update copy/paste toggle button UI
+    // Update copy/paste toggle button UI - Always shows disabled
     updateCopyPasteToggle() {
         const toggleBtn = document.getElementById('copy-paste-toggle');
         if (!toggleBtn) return;
 
-        if (this.state.copyPasteEnabled) {
-            toggleBtn.innerHTML = '<i class="fas fa-unlock"></i> Enabled';
-            toggleBtn.className = 'btn btn-success';
-        } else {
-            toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Disabled';
-            toggleBtn.className = 'btn btn-secondary';
-        }
+        // Always show disabled state since copy/paste is permanently disabled
+        toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Permanently Disabled';
+        toggleBtn.className = 'btn btn-danger';
+        toggleBtn.disabled = true;
+        toggleBtn.title = 'Copy & paste is permanently disabled for security reasons';
     }
 
-    // Apply copy/paste settings to all relevant elements
+    // Apply copy/paste settings to all relevant elements - Always disabled
     applyCopyPasteSettings() {
         const chatInput = document.getElementById('chat-input');
         if (chatInput) {
-            if (this.state.copyPasteEnabled) {
-                this.enableCopyPaste(chatInput);
-            } else {
-                this.disableCopyPaste(chatInput);
-            }
+            // Always disable copy/paste for security
+            this.disableCopyPaste(chatInput);
         }
 
         // Apply to any textarea elements in edit mode
         const textareas = document.querySelectorAll('textarea');
         textareas.forEach(textarea => {
-            if (this.state.copyPasteEnabled) {
-                this.enableCopyPaste(textarea);
-            } else {
-                this.disableCopyPaste(textarea);
-            }
+            // Always disable copy/paste for security
+            this.disableCopyPaste(textarea);
         });
+        
+        console.log('🔒 Copy/paste permanently disabled on all input elements');
+        
+        // Force disable copy/paste on any new elements that might be added
+        this.forceDisableCopyPasteOnAllElements();
+    }
+    
+    // Force disable copy/paste on all elements (additional security)
+    forceDisableCopyPasteOnAllElements() {
+        // Disable on all input elements
+        const allInputs = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+        allInputs.forEach(input => {
+            this.disableCopyPaste(input);
+        });
+        
+        // Disable on document body to catch any new elements
+        document.body.addEventListener('copy', (e) => {
+            e.preventDefault();
+            this.showNotification('Copy is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        document.body.addEventListener('paste', (e) => {
+            e.preventDefault();
+            this.showNotification('Paste is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        document.body.addEventListener('cut', (e) => {
+            e.preventDefault();
+            this.showNotification('Cut is disabled for security reasons.', 'warning');
+            return false;
+        });
+        
+        console.log('🔒 Global copy/paste prevention enabled');
     }
 
     // Bind multi-step navigation events
@@ -442,11 +623,22 @@ class PrivacyDemoApp {
 
     // Start chat interface
     startChatInterface() {
-        // Start conversation directly without requiring Prolific ID
-        if (!this.state.questionMode || this.state.conversationLog.length === 0) {
-            console.log('Starting conversation directly...');
-            this.startConversationDirectly();
-        }
+        // Always start fresh - ensure no previous conversation state
+        console.log('🔄 Starting fresh chat interface...');
+        
+        // Reset conversation state to ensure fresh start
+        this.state.conversationLog = [];
+        this.state.currentStep = 0;
+        this.state.questionMode = false;
+        this.state.currentQuestionIndex = 0;
+        this.state.questionsCompleted = false;
+        this.state.predefinedQuestionsCompleted = 0;
+        this.state.completedQuestionIndices = [];
+        this.state.justCompletedQuestion = false;
+        
+        // Start conversation directly
+        console.log('Starting conversation directly...');
+        this.startConversationDirectly();
         
         // Ensure the chatbot initiates the conversation
         setTimeout(async () => {
@@ -595,10 +787,12 @@ class PrivacyDemoApp {
                 this.exportDirect();
             }
             
-            // Test survey popup with different modes (for debugging)
+            // Test survey popup with different modes (for debugging) - DISABLED
             if (e.ctrlKey && e.key === 's') {
-                console.log('Test survey popup triggered');
-                this.showSurveyPopup('exportDirect');
+                console.log('Survey popup shortcut disabled for security');
+                this.showNotification('Survey popup shortcut is disabled for security reasons.', 'warning');
+                e.preventDefault();
+                return;
             }
             
             // Test mode switching (for debugging)
@@ -2979,17 +3173,17 @@ class PrivacyDemoApp {
             console.log('Executing action:', pendingAction);
             
             if (pendingAction === 'survey') {
-                // Show survey after consent
-                console.log('Showing survey after consent');
-                this.showSurveyPopup('survey');
+                // Survey disabled - skip to export
+                console.log('Survey disabled - proceeding directly to export');
+                this.exportDirect();
             } else if (pendingAction === 'exportDirect') {
-                // Show survey after consent, then export
-                console.log('Showing survey after consent for exportDirect');
-                this.showSurveyPopup('exportDirect');
+                // Survey disabled - export directly
+                console.log('Survey disabled - exporting directly');
+                this.exportDirect();
             } else if (pendingAction === 'exportComprehensive') {
-                // Show survey after consent, then export
-                console.log('Showing survey after consent for exportComprehensive');
-                this.showSurveyPopup('exportComprehensive');
+                // Survey disabled - export directly
+                console.log('Survey disabled - exporting directly');
+                this.exportComprehensive();
             } else if (pendingAction === 'analyzeAndExport') {
                 this.analyzeAndExport();
             }
@@ -3600,12 +3794,8 @@ class PrivacyDemoApp {
     bindEditModeEvents() {
         const editInputs = document.querySelectorAll('.message-edit-input');
         editInputs.forEach(input => {
-            // Apply copy/paste settings based on current state
-            if (this.state.copyPasteEnabled) {
-                this.enableCopyPaste(input);
-            } else {
-                this.disableCopyPaste(input);
-            }
+            // Always disable copy/paste for security
+            this.disableCopyPaste(input);
             
             // Save changes on blur (when user clicks away)
             input.addEventListener('blur', (e) => {
@@ -4329,70 +4519,32 @@ class PrivacyDemoApp {
     // Save to localStorage
     saveToLocalStorage() {
         try {
-            // Save the current state including multi-step interface state
-            const stateToSave = {
-                ...this.state,
-                // Ensure multi-step state is included
-                currentStepPage: this.state.currentStepPage,
-                consentChecked: this.state.consentChecked,
-                qualificationAnswers: this.state.qualificationAnswers
-            };
-            localStorage.setItem('privacyDemoState', JSON.stringify(stateToSave));
-            
-            // Save configuration separately
+            // Save configuration only - never save conversation state
             localStorage.setItem('privacyDemoConfig', JSON.stringify(this.config));
+            
+            // Never save conversation state - always start fresh
+            console.log('✅ Configuration saved, conversation state intentionally not saved');
         } catch (error) {
-            console.error('Failed to save to localStorage:', error);
+            console.error('Failed to save configuration to localStorage:', error);
         }
     }
 
     // Load from localStorage
     loadFromLocalStorage() {
         try {
-            // Load configuration first
+            // Load configuration only - never restore conversation state
             const savedConfig = localStorage.getItem('privacyDemoConfig');
             if (savedConfig) {
                 const parsedConfig = JSON.parse(savedConfig);
                 this.config = { ...this.config, ...parsedConfig };
+                console.log('✅ Loaded configuration from localStorage');
             }
             
-            const saved = localStorage.getItem('privacyDemoState');
-            if (saved) {
-                const savedState = JSON.parse(saved);
-                this.state = { ...this.state, ...savedState };
-                
-                // Respect configuration for sidebar state
-                if (!this.config.persistSidebarState) {
-                    this.state.sidebarHidden = this.config.sidebarHiddenByDefault;
-                }
-                
-                // Ensure background mode is properly restored for ongoing conversations
-                if (this.state.conversationLog.length > 0) {
-                    // If we have a conversation in progress, ensure background mode is properly set
-                    this.state.backgroundMode = true;
-                }
-                
-                // If we're in the middle of the multi-step flow, restore the current page
-                if (this.state.currentStepPage && this.state.currentStepPage !== 'introduction') {
-                    // Don't automatically show the saved page - let the user continue from where they left off
-                    // but ensure the UI is properly initialized
-                    this.updateUI();
-                    this.updateSidebarToggle();
-                    this.updateConfigurationUI();
-                    this.updateCopyPasteToggle();
-                    this.applyCopyPasteSettings();
-                    this.updateUserAgentButton();
-                } else {
-                    this.updateUI();
-                    this.updateSidebarToggle();
-                    this.updateConfigurationUI();
-                    this.updateCopyPasteToggle();
-                    this.applyCopyPasteSettings();
-                    this.updateUserAgentButton();
-                }
-            }
+            // Never restore conversation state - always start fresh
+            console.log('✅ Skipping conversation state restoration - fresh start enforced');
+            
         } catch (error) {
-            console.error('Failed to load from localStorage:', error);
+            console.error('Failed to load configuration from localStorage:', error);
         }
     }
 
@@ -4623,11 +4775,8 @@ class PrivacyDemoApp {
         setTimeout(() => {
             const textareas = popup.querySelectorAll('textarea');
             textareas.forEach(textarea => {
-                if (this.state.copyPasteEnabled) {
-                    this.enableCopyPaste(textarea);
-                } else {
-                    this.disableCopyPaste(textarea);
-                }
+                // Always disable copy/paste for security
+                this.disableCopyPaste(textarea);
             });
         }, 200); // Delay to ensure DOM is ready
         
