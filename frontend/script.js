@@ -856,7 +856,7 @@ class PrivacyDemoApp {
             mode: this.state.mode
         });
         
-        // Calculate progress based on completed questions only
+        // Calculate progress based on completed questions and current question
         let progress = 0;
         let progressTextContent = '';
         
@@ -865,10 +865,17 @@ class PrivacyDemoApp {
             progress = 100;
             progressTextContent = `All ${totalQuestions} questions completed!`;
         } else {
-            // Progress should be based only on completed questions
-            // Do not include current question in progress calculation
-            progress = Math.round((completedQuestions / totalQuestions) * 100);
-            progressTextContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions} (${completedQuestions} completed)`;
+            // Calculate progress including current question
+            // Progress should be based on completed questions plus current question if it's in progress
+            let currentProgress = completedQuestions;
+            
+            // If current question is not completed yet, add it to progress
+            if (!this.state.completedQuestionIndices.includes(currentQuestionIndex)) {
+                currentProgress += 1;
+            }
+            
+            progress = Math.round((currentProgress / totalQuestions) * 100);
+            progressTextContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions}`;
         }
         
         console.log('📊 Progress Calculation:', {
@@ -988,8 +995,8 @@ class PrivacyDemoApp {
         if (editExportBtnMain) {
             editExportBtnMain.addEventListener('click', () => {
                 if (this.state.editMode) {
-                    // For naive mode: Done button → Data Collection consent → S3 upload
-                    this.showConsentPopup('uploadToS3');
+                    // For naive mode: Export button → Data Collection consent → Post task survey
+                    this.showConsentPopup('exportDirect');
                 } else {
                     this.enterEditMode();
                 }
@@ -1016,8 +1023,8 @@ class PrivacyDemoApp {
         if (editExportBtn) {
             editExportBtn.addEventListener('click', () => {
                 if (this.state.editMode) {
-                    // For naive mode: Done button → Data Collection consent → S3 upload
-                    this.showConsentPopup('uploadToS3');
+                    // For naive mode: Export button → Data Collection consent → Post task survey
+                    this.showConsentPopup('exportDirect');
                 } else {
                     this.enterEditMode();
                 }
@@ -1087,8 +1094,8 @@ class PrivacyDemoApp {
         const exportComprehensive = document.getElementById('export-comprehensive');
         if (exportComprehensive) {
             exportComprehensive.addEventListener('click', () => {
-                // For featured mode: Done button → Data Collection consent → S3 upload
-                this.showConsentPopup('uploadComprehensiveToS3');
+                // For featured mode: Export button → Data Collection consent → Post task survey
+                this.showConsentPopup('exportComprehensive');
             });
         }
 
@@ -1213,12 +1220,7 @@ class PrivacyDemoApp {
                 this.state.predefinedQuestionsCompleted++;
                 // Removed turn counting - letting LLM decide when to move to next question
                 
-                // Check against total questions (background + main)
-                const bgQuestionsCount = 3;
-                const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                const totalQuestionsCount = bgQuestionsCount + mainQuestionsCount;
-                
-                if (this.state.predefinedQuestionsCompleted >= totalQuestionsCount) {
+                if (this.state.predefinedQuestionsCompleted >= this.state.predefinedQuestions[this.state.mode].length) {
                     this.state.questionsCompleted = true;
                     this.state.questionMode = false;
                     this.showCongratulationPopup();
@@ -2493,12 +2495,8 @@ class PrivacyDemoApp {
                     }
                     
                     // Check if this is the final question
-                    // Note: currentQuestionIndex is 0-based, so we need to check against total questions - 1
-                    const bgCount = 3;
-                    const mainCount = questions.length;
-                    const totalCount = bgCount + mainCount;
-                    const isFinalQuestion = (this.state.currentQuestionIndex === totalCount - 1);
-                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${totalCount} (${bgCount} background + ${mainCount} main) - Is final: ${isFinalQuestion}`);
+                    const isFinalQuestion = (this.state.currentQuestionIndex === questions.length - 1);
+                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${questions.length} - Is final: ${isFinalQuestion}`);
                     console.log(`Question text: "${currentQuestion}"`);
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
@@ -2508,10 +2506,7 @@ class PrivacyDemoApp {
                         this.state.justCompletedQuestion = false;
                     }
                     
-                    const bgQuestionsTotal = 3;
-                    const mainQuestionsTotal = predefinedQuestions.length;
-                    const totalQuestionsTotal = bgQuestionsTotal + mainQuestionsTotal;
-                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${totalQuestionsTotal} (${bgQuestionsTotal} background + ${mainQuestionsTotal} main): "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
+                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${predefinedQuestions.length}: "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
                     
                     const response = await API.sendMessage(message, this.state.currentStep, {
                         questionMode: true,
@@ -2669,10 +2664,7 @@ class PrivacyDemoApp {
                         this.state.justCompletedQuestion = true; // Set flag to indicate we just completed a question
                         console.log(`Question ${this.state.currentQuestionIndex + 1} completed. Moving to next question.`);
                         console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
-                        const backgroundQuestionsCount = 3;
-                        const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                        const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-                        console.log(`Progress: ${this.state.completedQuestionIndices.length}/${totalQuestions} questions completed (${backgroundQuestionsCount} background + ${mainQuestionsCount} main)`);
+                        console.log(`Progress: ${this.state.completedQuestionIndices.length}/${this.state.predefinedQuestions[this.state.mode].length} questions completed`);
                         
                         // Check if this was the final question
                         if (isFinalQuestion) {
@@ -2687,18 +2679,14 @@ class PrivacyDemoApp {
                             }
                             
                             // Show final completion notification
-                            const backgroundQuestionsCount = 3;
-                            const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
+                            const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                             this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
                             
                             // Stop conversation and show congratulation popup
                             this.stopConversationAndShowCongratulation();
                         } else {
                             // Show notification to user about progress
-                            const backgroundQuestionsCount = 3;
-                            const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
+                            const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                             const completedQuestionNumber = this.state.currentQuestionIndex + 1;
                             this.showNotification(`✅ Question ${completedQuestionNumber}/${totalQuestions} completed!`, 'success');
                             
@@ -2744,9 +2732,7 @@ class PrivacyDemoApp {
                                 this.state.questionMode = false;
                                 
                                 // Show final completion notification
-                                const backgroundQuestionsCount = 3;
-                                const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                                const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
+                                const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
                                 this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
                                 
                                 // Stop conversation and show congratulation popup
@@ -2765,14 +2751,10 @@ class PrivacyDemoApp {
                     this.monitorForQuestions();
                     
                     // Check if all predefined questions are completed
-                    // Note: completedQuestionIndices includes both background (3) and main (7) questions
-                    // So we need to check against the total of both, not just main questions
-                    const backgroundQuestionsCount = 3; // Background questions are always 3
-                    const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                    const totalQuestionsCount = backgroundQuestionsCount + mainQuestionsCount;
-                    
-                    if (this.state.completedQuestionIndices.length >= totalQuestionsCount) {
-                        console.log(`All ${totalQuestionsCount} questions completed (${backgroundQuestionsCount} background + ${mainQuestionsCount} main) - ending conversation`);
+                    const currentModeQuestions = this.state.predefinedQuestions[this.state.mode];
+                    if (currentModeQuestions && currentModeQuestions.length > 0 && 
+                        this.state.completedQuestionIndices.length >= currentModeQuestions.length) {
+                        console.log('All questions completed - ending conversation');
                         this.state.questionsCompleted = true;
                         this.state.questionMode = false;
                         this.stopConversationAndShowCongratulation();
@@ -3264,87 +3246,6 @@ class PrivacyDemoApp {
         }
     }
 
-    // Upload to S3 instead of exporting
-    async uploadToS3() {
-        try {
-            console.log('Starting S3 upload...');
-            this.showLoading(true, '📤 Uploading to S3...');
-            
-            // Create export data based on mode
-            let exportData;
-            if (this.state.mode === 'naive') {
-                exportData = this.generateNaiveExportData();
-            } else if (this.state.mode === 'neutral') {
-                exportData = this.generateNeutralExportData();
-            } else {
-                exportData = this.generateComprehensiveExportData();
-            }
-            
-            console.log('Upload data generated:', exportData);
-            
-            // Upload to S3
-            const response = await API.uploadToS3(exportData, this.state.prolificId);
-            if (response.success) {
-                console.log('Successfully uploaded to S3:', response.filename);
-                this.showNotification('📤 Data uploaded to S3 successfully!', 'success');
-                
-                // Show completion message and redirect
-                setTimeout(() => {
-                    this.showNotification('🎉 All done! Your data has been uploaded successfully.', 'success');
-                    this.redirectToThanksPage();
-                }, 1000);
-            } else {
-                throw new Error(response.error || 'Upload failed');
-            }
-        } catch (error) {
-            console.error('S3 upload error:', error);
-            this.showNotification('❌ S3 upload failed: ' + error.message, 'error');
-            
-            // Fallback to local export if S3 upload fails
-            this.showNotification('📥 Falling back to local export...', 'info');
-            this.exportDirect();
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    // Upload comprehensive data to S3
-    async uploadComprehensiveToS3() {
-        try {
-            console.log('Starting comprehensive S3 upload...');
-            this.showLoading(true, '📤 Uploading comprehensive data to S3...');
-            
-            // Create comprehensive export data
-            const exportData = this.generateComprehensiveExportData();
-            
-            console.log('Comprehensive upload data generated:', exportData);
-            
-            // Upload to S3
-            const response = await API.uploadToS3(exportData, this.state.prolificId);
-            if (response.success) {
-                console.log('Successfully uploaded comprehensive data to S3:', response.filename);
-                this.showNotification('📤 Comprehensive data uploaded to S3 successfully!', 'success');
-                
-                // Show completion message and redirect
-                setTimeout(() => {
-                    this.showNotification('🎉 All done! Your comprehensive data has been uploaded successfully.', 'success');
-                    this.redirectToThanksPage();
-                }, 1000);
-            } else {
-                throw new Error(response.error || 'Upload failed');
-            }
-        } catch (error) {
-            console.error('Comprehensive S3 upload error:', error);
-            this.showNotification('❌ S3 upload failed: ' + error.message, 'error');
-            
-            // Fallback to local export if S3 upload fails
-            this.showNotification('📥 Falling back to local export...', 'info');
-            this.exportComprehensive();
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
     // Close privacy analysis
     closePrivacyAnalysis() {
         this.state.showPrivacyAnalysis = false;
@@ -3488,29 +3389,19 @@ class PrivacyDemoApp {
             console.log('Executing action:', pendingAction);
             
             if (pendingAction === 'survey') {
-                // Show survey for neutral mode
-                console.log('Showing post-task survey for neutral mode');
-                this.showSurveyPopup('exportDirect');
+                // Survey disabled - skip to export
+                console.log('Survey disabled - proceeding directly to export');
+                this.exportDirect();
             } else if (pendingAction === 'exportDirect') {
-                // Show survey for export actions
-                console.log('Showing post-task survey for export action');
-                this.showSurveyPopup('exportDirect');
+                // Survey disabled - export directly
+                console.log('Survey disabled - exporting directly');
+                this.exportDirect();
             } else if (pendingAction === 'exportComprehensive') {
-                // Show survey for comprehensive export
-                console.log('Showing post-task survey for comprehensive export');
-                this.showSurveyPopup('exportComprehensive');
+                // Survey disabled - export directly
+                console.log('Survey disabled - exporting directly');
+                this.exportComprehensive();
             } else if (pendingAction === 'analyzeAndExport') {
-                // Show survey for analyze and export
-                console.log('Showing post-task survey for analyze and export');
-                this.showSurveyPopup('analyzeAndExport');
-            } else if (pendingAction === 'uploadToS3') {
-                // Show survey for S3 upload
-                console.log('Showing post-task survey for S3 upload');
-                this.showSurveyPopup('uploadToS3');
-            } else if (pendingAction === 'uploadComprehensiveToS3') {
-                // Show survey for comprehensive S3 upload
-                console.log('Showing post-task survey for comprehensive S3 upload');
-                this.showSurveyPopup('uploadComprehensiveToS3');
+                this.analyzeAndExport();
             }
         } else {
             console.log('No pending action found');
@@ -4237,7 +4128,7 @@ class PrivacyDemoApp {
         if (this.state.mode === 'naive') {
             if (this.state.editMode) {
                 // In edit mode, change button text and functionality
-                editExportBtnMain.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Done! (Upload to S3)';
+                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Done!';
                 editExportBtnMain.className = 'btn btn-success';
             } else {
                 // Normal edit mode button
@@ -4255,7 +4146,7 @@ class PrivacyDemoApp {
         } else {
             // Neutral mode
             if (this.state.editMode) {
-                editExportBtnMain.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Save & Upload to S3';
+                editExportBtnMain.innerHTML = '<i class="fas fa-save"></i> Save & Export';
                 editExportBtnMain.className = 'btn btn-success';
             } else {
                 editExportBtnMain.innerHTML = '<i class="fas fa-edit"></i> Edit & Export';
@@ -4273,9 +4164,7 @@ class PrivacyDemoApp {
         
         // Show predefined question progress in question mode
         if (this.state.questionMode) {
-            const backgroundQuestionsCount = 3;
-            const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
+            const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
             // Removed turn counting display - letting LLM decide when to move to next question
             const turnsInfo = '';
             // Show current question number (1-based) instead of completed count (0-based)
@@ -4309,7 +4198,7 @@ class PrivacyDemoApp {
             if (this.state.mode === 'naive') {
                 if (this.state.editMode) {
                     // In edit mode, change button text and functionality
-                    editExportBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Done! (Upload to S3)';
+                    editExportBtn.innerHTML = '<i class="fas fa-save"></i> Done!';
                     editExportBtn.className = 'btn btn-success';
                 } else {
                     // Normal edit mode button
@@ -4327,7 +4216,7 @@ class PrivacyDemoApp {
                 // Neutral mode - show Edit & Export button
                 if (this.state.editMode) {
                     // In edit mode, change button text and functionality
-                    editExportBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Save & Upload to S3';
+                    editExportBtn.innerHTML = '<i class="fas fa-save"></i> Save & Export';
                     editExportBtn.className = 'btn btn-success';
                 } else {
                     // Normal edit mode button
@@ -5251,14 +5140,7 @@ class PrivacyDemoApp {
         this.closeSurveyPopup();
         
         // Show success notification
-        const isUploadAction = this.state.pendingExportAction && 
-            (this.state.pendingExportAction.includes('upload') || this.state.pendingExportAction.includes('S3'));
-        
-        if (isUploadAction) {
-            this.showNotification('✅ Survey completed! Uploading data to S3...', 'success');
-        } else {
-            this.showNotification('✅ Survey completed! Exporting data...', 'success');
-        }
+        this.showNotification('✅ Survey completed! Exporting data...', 'success');
         
         // Debug: Log the pending export action
         console.log('Pending export action:', this.state.pendingExportAction);
@@ -5281,14 +5163,6 @@ class PrivacyDemoApp {
                     case 'analyzeAndExport':
                         console.log('Executing analyzeAndExport...');
                         this.analyzeAndExportAndRedirect();
-                        break;
-                    case 'uploadToS3':
-                        console.log('Executing uploadToS3...');
-                        this.uploadToS3();
-                        break;
-                    case 'uploadComprehensiveToS3':
-                        console.log('Executing uploadComprehensiveToS3...');
-                        this.uploadComprehensiveToS3();
                         break;
                     default:
                         console.error('Unknown export action:', this.state.pendingExportAction);

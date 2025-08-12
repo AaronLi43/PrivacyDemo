@@ -23,17 +23,8 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   }
   
   export function getCurrentQuestion(state, backgroundQuestions, mainQuestions) {
-    if (state.phase === "background") {
-      const question = backgroundQuestions[state.bgIdx];
-      console.log(`getCurrentQuestion: background phase, bgIdx: ${state.bgIdx}, question: "${question}"`);
-      return question || null;
-    }
-    if (state.phase === "main") {
-      const question = mainQuestions[state.mainIdx];
-      console.log(`getCurrentQuestion: main phase, mainIdx: ${state.mainIdx}, question: "${question}"`);
-      return question || null;
-    }
-    console.log(`getCurrentQuestion: done phase, returning null`);
+    if (state.phase === "background") return backgroundQuestions[state.bgIdx] || null;
+    if (state.phase === "main") return mainQuestions[state.mainIdx] || null;
     return null;
   }
   
@@ -104,7 +95,6 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       state.bgIdx += 1;
       if (state.bgIdx >= backgroundQuestions.length) {
         state.phase = "main";
-        state.mainIdx = 0; // Reset main index when transitioning to main phase
       }
     } else if (state.phase === "main") {
       state.mainIdx += 1;
@@ -112,14 +102,10 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         state.phase = "done";
       }
     }
-    
     // After entering the next question, reset allowed actions and per-question follow-up count
     const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-    const isNextBackground = nextQuestion && backgroundQuestions.includes(nextQuestion);
+    const isNextBackground = backgroundQuestions.includes(nextQuestion);
     resetAllowedForQuestion(state, isNextBackground);
-    
-    // Log the transition for debugging
-    console.log(`Orchestrator: Advanced to ${state.phase} phase, bgIdx: ${state.bgIdx}, mainIdx: ${state.mainIdx}, nextQuestion: "${nextQuestion}"`);
   }
   
   export function storeAudits(state, { completionAudit, presenceAudit }) {

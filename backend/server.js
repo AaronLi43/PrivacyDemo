@@ -1115,17 +1115,6 @@ app.post('/api/chat', async (req, res) => {
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
-      
-      // Validate question progression
-      if (qNow && backgroundQuestions.includes(qNow)) {
-        const questionIndex = backgroundQuestions.indexOf(qNow);
-        log.info('background question validation', {
-          questionIndex,
-          bgIdx: state.bgIdx,
-          expectedIndex: state.bgIdx,
-          question: qNow
-        });
-      }
   
       log.info('orchestrator state', {
         phase: state.phase,
@@ -1325,38 +1314,16 @@ app.post('/api/chat', async (req, res) => {
           if (isBackgroundQuestion) {
             // Background questions automatically advance after any user response
             questionCompleted = true;
-            
-            // Store the current question before advancing
-            const currentQuestionBeforeAdvance = qNow;
-            
-            // Advance to next question
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             
-            // Get the next question after advancement
-            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-            
-            // Always show the next question for background questions to prevent duplication
-            if (nextQuestion && nextQuestion !== currentQuestionBeforeAdvance) {
-              aiResponse = nextQuestion;
-              log.info('background question advanced - showing next question', {
-                previous: currentQuestionBeforeAdvance,
-                next: nextQuestion,
-                phase: state.phase,
-                bgIdx: state.bgIdx,
-                mainIdx: state.mainIdx
-              });
-            } else {
-              // Fallback: if no next question or same question, provide a transition message
-              if (state.phase === "main") {
-                aiResponse = "Thank you for sharing that background information. Now let's move to the main interview questions.";
-              } else {
-                aiResponse = "Thank you for sharing that. Let me ask you the next question.";
+            // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
+            // show the next question instead of the follow-up utterance
+            if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
+                (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
+              const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+              if (nextQuestion) {
+                aiResponse = nextQuestion;
               }
-              log.info('background question advanced - using transition message', {
-                phase: state.phase,
-                bgIdx: state.bgIdx,
-                mainIdx: state.mainIdx
-              });
             }
             
             log.info('background question auto-advanced', {
