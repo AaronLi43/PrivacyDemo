@@ -506,17 +506,16 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
-      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
-        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
+        '- For background questions: NEVER ask follow-up questions. Ask the question, get ANY response, then use NEXT_QUESTION action immediately.' :
+        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral. When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
       `Output JSON only:`,
       `{`,
-      `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
+      `  "action": "${isBackgroundQuestion ? 'SUMMARIZE_QUESTION | NEXT_QUESTION' : 'ASK_FOLLOWUP | SUMMARIZE_QUESTION | REQUEST_CLARIFY | NEXT_QUESTION | END'}",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "<ONE natural question OR a brief summary>",`,
+      `  "utterance": "<${isBackgroundQuestion ? 'brief summary or acknowledgment' : 'ONE natural question OR a brief summary'}>",`,
       `  "notes": ["optional extracted facts"]`,
       `}`
     ].join("\n");
@@ -1219,7 +1218,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           recordScores(state, qNow, completionAudit?.scores);
-          allowNextIfAuditPass(state, completionAudit?.verdict);
+          allowNextIfAuditPass(state, completionAudit?.verdict, backgroundQuestions, qNow);
           finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
           // ====== Presence Audit ======
