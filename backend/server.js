@@ -1113,7 +1113,21 @@ app.post('/api/chat', async (req, res) => {
   
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
-      const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+      
+      // For the initial message, always start with the first background question
+      // For subsequent messages, use the currentQuestion parameter or get from state
+      let qNow;
+      if (session.conversationHistory.length === 1) {
+        // This is the initial message, start with first background question
+        qNow = backgroundQuestions[0];
+        // Ensure state is properly initialized for first question
+        state.phase = "background";
+        state.bgIdx = 0;
+      } else {
+        // Subsequent messages, use provided currentQuestion or get from state
+        qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+      }
+      
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
   
       log.info('orchestrator state', {
@@ -1121,7 +1135,9 @@ app.post('/api/chat', async (req, res) => {
         bgIdx: state.bgIdx,
         mainIdx: state.mainIdx,
         qNow,
-        allowedActions: allowedActionsArr
+        allowedActions: allowedActionsArr,
+        conversationHistoryLength: session.conversationHistory.length,
+        isInitialMessage: session.conversationHistory.length === 1
       });
   
       // Build Executor system prompt
@@ -1314,34 +1330,35 @@ app.post('/api/chat', async (req, res) => {
           if (isBackgroundQuestion) {
             // Background questions automatically advance after any user response
             questionCompleted = true;
+            log.info('background question completed, advancing to next question', { 
+              currentQuestion: qNow,
+              phase: state.phase,
+              bgIdx: state.bgIdx 
+            });
             
-            // Check if the executor is trying to ask the same question again
-            // This prevents the first question from being asked twice in the same response
-            const isRepeatingQuestion = parsedExec && 
-              parsedExec.action === "NEXT_QUESTION" && 
-              (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you")) &&
-              parsedExec.utterance.trim() === qNow;
+            gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             
-            if (!isRepeatingQuestion) {
-              // Normal advancement - move to next question
-              gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-              
-              // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
-              // show the next question instead of the follow-up utterance
-              if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
-                  (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
-                const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-                if (nextQuestion) {
-                  aiResponse = nextQuestion;
-                }
-              }
+            // Always show the next question for background questions after advancement
+            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+            if (nextQuestion) {
+              aiResponse = nextQuestion;
+              log.info('background question advanced to next question', { 
+                nextQuestion,
+                newPhase: state.phase,
+                newBgIdx: state.bgIdx 
+              });
+            } else {
+              // If no next question, we've moved to main questions phase
+              log.info('background questions completed, moved to main questions phase', {
+                newPhase: state.phase,
+                newMainIdx: state.mainIdx
+              });
             }
             
-            log.info('background question handled', {
+            log.info('background question auto-advanced', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              isRepeatingQuestion,
               newAllowed: Array.from(state.allowedActions)
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
