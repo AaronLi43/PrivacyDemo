@@ -843,32 +843,34 @@ class PrivacyDemoApp {
             return;
         }
 
+        // Since the backend manages question progression, we can't track individual question completion
+        // Instead, show progress based on conversation turns
         const totalQuestions = questions.length;
-        const completedQuestions = this.state.completedQuestionIndices.length;
-        const currentQuestionIndex = this.state.currentQuestionIndex !== null ? this.state.currentQuestionIndex : 0;
+        const conversationTurns = this.state.conversationLog.length;
         
         // Debug logging for progress calculation
         console.log('📊 Progress Bar Debug:', {
             totalQuestions,
-            completedQuestions,
-            currentQuestionIndex,
-            completedIndices: this.state.completedQuestionIndices,
+            conversationTurns,
             mode: this.state.mode
         });
         
-        // Calculate progress based on completed questions only
+        // Show progress based on conversation advancement
         let progress = 0;
         let progressTextContent = '';
         
-        if (completedQuestions >= totalQuestions) {
-            // All questions completed
+        // Estimate progress based on conversation turns (rough approximation)
+        // Background questions typically take 1-2 turns each, main questions take 3-5 turns each
+        const estimatedTotalTurns = 3 + (totalQuestions * 3); // 3 background + main questions with follow-ups
+        
+        if (conversationTurns >= estimatedTotalTurns) {
+            // Conversation appears complete
             progress = 100;
-            progressTextContent = `All ${totalQuestions} questions completed!`;
+            progressTextContent = `All questions completed!`;
         } else {
-            // Progress should be based only on completed questions
-            // Do not include current question in progress calculation
-            progress = Math.round((completedQuestions / totalQuestions) * 100);
-            progressTextContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions} (${completedQuestions} completed)`;
+            // Show progress based on conversation turns
+            progress = Math.round((conversationTurns / estimatedTotalTurns) * 100);
+            progressTextContent = `Interview in progress (${conversationTurns} exchanges)`;
         }
         
         console.log('📊 Progress Calculation:', {
@@ -1204,29 +1206,12 @@ class PrivacyDemoApp {
             }
         });
 
-        // Debug: Manual next question button (for testing)
+        // Debug: Manual next question button (for testing) - DISABLED since backend manages progression
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'n' && this.state.questionMode) {
                 e.preventDefault();
-                console.log('Manual next question triggered');
-                this.state.currentQuestionIndex++;
-                this.state.predefinedQuestionsCompleted++;
-                // Removed turn counting - letting LLM decide when to move to next question
-                
-                // Check against total questions (background + main)
-                const bgQuestionsCount = 3;
-                const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                const totalQuestionsCount = bgQuestionsCount + mainQuestionsCount;
-                
-                if (this.state.predefinedQuestionsCompleted >= totalQuestionsCount) {
-                    this.state.questionsCompleted = true;
-                    this.state.questionMode = false;
-                    this.showCongratulationPopup();
-                } else {
-                    this.showNotification('Manual: Moved to next question', 'info');
-                }
-                this.updateUI();
-                this.updateProgressBar(); // Update progress bar after manual question completion
+                console.log('Manual next question disabled - backend manages progression');
+                this.showNotification('Manual question advancement is disabled. The AI manages question progression.', 'info');
             }
         });
 
@@ -1485,15 +1470,32 @@ class PrivacyDemoApp {
             }
             
             console.log('✅ Questions loaded:', questions.length, 'questions');
+            console.log('🔍 Questions array:', questions);
+            console.log('🔍 Current question index:', this.state.currentQuestionIndex);
+            console.log('🔍 Questions[0]:', questions[0]);
+            console.log('🔍 Questions[0] type:', typeof questions[0]);
+            console.log('🔍 Questions[0] length:', questions[0] ? questions[0].length : 'undefined');
             
-            const currentQuestion = questions[this.state.currentQuestionIndex];
+            let currentQuestion = questions[this.state.currentQuestionIndex];
             const predefinedQuestions = questions;
             
             if (!currentQuestion) {
                 console.error('❌ Current question is undefined!');
-                this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
-                this.showLoading(false);
-                return;
+                console.error('Current question index:', this.state.currentQuestionIndex);
+                console.error('Available questions:', questions);
+                
+                // Try to find a valid question as fallback
+                const fallbackQuestion = questions.find(q => q && typeof q === 'string' && q.trim().length > 0);
+                if (fallbackQuestion) {
+                    console.log('🔄 Using fallback question:', fallbackQuestion);
+                    const fallbackIndex = questions.indexOf(fallbackQuestion);
+                    this.state.currentQuestionIndex = fallbackIndex;
+                    currentQuestion = fallbackQuestion;
+                } else {
+                    this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
+                    this.showLoading(false);
+                    return;
+                }
             }
             
             console.log('📋 Current question:', currentQuestion);
@@ -2474,17 +2476,21 @@ class PrivacyDemoApp {
                         console.error('❌ Current question is undefined!');
                         console.error('Current question index:', this.state.currentQuestionIndex);
                         console.error('Available questions:', questions);
-                        this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
-                        return;
+                        
+                        // Try to find a valid question as fallback
+                        const fallbackQuestion = questions.find(q => q && typeof q === 'string' && q.trim().length > 0);
+                        if (fallbackQuestion) {
+                            console.log('🔄 Using fallback question:', fallbackQuestion);
+                            const fallbackIndex = questions.indexOf(fallbackQuestion);
+                            this.state.currentQuestionIndex = fallbackIndex;
+                            currentQuestion = fallbackQuestion;
+                        } else {
+                            this.showNotification('Error: Question not found. Please try refreshing the page.', 'error');
+                            return;
+                        }
                     }
                     
-                    // Check if this is the final question
-                    // Note: currentQuestionIndex is 0-based, so we need to check against total questions - 1
-                    const bgCount = 3;
-                    const mainCount = questions.length;
-                    const totalCount = bgCount + mainCount;
-                    const isFinalQuestion = (this.state.currentQuestionIndex === totalCount - 1);
-                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${totalCount} (${bgCount} background + ${mainCount} main) - Is final: ${isFinalQuestion}`);
+                    // Let the backend manage question progression and final question detection
                     console.log(`Question text: "${currentQuestion}"`);
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
@@ -2497,13 +2503,13 @@ class PrivacyDemoApp {
                     const bgQuestionsTotal = 3;
                     const mainQuestionsTotal = predefinedQuestions.length;
                     const totalQuestionsTotal = bgQuestionsTotal + mainQuestionsTotal;
-                    console.log(`Frontend: Sending question ${this.state.currentQuestionIndex + 1}/${totalQuestionsTotal} (${bgQuestionsTotal} background + ${mainQuestionsTotal} main): "${currentQuestion}" (justCompleted: ${this.state.justCompletedQuestion})`);
+                    console.log(`Frontend: Sending message with ${bgQuestionsTotal} background + ${mainQuestionsTotal} main questions available`);
                     
                     const response = await API.sendMessage(message, this.state.currentStep, {
                         questionMode: true,
                         currentQuestion: currentQuestion,
                         predefinedQuestions: predefinedQuestions,
-                        isFinalQuestion: isFinalQuestion
+                        isFinalQuestion: false // Let backend determine this
                     });
                     
                     if (response && response.bot_response) {
@@ -2618,128 +2624,21 @@ class PrivacyDemoApp {
                     }
                     
                     // Check if audit LLM explicitly says not to proceed
-                    const auditSaysNotToProceed = response && response.audit_result && 
-                        response.audit_result.shouldProceed === false && 
-                        response.audit_result.confidence >= 0.7;
+                    // Let the backend manage question progression - no need for complex completion logic here
+                    console.log('Backend manages question progression - no frontend completion tracking needed');
                     
-                    // For background questions, be more lenient about completion
-                    const shouldCompleteQuestion = response && !auditSaysNotToProceed && (
-                        response.question_completed || 
-                        hasNextQuestionSignal || 
-                        hasEndingPattern ||
-                        hasWrapUpLanguage ||
-                        (isBackgroundQuestion && this.state.conversationLog.length > 1) // Complete background questions after at least one exchange
-                    );
-                    
-                    console.log('Question completion check:');
-                    console.log('- response.question_completed:', response?.question_completed);
-                    console.log('- hasNextQuestionSignal:', hasNextQuestionSignal);
-                    console.log('- hasEndingPattern:', hasEndingPattern);
-                    console.log('- hasWrapUpLanguage:', hasWrapUpLanguage);
-                    console.log('- isBackgroundQuestion:', isBackgroundQuestion);
-                    console.log('- conversationLog.length:', this.state.conversationLog.length);
-                    console.log('- auditSaysNotToProceed:', auditSaysNotToProceed);
-                    console.log('- shouldCompleteQuestion:', shouldCompleteQuestion);
-                    
-                    if (auditSaysNotToProceed) {
-                        console.log('🛑 Audit LLM preventing question completion:', response.audit_result.reason);
+                    // Check if the conversation has ended (backend will signal this)
+                    if (response && response.conversation_ended) {
+                        console.log('Backend signaled conversation ended');
+                        this.state.questionsCompleted = true;
+                        this.state.questionMode = false;
+                        this.showNotification('🎉 Interview completed! Thank you for sharing your experiences.', 'success');
+                        this.stopConversationAndShowCongratulation();
+                        return;
                     }
                     
-                    if (shouldCompleteQuestion) {
-                        // Mark the current question as completed
-                        if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
-                            this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
-                        }
-                        
-                        this.state.predefinedQuestionsCompleted++;
-                        this.state.justCompletedQuestion = true; // Set flag to indicate we just completed a question
-                        console.log(`Question ${this.state.currentQuestionIndex + 1} completed. Moving to next question.`);
-                        console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
-                        const backgroundQuestionsCount = 3;
-                        const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                        const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-                        console.log(`Progress: ${this.state.completedQuestionIndices.length}/${totalQuestions} questions completed (${backgroundQuestionsCount} background + ${mainQuestionsCount} main)`);
-                        
-                        // Check if this was the final question
-                        if (isFinalQuestion) {
-                            console.log('Final question completed! Ending conversation.');
-                            this.state.questionsCompleted = true;
-                            this.state.questionMode = false;
-                            
-                            // If this was a wrap-up response, show special notification
-                            if (hasWrapUpLanguage) {
-                                console.log('Wrap-up response detected - conversation concluded with thank you message');
-                                this.showNotification('🎉 Conversation completed! Thank you for sharing your experiences.', 'success');
-                            }
-                            
-                            // Show final completion notification
-                            const backgroundQuestionsCount = 3;
-                            const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-                            this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
-                            
-                            // Stop conversation and show congratulation popup
-                            this.stopConversationAndShowCongratulation();
-                        } else {
-                            // Show notification to user about progress
-                            const backgroundQuestionsCount = 3;
-                            const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-                            const completedQuestionNumber = this.state.currentQuestionIndex + 1;
-                            this.showNotification(`✅ Question ${completedQuestionNumber}/${totalQuestions} completed!`, 'success');
-                            
-                            // Add a small delay to make the transition feel more natural
-                            setTimeout(() => {
-                                this.scrollToBottom();
-                            }, 500);
-                        }
-                        
-                        console.log(`After completion - Current index: ${this.state.currentQuestionIndex}, Completed: [${this.state.completedQuestionIndices.join(', ')}]`);
-                        
-                        // Update progress bar after question completion
-                        this.updateProgressBar();
-                    } else {
-                        if (auditSaysNotToProceed) {
-                            console.log(`🛑 Question not completed - Audit LLM says not to proceed: ${response.audit_result.reason}`);
-                        } else {
-                            console.log(`Question not completed yet - letting LLM decide when to move to next question`);
-                        }
-                        
-                        // Fallback: If this is the final question and we've had enough exchanges, auto-complete
-                        // But only if audit LLM doesn't explicitly say not to proceed
-                        if (isFinalQuestion && !auditSaysNotToProceed) {
-                            // Count exchanges since the last question completion
-                            const lastCompletionIndex = this.state.completedQuestionIndices.length > 0 ? 
-                                Math.max(...this.state.completedQuestionIndices) : -1;
-                            
-                            // Count bot responses since the last completion (for current question)
-                            const currentQuestionExchanges = this.state.conversationLog.slice(lastCompletionIndex + 1)
-                                .filter(log => log.bot && log.bot.trim()).length;
-                            
-                            console.log(`Final question exchanges: ${currentQuestionExchanges}`);
-                            
-                            if (currentQuestionExchanges >= 6) { // Allow 6 exchanges before auto-completing (increased to encourage more personal stories)
-                                console.log('Final question has had enough exchanges, auto-completing conversation...');
-                                
-                                // Mark the final question as completed
-                                if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
-                                    this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
-                                }
-                                
-                                this.state.questionsCompleted = true;
-                                this.state.questionMode = false;
-                                
-                                // Show final completion notification
-                                const backgroundQuestionsCount = 3;
-                                const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                                const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-                                this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
-                                
-                                // Stop conversation and show congratulation popup
-                                this.stopConversationAndShowCongratulation();
-                            }
-                        }
-                    }
+                    // Update progress bar to show conversation progress
+                    this.updateProgressBar();
                     
                     this.updateUI();
                     this.updateProgressBar(); // Ensure progress bar is updated
@@ -2750,20 +2649,7 @@ class PrivacyDemoApp {
                     // Monitor for questions after bot response (for user agent)
                     this.monitorForQuestions();
                     
-                    // Check if all predefined questions are completed
-                    // Note: completedQuestionIndices includes both background (3) and main (7) questions
-                    // So we need to check against the total of both, not just main questions
-                    const backgroundQuestionsCount = 3; // Background questions are always 3
-                    const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                    const totalQuestionsCount = backgroundQuestionsCount + mainQuestionsCount;
-                    
-                    if (this.state.completedQuestionIndices.length >= totalQuestionsCount) {
-                        console.log(`All ${totalQuestionsCount} questions completed (${backgroundQuestionsCount} background + ${mainQuestionsCount} main) - ending conversation`);
-                        this.state.questionsCompleted = true;
-                        this.state.questionMode = false;
-                        this.stopConversationAndShowCongratulation();
-                        return;
-                    }
+                    // Backend manages conversation completion - no need for frontend checks here
                     
                     return;
                 } catch (apiError) {
@@ -4171,11 +4057,9 @@ class PrivacyDemoApp {
             const backgroundQuestionsCount = 3;
             const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
             const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
-            // Removed turn counting display - letting LLM decide when to move to next question
-            const turnsInfo = '';
-            // Show current question number (1-based) instead of completed count (0-based)
-            const currentQuestionNumber = this.state.currentQuestionIndex + 1;
-            document.getElementById('stat-step').textContent = `Main: ${currentQuestionNumber}/${totalQuestions}${turnsInfo}`;
+            // Show conversation progress since backend manages question progression
+            const conversationTurns = this.state.conversationLog.length;
+            document.getElementById('stat-step').textContent = `Interview: ${conversationTurns} exchanges (${totalQuestions} total questions)`;
         } else {
             document.getElementById('stat-step').textContent = this.state.currentStep;
         }
