@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Button Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .btn { padding: 10px 20px; background: blue; color: white; border: none; cursor: pointer; }
+        .btn:hover { background: darkblue; }
+        .page { display: none; padding: 20px; border: 1px solid #ccc; margin: 10px 0; }
+        .page.active { display: block; }
+    </style>
+</head>
+<body>
+    <h1>Simple Button Test</h1>
+    
+    <div id="page1" class="page active">
+        <h2>Page 1</h2>
+        <p>Click the button to go to page 2</p>
+        <button id="btn1" class="btn">Go to Page 2</button>
+    </div>
+    
+    <div id="page2" class="page">
+        <h2>Page 2</h2>
+        <p>Success! Button worked!</p>
+        <button id="btn2" class="btn">Go Back to Page 1</button>
+    </div>
+    
+    <div id="debug"></div>
+    
+    <script>
+        function log(msg) {
+            document.getElementById('debug').innerHTML += '<div>' + msg + '</div>';
+            console.log(msg);
+        }
+        
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            log('Showing page: ' + pageId);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            log('DOM loaded');
+            
+            const btn1 = document.getElementById('btn1');
+            const btn2 = document.getElementById('btn2');
+            
+            log('Button 1 found: ' + !!btn1);
+            log('Button 2 found: ' + !!btn2);
+            
+            if (btn1) {
+                btn1.addEventListener('click', function() {
+                    log('Button 1 clicked!');
+                    showPage('page2');
+                });
+                log('Event listener added to button 1');
+            }
+            
+            if (btn2) {
+                btn2.addEventListener('click', function() {
+                    log('Button 2 clicked!');
+                    showPage('page1');
+                });
+                log('Event listener added to button 2');
+            }
+        });
+    </script>
+</body>
+</html>

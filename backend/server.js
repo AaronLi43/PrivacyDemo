@@ -496,23 +496,19 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
       `CURRENT QUESTION: "${currentQuestion || 'N/A'}"`,
       `REMAINING QUESTIONS: [${remaining.map(q => `"${q}"`).join("; ")}]`,
-      `ALLOWED_ACTIONS: [${AA}]${isBackgroundQuestion ? ' (Background questions: NO follow-ups, use NEXT_QUESTION after response)' : ''}`,
+      `ALLOWED_ACTIONS: [${AA}]`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
       ``,
       `${isBackgroundQuestion ? 'BACKGROUND QUESTION RULES:' : 'MAIN QUESTION RULES:'}`,
       `${isBackgroundQuestion ? 
-        '- This is a BACKGROUND QUESTION - complete it in ONE exchange with NO follow-ups, then move to NEXT_QUESTION immediately' :
+        '- This is a BACKGROUND QUESTION - complete it in ONE exchange and move to NEXT_QUESTION immediately' :
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
-      }`,
-      `${isBackgroundQuestion ? 
-        '- Example: For NEXT_QUESTION action, put the actual next question text in the utterance field' :
-        ''
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action with the next question text in utterance. NO follow-ups allowed.' :
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
         '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
@@ -520,19 +516,9 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `{`,
       `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "<ONE natural question OR a brief summary OR the next question text for NEXT_QUESTION action>",`,
+      `  "utterance": "<ONE natural question OR a brief summary>",`,
       `  "notes": ["optional extracted facts"]`,
-      `}`,
-      ``,
-      `${isBackgroundQuestion ? 
-        'IMPORTANT: For background questions with NEXT_QUESTION action, put the actual next question text in utterance field, not just a placeholder.' :
-        ''
-      }`,
-      ``,
-      `${isBackgroundQuestion ? 
-        'CRITICAL: Output ONLY valid JSON. Do not include any text before or after the JSON object.' :
-        ''
-      }`
+      `}`
     ].join("\n");
   }
 
@@ -1122,7 +1108,7 @@ app.post('/api/chat', async (req, res) => {
       // Questions (background + main questions)
       const backgroundQuestions = [
         "Tell me about your educational background - what did you study in college or university?",
-        "Can you tell me about your current work and how you got into it by job interviews?",
+        "I'd love to hear about your current work and how you got into it by job interviews?",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
       ];
       const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : [
@@ -1138,12 +1124,6 @@ app.post('/api/chat', async (req, res) => {
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-      
-      // For background questions, ensure NEXT_QUESTION is always allowed
-      if (backgroundQuestions.includes(qNow)) {
-        state.allowedActions.add("NEXT_QUESTION");
-      }
-      
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
   
       log.info('orchestrator state', {
@@ -1156,16 +1136,7 @@ app.post('/api/chat', async (req, res) => {
   
       // Build Executor system prompt
       const executorSystemPrompt = buildExecutorSystemPrompt(qNow, allowedActionsArr, { backgroundQuestions, mainQuestions });
-      
-      // For background questions, remove ASK_FOLLOWUP from allowed actions
-      let messages;
-      if (backgroundQuestions.includes(qNow)) {
-        const backgroundAllowedActions = allowedActionsArr.filter(action => action !== 'ASK_FOLLOWUP');
-        const backgroundPrompt = buildExecutorSystemPrompt(qNow, backgroundAllowedActions, { backgroundQuestions, mainQuestions });
-        messages = [{ role: 'system', content: backgroundPrompt }];
-      } else {
-        messages = [{ role: 'system', content: executorSystemPrompt }];
-      }
+      const messages = [{ role: 'system', content: executorSystemPrompt }];
   
       // Avoid double-inserting last user turn
       const historyExceptLast = session.conversationHistory.slice(0, -1);
@@ -1210,7 +1181,6 @@ app.post('/api/chat', async (req, res) => {
           if (parsedExec) {
             enforceAllowedAction(state, parsedExec);
             log.info('executor parsed', parsedExec);
-            log.info('executor raw response', { rawResponse: aiResponse });
   
             // Convert execution results to user output text
             if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
@@ -1219,29 +1189,63 @@ app.post('/api/chat', async (req, res) => {
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
-              // For NEXT_QUESTION/END actions, use the utterance if available, otherwise keep the original response
-              if (parsedExec.utterance && parsedExec.utterance.trim()) {
-                aiResponse = parsedExec.utterance;
-              }
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
             }
           } else {
             log.warn('executor output not JSON; using raw text');
           }
   
-          // ====== Check if this is a background question ======
-          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
-          
-          // ====== Completion Audit (PSS) - ONLY for predefined questions ======
-          let completionAudit = null;
-          let presenceAudit = null;
-          
-          if (!isBackgroundQuestion) {
-            // Only run audits for predefined (main) questions
-            const compT0 = Date.now();
-            const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
-            console.log('isFinalQuestionValue', isFinalQuestionValue);
-            completionAudit = await auditQuestionCompletion(
+          // ====== Completion Audit (PSS) ======
+          const compT0 = Date.now();
+          const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
+          console.log('isFinalQuestionValue', isFinalQuestionValue);
+          completionAudit = await auditQuestionCompletion(
+            message,
+            aiResponse,
+            qNow,
+            session.conversationHistory,
+            isFinalQuestionValue,
+            followUpMode
+          );
+          const compDur = Date.now() - compT0;
+  
+          log.info('completion audit', {
+            ms: compDur,
+            verdict: completionAudit?.verdict,
+            scores: completionAudit?.scores,
+            missing: completionAudit?.missing,
+            followUpQ: completionAudit?.followUpQuestions,
+            confidence: completionAudit?.confidence
+          });
+  
+          recordScores(state, qNow, completionAudit?.scores);
+          allowNextIfAuditPass(state, completionAudit?.verdict);
+          finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
+  
+          // ====== Presence Audit ======
+          const presT0 = Date.now();
+          presenceAudit = await auditQuestionPresence(
+            message,
+            aiResponse,
+            qNow,
+            session.conversationHistory,
+            isFinalQuestionValue,
+            followUpMode
+          );
+          const presDur = Date.now() - presT0;
+  
+          log.info('presence audit', {
+            ms: presDur,
+            hasQuestion: presenceAudit?.hasQuestion,
+            shouldRegenerate: presenceAudit?.shouldRegenerate,
+            reason: presenceAudit?.reason,
+            confidence: presenceAudit?.confidence
+          });
+  
+          // ====== Regenerate if needed (presence) ======
+          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+            const regenT0 = Date.now();
+            const regenerated = await regenerateResponseWithQuestions(
               message,
               aiResponse,
               qNow,
@@ -1249,104 +1253,43 @@ app.post('/api/chat', async (req, res) => {
               isFinalQuestionValue,
               followUpMode
             );
-            const compDur = Date.now() - compT0;
+            const regenDur = Date.now() - regenT0;
   
-            log.info('completion audit', {
-              ms: compDur,
-              verdict: completionAudit?.verdict,
-              scores: completionAudit?.scores,
-              missing: completionAudit?.missing,
-              followUpQ: completionAudit?.followUpQuestions,
-              confidence: completionAudit?.confidence
-            });
+            if (regenerated) {
+              usedRegenerate = true;
+              aiResponse = regenerated;
+              log.info('regenerated response used', { ms: regenDur, aiResponsePreview: aiResponse.slice(0,160) });
+            } else {
+              log.warn('regenerate returned null; keep original');
+            }
+          }
   
-            recordScores(state, qNow, completionAudit?.scores);
-            allowNextIfAuditPass(state, completionAudit?.verdict);
-            finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
-  
-            // ====== Presence Audit - ONLY for predefined questions ======
-            const presT0 = Date.now();
-            presenceAudit = await auditQuestionPresence(
+          // ====== Polish if need more (completion) ======
+          if (completionAudit?.verdict === 'REQUIRE_MORE') {
+            const polT0 = Date.now();
+            const polished = await polishResponseWithAuditFeedback(
               message,
               aiResponse,
+              completionAudit,
               qNow,
               session.conversationHistory,
               isFinalQuestionValue,
               followUpMode
             );
-            const presDur = Date.now() - presT0;
+            const polDur = Date.now() - polT0;
   
-            log.info('presence audit', {
-              ms: presDur,
-              hasQuestion: presenceAudit?.hasQuestion,
-              shouldRegenerate: presenceAudit?.shouldRegenerate,
-              reason: presenceAudit?.reason,
-              confidence: presenceAudit?.confidence
-            });
-  
-            // ====== Regenerate if needed (presence) - ONLY for predefined questions ======
-            if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
-              const regenT0 = Date.now();
-              const regenerated = await regenerateResponseWithQuestions(
-                message,
-                aiResponse,
-                qNow,
-                session.conversationHistory,
-                isFinalQuestionValue,
-                followUpMode
-              );
-              const regenDur = Date.now() - regenT0;
-  
-              if (regenerated) {
-                usedRegenerate = true;
-                aiResponse = regenerated;
-                log.info('regenerated response used', { ms: regenDur, aiResponsePreview: aiResponse.slice(0,160) });
-              } else {
-                log.warn('regenerate returned null; keep original');
-              }
+            if (polished) {
+              usedPolish = true;
+              aiResponse = polished;
+              log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
+            } else {
+              log.info('polish returned null (either passed or kept original)');
             }
-  
-            // ====== Polish if need more (completion) - ONLY for predefined questions ======
-            if (completionAudit?.verdict === 'REQUIRE_MORE') {
-              const polT0 = Date.now();
-              const polished = await polishResponseWithAuditFeedback(
-                message,
-                aiResponse,
-                completionAudit,
-                qNow,
-                session.conversationHistory,
-                isFinalQuestionValue,
-                followUpMode
-              );
-              const polDur = Date.now() - polT0;
-  
-              if (polished) {
-                usedPolish = true;
-                aiResponse = polished;
-                log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
-              } else {
-                log.info('polish returned null (either passed or kept original)');
-              }
-            }
-          } else {
-            // For background questions, skip all audits and set default values
-            log.info('background question detected - skipping all audits');
-            completionAudit = { 
-              verdict: 'ALLOW_NEXT_QUESTION', 
-              reason: 'Background question - auto-complete',
-              shouldProceed: true,
-              confidence: 1.0 
-            };
-            presenceAudit = { 
-              hasQuestion: false, 
-              reason: 'Background question - no follow-up needed',
-              confidence: 1.0, 
-              shouldRegenerate: false 
-            };
           }
   
           // ====== Final gating by completion audit ======
           // Check if this is a background question and force completion
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
           
           if (isBackgroundQuestion) {
             // Force background questions to complete immediately
