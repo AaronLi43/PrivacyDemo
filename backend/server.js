@@ -506,9 +506,12 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
-      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
+        '- Be concise and conversational; warm, curious, neutral.' :
+        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.'
+      }`,
+      `${isBackgroundQuestion ? 
+        '- For background questions: Get a brief response, then use NEXT_QUESTION action immediately.' :
         '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
