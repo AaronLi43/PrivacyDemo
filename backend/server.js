@@ -1314,22 +1314,28 @@ app.post('/api/chat', async (req, res) => {
           if (isBackgroundQuestion) {
             // Background questions automatically advance after any user response
             questionCompleted = true;
-            gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             
-            // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
-            // show the next question instead of the follow-up utterance
-            if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
-                (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
-              const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-              if (nextQuestion) {
-                aiResponse = nextQuestion;
+            // Only advance to next question if this isn't the first exchange
+            // This prevents the first question from being asked twice
+            if (session.conversationHistory.length > 1) {
+              gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+              
+              // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
+              // show the next question instead of the follow-up utterance
+              if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
+                  (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
+                const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+                if (nextQuestion) {
+                  aiResponse = nextQuestion;
+                }
               }
             }
             
-            log.info('background question auto-advanced', {
+            log.info('background question handled', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
+              conversationLength: session.conversationHistory.length,
               newAllowed: Array.from(state.allowedActions)
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
