@@ -505,10 +505,14 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a BACKGROUND QUESTION - complete it in ONE exchange with NO follow-ups, then move to NEXT_QUESTION immediately' :
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
+      `${isBackgroundQuestion ? 
+        '- Example: For NEXT_QUESTION action, put the actual next question text in the utterance field' :
+        ''
+      }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Acknowledge the response briefly, then use NEXT_QUESTION action. NO follow-ups allowed.' :
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action with the next question text in utterance. NO follow-ups allowed.' :
         '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
@@ -516,9 +520,19 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `{`,
       `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "${isBackgroundQuestion ? '<Brief acknowledgment of response>' : '<ONE natural question OR a brief summary>'}",`,
+      `  "utterance": "<ONE natural question OR a brief summary OR the next question text for NEXT_QUESTION action>",`,
       `  "notes": ["optional extracted facts"]`,
-      `}`
+      `}`,
+      ``,
+      `${isBackgroundQuestion ? 
+        'IMPORTANT: For background questions with NEXT_QUESTION action, put the actual next question text in utterance field, not just a placeholder.' :
+        ''
+      }`,
+      ``,
+      `${isBackgroundQuestion ? 
+        'CRITICAL: Output ONLY valid JSON. Do not include any text before or after the JSON object.' :
+        ''
+      }`
     ].join("\n");
   }
 
@@ -1196,6 +1210,7 @@ app.post('/api/chat', async (req, res) => {
           if (parsedExec) {
             enforceAllowedAction(state, parsedExec);
             log.info('executor parsed', parsedExec);
+            log.info('executor raw response', { rawResponse: aiResponse });
   
             // Convert execution results to user output text
             if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
@@ -1204,9 +1219,9 @@ app.post('/api/chat', async (req, res) => {
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
-              // For background questions, show acknowledgment and prepare for next question
-              if (backgroundQuestions.includes(qNow)) {
-                aiResponse = parsedExec.utterance || "Thanks for sharing that!";
+              // For NEXT_QUESTION/END actions, use the utterance if available, otherwise keep the original response
+              if (parsedExec.utterance && parsedExec.utterance.trim()) {
+                aiResponse = parsedExec.utterance;
               }
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
             }
@@ -1337,19 +1352,11 @@ app.post('/api/chat', async (req, res) => {
             // Force background questions to complete immediately
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-            
-            // Get the next question and append it to the response
-            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-            if (nextQuestion) {
-              aiResponse = `${aiResponse}\n\n${nextQuestion}`;
-            }
-            
             log.info('background question forced to complete', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              newAllowed: Array.from(state.allowedActions),
-              nextQuestion: nextQuestion
+              newAllowed: Array.from(state.allowedActions)
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
             questionCompleted = true;

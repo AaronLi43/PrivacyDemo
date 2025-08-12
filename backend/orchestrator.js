@@ -125,14 +125,12 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
     }
   }
   
-  // Check if the current action is allowed; if not, force back to ASK_FOLLOWUP or SUMMARIZE_QUESTION
+  // Check if the current action is allowed; if not, force back to allowed actions
   export function enforceAllowedAction(state, parsed) {
     if (!parsed || !parsed.action) return parsed;
     if (!state.allowedActions.has(parsed.action)) {
-      // Simple fallback strategy:
-      if (state.allowedActions.has("ASK_FOLLOWUP")) parsed.action = "ASK_FOLLOWUP";
-      else if (state.allowedActions.has("SUMMARIZE_QUESTION")) parsed.action = "SUMMARIZE_QUESTION";
-      else parsed.action = Array.from(state.allowedActions)[0] || "ASK_FOLLOWUP";
+      // Simple fallback strategy: use the first available allowed action
+      parsed.action = Array.from(state.allowedActions)[0] || "SUMMARIZE_QUESTION";
     }
     return parsed;
   }
