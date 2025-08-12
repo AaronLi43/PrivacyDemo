@@ -8,7 +8,7 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
         phase: "background",        // "background" | "main" | "done"
         bgIdx: 0,
         mainIdx: 0,
-        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]),
+        allowedActions: new Set(["REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]), // Background questions start with NEXT_QUESTION allowed
         perQuestion: {},            // question -> { followups: number, lastScores: null }
         maxFollowups,
         lastAudit: null,
@@ -48,8 +48,14 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
     state.perQuestion[question].lastScores = scores || null;
   }
   
-  export function resetAllowedForQuestion(state) {
-    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
+  export function resetAllowedForQuestion(state, isBackgroundQuestion = false) {
+    if (isBackgroundQuestion) {
+      // Background questions should not allow follow-ups
+      state.allowedActions = new Set(["REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
+    } else {
+      // Main questions can have follow-ups
+      state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
+    }
   }
   
   export function buildAllowedActionsForPrompt(state) {
@@ -91,7 +97,9 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
       }
     }
     // After entering the next question, reset allowed actions and per-question follow-up count
-    resetAllowedForQuestion(state);
+    const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+    const isNextBackground = backgroundQuestions.includes(nextQuestion);
+    resetAllowedForQuestion(state, isNextBackground);
   }
   
   export function storeAudits(state, { completionAudit, presenceAudit }) {

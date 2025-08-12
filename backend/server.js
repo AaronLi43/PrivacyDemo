@@ -496,22 +496,19 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
       `CURRENT QUESTION: "${currentQuestion || 'N/A'}"`,
       `REMAINING QUESTIONS: [${remaining.map(q => `"${q}"`).join("; ")}]`,
-      `ALLOWED_ACTIONS: [${AA}]`,
+      `ALLOWED_ACTIONS: [${AA}]${isBackgroundQuestion ? ' (Background questions: NO follow-ups, use NEXT_QUESTION after response)' : ''}`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
       ``,
       `${isBackgroundQuestion ? 'BACKGROUND QUESTION RULES:' : 'MAIN QUESTION RULES:'}`,
       `${isBackgroundQuestion ? 
-        '- This is a BACKGROUND QUESTION - complete it in ONE exchange and move to NEXT_QUESTION immediately' :
+        '- This is a BACKGROUND QUESTION - complete it in ONE exchange with NO follow-ups, then move to NEXT_QUESTION immediately' :
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
+      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- Be concise and conversational; warm, curious, neutral.' :
-        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.'
-      }`,
-      `${isBackgroundQuestion ? 
-        '- For background questions: Get a brief response, then use NEXT_QUESTION action immediately.' :
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action. NO follow-ups allowed.' :
         '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
@@ -1127,6 +1124,12 @@ app.post('/api/chat', async (req, res) => {
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+      
+      // For background questions, ensure NEXT_QUESTION is always allowed
+      if (backgroundQuestions.includes(qNow)) {
+        state.allowedActions.add("NEXT_QUESTION");
+      }
+      
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
   
       log.info('orchestrator state', {
@@ -1139,7 +1142,16 @@ app.post('/api/chat', async (req, res) => {
   
       // Build Executor system prompt
       const executorSystemPrompt = buildExecutorSystemPrompt(qNow, allowedActionsArr, { backgroundQuestions, mainQuestions });
-      const messages = [{ role: 'system', content: executorSystemPrompt }];
+      
+      // For background questions, remove ASK_FOLLOWUP from allowed actions
+      let messages;
+      if (backgroundQuestions.includes(qNow)) {
+        const backgroundAllowedActions = allowedActionsArr.filter(action => action !== 'ASK_FOLLOWUP');
+        const backgroundPrompt = buildExecutorSystemPrompt(qNow, backgroundAllowedActions, { backgroundQuestions, mainQuestions });
+        messages = [{ role: 'system', content: backgroundPrompt }];
+      } else {
+        messages = [{ role: 'system', content: executorSystemPrompt }];
+      }
   
       // Avoid double-inserting last user turn
       const historyExceptLast = session.conversationHistory.slice(0, -1);
@@ -1198,57 +1210,19 @@ app.post('/api/chat', async (req, res) => {
             log.warn('executor output not JSON; using raw text');
           }
   
-          // ====== Completion Audit (PSS) ======
-          const compT0 = Date.now();
-          const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
-          console.log('isFinalQuestionValue', isFinalQuestionValue);
-          completionAudit = await auditQuestionCompletion(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
-          const compDur = Date.now() - compT0;
-  
-          log.info('completion audit', {
-            ms: compDur,
-            verdict: completionAudit?.verdict,
-            scores: completionAudit?.scores,
-            missing: completionAudit?.missing,
-            followUpQ: completionAudit?.followUpQuestions,
-            confidence: completionAudit?.confidence
-          });
-  
-          recordScores(state, qNow, completionAudit?.scores);
-          allowNextIfAuditPass(state, completionAudit?.verdict);
-          finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
-  
-          // ====== Presence Audit ======
-          const presT0 = Date.now();
-          presenceAudit = await auditQuestionPresence(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
-          const presDur = Date.now() - presT0;
-  
-          log.info('presence audit', {
-            ms: presDur,
-            hasQuestion: presenceAudit?.hasQuestion,
-            shouldRegenerate: presenceAudit?.shouldRegenerate,
-            reason: presenceAudit?.reason,
-            confidence: presenceAudit?.confidence
-          });
-  
-          // ====== Regenerate if needed (presence) ======
-          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
-            const regenT0 = Date.now();
-            const regenerated = await regenerateResponseWithQuestions(
+          // ====== Check if this is a background question ======
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+          
+          // ====== Completion Audit (PSS) - ONLY for predefined questions ======
+          let completionAudit = null;
+          let presenceAudit = null;
+          
+          if (!isBackgroundQuestion) {
+            // Only run audits for predefined (main) questions
+            const compT0 = Date.now();
+            const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
+            console.log('isFinalQuestionValue', isFinalQuestionValue);
+            completionAudit = await auditQuestionCompletion(
               message,
               aiResponse,
               qNow,
@@ -1256,43 +1230,104 @@ app.post('/api/chat', async (req, res) => {
               isFinalQuestionValue,
               followUpMode
             );
-            const regenDur = Date.now() - regenT0;
+            const compDur = Date.now() - compT0;
   
-            if (regenerated) {
-              usedRegenerate = true;
-              aiResponse = regenerated;
-              log.info('regenerated response used', { ms: regenDur, aiResponsePreview: aiResponse.slice(0,160) });
-            } else {
-              log.warn('regenerate returned null; keep original');
-            }
-          }
+            log.info('completion audit', {
+              ms: compDur,
+              verdict: completionAudit?.verdict,
+              scores: completionAudit?.scores,
+              missing: completionAudit?.missing,
+              followUpQ: completionAudit?.followUpQuestions,
+              confidence: completionAudit?.confidence
+            });
   
-          // ====== Polish if need more (completion) ======
-          if (completionAudit?.verdict === 'REQUIRE_MORE') {
-            const polT0 = Date.now();
-            const polished = await polishResponseWithAuditFeedback(
+            recordScores(state, qNow, completionAudit?.scores);
+            allowNextIfAuditPass(state, completionAudit?.verdict);
+            finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
+  
+            // ====== Presence Audit - ONLY for predefined questions ======
+            const presT0 = Date.now();
+            presenceAudit = await auditQuestionPresence(
               message,
               aiResponse,
-              completionAudit,
               qNow,
               session.conversationHistory,
               isFinalQuestionValue,
               followUpMode
             );
-            const polDur = Date.now() - polT0;
+            const presDur = Date.now() - presT0;
   
-            if (polished) {
-              usedPolish = true;
-              aiResponse = polished;
-              log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
-            } else {
-              log.info('polish returned null (either passed or kept original)');
+            log.info('presence audit', {
+              ms: presDur,
+              hasQuestion: presenceAudit?.hasQuestion,
+              shouldRegenerate: presenceAudit?.shouldRegenerate,
+              reason: presenceAudit?.reason,
+              confidence: presenceAudit?.confidence
+            });
+  
+            // ====== Regenerate if needed (presence) - ONLY for predefined questions ======
+            if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+              const regenT0 = Date.now();
+              const regenerated = await regenerateResponseWithQuestions(
+                message,
+                aiResponse,
+                qNow,
+                session.conversationHistory,
+                isFinalQuestionValue,
+                followUpMode
+              );
+              const regenDur = Date.now() - regenT0;
+  
+              if (regenerated) {
+                usedRegenerate = true;
+                aiResponse = regenerated;
+                log.info('regenerated response used', { ms: regenDur, aiResponsePreview: aiResponse.slice(0,160) });
+              } else {
+                log.warn('regenerate returned null; keep original');
+              }
             }
+  
+            // ====== Polish if need more (completion) - ONLY for predefined questions ======
+            if (completionAudit?.verdict === 'REQUIRE_MORE') {
+              const polT0 = Date.now();
+              const polished = await polishResponseWithAuditFeedback(
+                message,
+                aiResponse,
+                completionAudit,
+                qNow,
+                session.conversationHistory,
+                isFinalQuestionValue,
+                followUpMode
+              );
+              const polDur = Date.now() - polT0;
+  
+              if (polished) {
+                usedPolish = true;
+                aiResponse = polished;
+                log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
+              } else {
+                log.info('polish returned null (either passed or kept original)');
+              }
+            }
+          } else {
+            // For background questions, skip all audits and set default values
+            log.info('background question detected - skipping all audits');
+            completionAudit = { 
+              verdict: 'ALLOW_NEXT_QUESTION', 
+              reason: 'Background question - auto-complete',
+              shouldProceed: true,
+              confidence: 1.0 
+            };
+            presenceAudit = { 
+              hasQuestion: false, 
+              reason: 'Background question - no follow-up needed',
+              confidence: 1.0, 
+              shouldRegenerate: false 
+            };
           }
   
           // ====== Final gating by completion audit ======
           // Check if this is a background question and force completion
-          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
           
           if (isBackgroundQuestion) {
             // Force background questions to complete immediately
