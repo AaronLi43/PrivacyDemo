@@ -60,7 +60,8 @@ runTest('State Initialization', () => {
   return state.phase === 'background' &&
          state.bgIdx === 0 &&
          state.mainIdx === 0 &&
-         state.allowedActions.has('ASK_FOLLOWUP') &&
+         state.allowedActions.has('NEXT_QUESTION') &&
+         !state.allowedActions.has('ASK_FOLLOWUP') &&
          state.maxFollowups.background === 2 &&
          state.maxFollowups.main === 4;
 });
@@ -97,7 +98,7 @@ runTest('Final Question Detection', () => {
 console.log('\n📋 Test Suite 2: Follow-up Management\n');
 
 runTest('Follow-up Registration', () => {
-  const state = initState({});
+  const state = initState({}, { maxFollowups: { background: 1, main: 3 } }); // Use 1 for background to test registration
   const question = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
   
   const beforeCap = atFollowupCap(state, question);
@@ -207,18 +208,18 @@ runTest('Allowed Actions Building', () => {
   const actions = buildAllowedActionsForPrompt(state);
   
   return Array.isArray(actions) &&
-         actions.includes('ASK_FOLLOWUP') &&
+         actions.includes('NEXT_QUESTION') &&
          actions.includes('REQUEST_CLARIFY') &&
          actions.includes('SUMMARIZE_QUESTION');
 });
 
 runTest('Action Enforcement - Valid', () => {
   const state = initState({});
-  const validAction = { action: 'ASK_FOLLOWUP', utterance: 'test' };
+  const validAction = { action: 'NEXT_QUESTION', utterance: 'test' };
   
   const enforced = enforceAllowedAction(state, validAction);
   
-  return enforced.action === 'ASK_FOLLOWUP';
+  return enforced.action === 'NEXT_QUESTION';
 });
 
 runTest('Action Enforcement - Invalid', () => {
@@ -227,7 +228,7 @@ runTest('Action Enforcement - Invalid', () => {
   
   const enforced = enforceAllowedAction(state, invalidAction);
   
-  return enforced.action === 'ASK_FOLLOWUP'; // Should fallback to allowed action
+  return enforced.action === 'NEXT_QUESTION'; // Should fallback to allowed action for background questions
 });
 
 // Test Suite 6: Data Management
@@ -346,9 +347,9 @@ runTest('State Reset After Question Change', () => {
   gotoNextQuestion(state, backgroundQuestions, mainQuestions);
   const question2 = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
   
-  // Check if actions were reset
-  return state.allowedActions.has('ASK_FOLLOWUP') &&
-         !state.allowedActions.has('NEXT_QUESTION');
+  // Check if actions were reset - next question is still background, so should have NEXT_QUESTION
+  return state.allowedActions.has('NEXT_QUESTION') &&
+         !state.allowedActions.has('ASK_FOLLOWUP');
 });
 
 // Results Summary

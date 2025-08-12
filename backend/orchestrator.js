@@ -10,10 +10,14 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         mainIdx: 0,
         allowedActions: new Set(["REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]), // Background questions start with NEXT_QUESTION allowed
         perQuestion: {},            // question -> { followups: number, lastScores: null }
-        maxFollowups,
+        maxFollowups: { ...maxFollowups }, // Ensure we copy the values
         lastAudit: null,
         lastPresence: null
       };
+      
+      // Initialize allowed actions based on the current question type
+      const isBackgroundQuestion = true; // We start in background phase
+      resetAllowedForQuestion(session.state, isBackgroundQuestion);
     }
     return session.state;
   }
@@ -131,8 +135,15 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   export function enforceAllowedAction(state, parsed) {
     if (!parsed || !parsed.action) return parsed;
     if (!state.allowedActions.has(parsed.action)) {
-      // Simple fallback strategy: use the first available allowed action
-      parsed.action = Array.from(state.allowedActions)[0] || "SUMMARIZE_QUESTION";
+      // Deterministic fallback strategy: prefer NEXT_QUESTION for background questions, ASK_FOLLOWUP for main questions
+      if (state.allowedActions.has('NEXT_QUESTION')) {
+        parsed.action = 'NEXT_QUESTION';
+      } else if (state.allowedActions.has('ASK_FOLLOWUP')) {
+        parsed.action = 'ASK_FOLLOWUP';
+      } else {
+        // Fallback to first available action
+        parsed.action = Array.from(state.allowedActions)[0] || "SUMMARIZE_QUESTION";
+      }
     }
     return parsed;
   }

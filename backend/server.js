@@ -1189,14 +1189,32 @@ app.post('/api/chat', async (req, res) => {
           const compT0 = Date.now();
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
           console.log('isFinalQuestionValue', isFinalQuestionValue);
-          completionAudit = await auditQuestionCompletion(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
+          
+          // Skip audit for background questions - they automatically advance
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+          if (isBackgroundQuestion) {
+            completionAudit = {
+              question_id: qNow,
+              verdict: 'ALLOW_NEXT_QUESTION',
+              scores: { structure: 1, specificity: 1, depth: 1 },
+              missing: [],
+              notes: 'Background question - auto-advance',
+              confidence: 1.0,
+              followUpQuestions: null,
+              shouldProceed: true,
+              reason: 'Background question - auto-advance'
+            };
+            log.info('background question - audit skipped, auto-advance verdict created');
+          } else {
+            completionAudit = await auditQuestionCompletion(
+              message,
+              aiResponse,
+              qNow,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+          }
           const compDur = Date.now() - compT0;
   
           log.info('completion audit', {
@@ -1214,14 +1232,26 @@ app.post('/api/chat', async (req, res) => {
   
           // ====== Presence Audit ======
           const presT0 = Date.now();
-          presenceAudit = await auditQuestionPresence(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
+          
+          // Skip presence audit for background questions - they don't need follow-up questions
+          if (isBackgroundQuestion) {
+            presenceAudit = {
+              hasQuestion: false,
+              reason: 'Background question - no follow-up needed',
+              confidence: 1.0,
+              shouldRegenerate: false
+            };
+            log.info('background question - presence audit skipped');
+          } else {
+            presenceAudit = await auditQuestionPresence(
+              message,
+              aiResponse,
+              qNow,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+          }
           const presDur = Date.now() - presT0;
   
           log.info('presence audit', {
@@ -1233,7 +1263,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           // ====== Regenerate if needed (presence) ======
-          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+          if (!isBackgroundQuestion && presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
             const regenT0 = Date.now();
             const regenerated = await regenerateResponseWithQuestions(
               message,
@@ -1255,7 +1285,7 @@ app.post('/api/chat', async (req, res) => {
           }
   
           // ====== Polish if need more (completion) ======
-          if (completionAudit?.verdict === 'REQUIRE_MORE') {
+          if (!isBackgroundQuestion && completionAudit?.verdict === 'REQUIRE_MORE') {
             const polT0 = Date.now();
             const polished = await polishResponseWithAuditFeedback(
               message,
@@ -1278,10 +1308,9 @@ app.post('/api/chat', async (req, res) => {
           }
   
           // ====== Final gating by completion audit ======
-          // Check if this is a background question
-          const isBackground = backgroundQuestions.includes(qNow);
+          // Check if this is a background question (reuse variable from above)
           
-          if (isBackground) {
+          if (isBackgroundQuestion) {
             // Background questions automatically advance after any user response
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
