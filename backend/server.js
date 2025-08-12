@@ -484,13 +484,10 @@ function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
 }
 
 // Executor System Prompt
-function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
+export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
     const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
     const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
-    
-    // Check if current question is a background question
-    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
   
     return [
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
@@ -499,18 +496,11 @@ function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questio
       `ALLOWED_ACTIONS: [${AA}]`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
-      ``,
-      `${isBackgroundQuestion ? 'BACKGROUND QUESTION RULES:' : 'MAIN QUESTION RULES:'}`,
-      `${isBackgroundQuestion ? 
-        '- This is a BACKGROUND QUESTION - complete it in ONE exchange and move to NEXT_QUESTION immediately' :
-        '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
-      }`,
+      `Hard rules:`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
-      `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
-        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
-      }`,
+      `- Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).`,
+      `- When you believe the bar is met, propose a 2-3 line summary before moving on.`,
       ``,
       `Output JSON only:`,
       `{`,
@@ -1288,23 +1278,24 @@ app.post('/api/chat', async (req, res) => {
           }
   
           // ====== Final gating by completion audit ======
-          // Check if this is a background question and force completion
-          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+          // Check if this is a background question
+          const isBackground = backgroundQuestions.includes(qNow);
           
-          if (isBackgroundQuestion) {
-            // Force background questions to complete immediately
+          if (isBackground) {
+            // Background questions automatically advance after any user response
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-            log.info('background question forced to complete', {
+            log.info('background question auto-advanced', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
               newAllowed: Array.from(state.allowedActions)
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
+            // Main questions require audit approval to advance
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-            log.info('advanced to next', {
+            log.info('main question advanced via audit', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
@@ -1313,7 +1304,7 @@ app.post('/api/chat', async (req, res) => {
           } else {
             questionCompleted = false;
             const reachedCap = atFollowupCap(state, qNow);
-            log.info('stay on current', {
+            log.info('stay on current main question', {
               reachedCap,
               allowed: Array.from(state.allowedActions),
               missing: completionAudit?.missing

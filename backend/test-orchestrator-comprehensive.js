@@ -108,7 +108,7 @@ runTest('Follow-up Registration', () => {
 });
 
 runTest('Follow-up Limits - Background', () => {
-  const state = initState({}, { maxFollowups: { background: 1, main: 3 } });
+  const state = initState({}, { maxFollowups: { background: 0, main: 3 } });
   const question = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
   
   registerFollowup(state, question);
@@ -118,9 +118,9 @@ runTest('Follow-up Limits - Background', () => {
 });
 
 runTest('Follow-up Limits - Main', () => {
-  const state = initState({}, { maxFollowups: { background: 1, main: 3 } });
+  const state = initState({}, { maxFollowups: { background: 0, main: 3 } });
   state.phase = 'main';
-  const question = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+  const question = getCurrentQuestion(state, mainQuestions, mainQuestions);
   
   // Register 3 follow-ups
   registerFollowup(state, question);
@@ -284,7 +284,7 @@ console.log('\n📋 Test Suite 8: Full Pipeline Simulation\n');
 
 runTest('Complete Conversation Flow', () => {
   const session = {};
-  const state = initState(session, { maxFollowups: { background: 1, main: 2 } });
+  const state = initState(session, { maxFollowups: { background: 0, main: 2 } });
   
   // Simulate background question flow
   let currentQ = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
