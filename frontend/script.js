@@ -3488,27 +3488,29 @@ class PrivacyDemoApp {
             console.log('Executing action:', pendingAction);
             
             if (pendingAction === 'survey') {
-                // Survey disabled - skip to export
-                console.log('Survey disabled - proceeding directly to export');
-                this.exportDirect();
+                // Show survey for neutral mode
+                console.log('Showing post-task survey for neutral mode');
+                this.showSurveyPopup('exportDirect');
             } else if (pendingAction === 'exportDirect') {
-                // Survey disabled - export directly
-                console.log('Survey disabled - exporting directly');
-                this.exportDirect();
+                // Show survey for export actions
+                console.log('Showing post-task survey for export action');
+                this.showSurveyPopup('exportDirect');
             } else if (pendingAction === 'exportComprehensive') {
-                // Survey disabled - export directly
-                console.log('Survey disabled - exporting directly');
-                this.exportComprehensive();
+                // Show survey for comprehensive export
+                console.log('Showing post-task survey for comprehensive export');
+                this.showSurveyPopup('exportComprehensive');
             } else if (pendingAction === 'analyzeAndExport') {
-                this.analyzeAndExport();
+                // Show survey for analyze and export
+                console.log('Showing post-task survey for analyze and export');
+                this.showSurveyPopup('analyzeAndExport');
             } else if (pendingAction === 'uploadToS3') {
-                // Upload to S3 instead of exporting
-                console.log('Consent given - uploading to S3');
-                this.uploadToS3();
+                // Show survey for S3 upload
+                console.log('Showing post-task survey for S3 upload');
+                this.showSurveyPopup('uploadToS3');
             } else if (pendingAction === 'uploadComprehensiveToS3') {
-                // Upload comprehensive data to S3
-                console.log('Consent given - uploading comprehensive data to S3');
-                this.uploadComprehensiveToS3();
+                // Show survey for comprehensive S3 upload
+                console.log('Showing post-task survey for comprehensive S3 upload');
+                this.showSurveyPopup('uploadComprehensiveToS3');
             }
         } else {
             console.log('No pending action found');
@@ -5249,7 +5251,14 @@ class PrivacyDemoApp {
         this.closeSurveyPopup();
         
         // Show success notification
-        this.showNotification('✅ Survey completed! Exporting data...', 'success');
+        const isUploadAction = this.state.pendingExportAction && 
+            (this.state.pendingExportAction.includes('upload') || this.state.pendingExportAction.includes('S3'));
+        
+        if (isUploadAction) {
+            this.showNotification('✅ Survey completed! Uploading data to S3...', 'success');
+        } else {
+            this.showNotification('✅ Survey completed! Exporting data...', 'success');
+        }
         
         // Debug: Log the pending export action
         console.log('Pending export action:', this.state.pendingExportAction);
@@ -5272,6 +5281,14 @@ class PrivacyDemoApp {
                     case 'analyzeAndExport':
                         console.log('Executing analyzeAndExport...');
                         this.analyzeAndExportAndRedirect();
+                        break;
+                    case 'uploadToS3':
+                        console.log('Executing uploadToS3...');
+                        this.uploadToS3();
+                        break;
+                    case 'uploadComprehensiveToS3':
+                        console.log('Executing uploadComprehensiveToS3...');
+                        this.uploadComprehensiveToS3();
                         break;
                     default:
                         console.error('Unknown export action:', this.state.pendingExportAction);
