@@ -2529,14 +2529,10 @@ class PrivacyDemoApp {
                     
                     // Only get the next question if we just completed a question or if we don't have a current question
                     if (this.state.justCompletedQuestion || this.state.currentQuestionIndex === null || this.state.currentQuestionIndex === undefined) {
-                        console.log(`🔄 Determining next question - justCompletedQuestion: ${this.state.justCompletedQuestion}, currentQuestionIndex: ${this.state.currentQuestionIndex}`);
-                        
                         const nextQuestionIndex = this.getNextUncompletedQuestionIndex();
-                        console.log(`Found next uncompleted question at index: ${nextQuestionIndex}`);
                         
                         // If all questions are completed, end the conversation
                         if (nextQuestionIndex === -1) {
-                            console.log('All questions completed, ending conversation');
                             this.state.questionsCompleted = true;
                             this.state.questionMode = false;
                             this.stopConversationAndShowCongratulation();
@@ -2544,13 +2540,8 @@ class PrivacyDemoApp {
                         }
                         
                         // Update current question index to the next uncompleted question
-                        const oldIndex = this.state.currentQuestionIndex;
                         this.state.currentQuestionIndex = nextQuestionIndex;
-                        console.log(`Moved from question ${oldIndex + 1} to question ${this.state.currentQuestionIndex + 1}`);
-                        
-                        // Reset the justCompletedQuestion flag since we've now moved to the next question
-                        this.state.justCompletedQuestion = false;
-                        console.log(`justCompletedQuestion flag reset to: ${this.state.justCompletedQuestion}`);
+                        console.log(`Moved to next question: ${this.state.currentQuestionIndex + 1}`);
                     }
                     
                     // Ensure current question index is valid
@@ -2733,9 +2724,10 @@ class PrivacyDemoApp {
                         // Don't return here - let the normal question completion flow handle the next question
                         console.log('Background question marked as completed, continuing with normal flow');
                         
-                        // Don't automatically ask the next question - let the user control the flow
-                        // The next question will be asked when they send their next message
-                        console.log('Waiting for user to send next message before asking next question');
+                        // After updating UI, automatically ask the next question
+                        setTimeout(() => {
+                            this.askNextQuestion();
+                        }, 1000); // Small delay to make the transition feel natural
                     }
                     
                     // Handle follow-up questions from audit LLM (only for main questions)
@@ -2796,8 +2788,6 @@ class PrivacyDemoApp {
                         console.log(`Question ${this.state.currentQuestionIndex + 1} completed. Moving to next question.`);
                         console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                         console.log(`Progress: ${this.state.completedQuestionIndices.length}/${this.state.predefinedQuestions[this.state.mode].length} questions completed`);
-                        console.log(`justCompletedQuestion flag set to: ${this.state.justCompletedQuestion}`);
-                        console.log(`Next time user sends a message, system will move to question ${this.state.currentQuestionIndex + 2}`);
                         
                         // Check if this was the final question
                         if (isFinalQuestion) {

@@ -1442,28 +1442,28 @@ async function auditQuestionCompletion(
       const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
       
       if (isBackgroundQuestion) {
-        console.log(`🎯 Using EASY audit rules for background question: "${currentQuestion}"`);
+        console.log(`🎯 Using NO FOLLOW-UP audit rules for background question: "${currentQuestion}"`);
       }
       
       let auditPrompt;
       if (isBackgroundQuestion) {
-        // Much easier audit rule for background questions - only ask follow-up if completely irrelevant
+        // Background questions should NEVER ask follow-ups - always proceed to next question
         auditPrompt = `
   You are the Auditor for a BACKGROUND QUESTION. This is a simple, efficient question that should complete quickly.
   
   CURRENT QUESTION: "${currentQuestion}"
   
-  BACKGROUND QUESTION RULE: Only ask a follow-up question if the user's response is COMPLETELY IRRELEVANT to the question.
+  BACKGROUND QUESTION RULE: Background questions should ALWAYS proceed to the next question. NEVER ask follow-up questions.
   
-  Examples of RELEVANT responses (allow to proceed):
-  - Any answer that relates to the question topic, even if brief
-  - "I don't have experience with this" or "I'm not sure about this"
-  - Brief, incomplete, or vague answers that still address the question
+  CRITICAL: For background questions, the verdict should ALWAYS be "ALLOW_NEXT_QUESTION" regardless of the user's response.
   
-  Examples of COMPLETELY IRRELEVANT responses (require follow-up):
-  - Answering a different question entirely
-  - Talking about something completely unrelated
-  - No response to the question at all
+  Background questions are designed to gather basic information quickly and move on. Even if the user's response is:
+  - Brief or incomplete
+  - Vague or unclear
+  - Off-topic or irrelevant
+  - "I don't know" or "I'm not sure"
+  
+  The response should ALWAYS proceed to the next question.
   
   OUTPUT STRICTLY AS JSON (no markdown/code fences):
   
@@ -1471,17 +1471,15 @@ async function auditQuestionCompletion(
     "question_id": "<ID or text>",
     "scores": { "structure": 2, "specificity": 2, "depth": 2 },
     "missing": [],
-    "notes": "Background question - easy completion rule applied",
-    "verdict": "ALLOW_NEXT_QUESTION" | "REQUIRE_MORE",
-    "confidence": 0.9,
-    "followUpQuestion": "ONE clarifying question if verdict=REQUIRE_MORE, else omit"
+    "notes": "Background question - always proceed, no follow-ups",
+    "verdict": "ALLOW_NEXT_QUESTION",
+    "confidence": 0.95
   }
   
   Decision rule:
-  - ALLOW_NEXT_QUESTION if the response is relevant to the question (even if brief/incomplete)
-  - REQUIRE_MORE ONLY if the response is completely irrelevant or off-topic
-  
-  If REQUIRE_MORE, ask ONE simple clarifying question to get the user back on topic.
+  - ALWAYS return "ALLOW_NEXT_QUESTION" for background questions
+  - NEVER return "REQUIRE_MORE" for background questions
+  - NEVER include followUpQuestion field for background questions
   `;
       } else {
         // Original strict PSS audit prompt for main questions
@@ -1615,14 +1613,14 @@ async function auditQuestionCompletion(
       
       // Special handling for background questions - ensure they get appropriate scores
       if (isBackgroundQuestion) {
-        // For background questions, if the verdict is ALLOW_NEXT_QUESTION, ensure good scores
-        if (verdict === 'ALLOW_NEXT_QUESTION') {
-          scores = { structure: 2, specificity: 2, depth: 2 };
-          missing = [];
-          confidence = Math.max(confidence, 0.9);
-        }
+        // For background questions, ALWAYS proceed to next question - no follow-ups ever
+        verdict = 'ALLOW_NEXT_QUESTION';
+        scores = { structure: 2, specificity: 2, depth: 2 };
+        missing = [];
+        confidence = 0.95;
+        followUpQuestions = null; // Ensure no follow-up questions for background questions
         // Add note that this was processed with background question rules
-        notes = notes ? `${notes} (Background question - easy rules applied)` : 'Background question - easy rules applied';
+        notes = 'Background question - always proceed, no follow-ups (easy rules applied)';
       }
   
       const result = {
