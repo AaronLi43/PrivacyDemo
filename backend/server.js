@@ -484,7 +484,7 @@ function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
 }
 
 // Executor System Prompt
-export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
+function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
     const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
     const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
