@@ -8,7 +8,7 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
         phase: "background",        // "background" | "main" | "done"
         bgIdx: 0,
         mainIdx: 0,
-        allowedActions: new Set(["SUMMARIZE_QUESTION"]), // Background questions start with no follow-ups allowed
+        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]),
         perQuestion: {},            // question -> { followups: number, lastScores: null }
         maxFollowups,
         lastAudit: null,
@@ -48,13 +48,8 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
     state.perQuestion[question].lastScores = scores || null;
   }
   
-  export function resetAllowedForQuestion(state, backgroundQuestions = [], currentQuestion = null) {
-    // For background questions, never allow follow-ups - only allow moving to next question
-    if (currentQuestion && backgroundQuestions.includes(currentQuestion)) {
-      state.allowedActions = new Set(["SUMMARIZE_QUESTION"]);
-    } else {
-      state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
-    }
+  export function resetAllowedForQuestion(state) {
+    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
   }
   
   export function buildAllowedActionsForPrompt(state) {
@@ -62,19 +57,11 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
   }
     
 // Audit access: as long as the PSS audit passes, allow NEXT_QUESTION; otherwise remove
-  export function allowNextIfAuditPass(state, completionAuditVerdict, backgroundQuestions = [], currentQuestion = null) {
+  export function allowNextIfAuditPass(state, completionAuditVerdict) {
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION") {
       state.allowedActions.add("NEXT_QUESTION");
     } else {
       state.allowedActions.delete("NEXT_QUESTION");
-    }
-    
-    // For background questions, always allow NEXT_QUESTION regardless of audit result
-    if (currentQuestion && backgroundQuestions.includes(currentQuestion)) {
-      state.allowedActions.add("NEXT_QUESTION");
-      // Remove follow-up actions for background questions
-      state.allowedActions.delete("ASK_FOLLOWUP");
-      state.allowedActions.delete("REQUEST_CLARIFY");
     }
   }
   
@@ -104,9 +91,7 @@ export function initState(session, { maxFollowups = { background: 1, main: 3 } }
       }
     }
     // After entering the next question, reset allowed actions and per-question follow-up count
-    // Get the current question to determine if it's a background question
-    const currentQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-    resetAllowedForQuestion(state, backgroundQuestions, currentQuestion);
+    resetAllowedForQuestion(state);
   }
   
   export function storeAudits(state, { completionAudit, presenceAudit }) {

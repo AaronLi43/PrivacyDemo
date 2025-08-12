@@ -506,16 +506,17 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
+      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: NEVER ask follow-up questions. Ask the question, get ANY response, then use NEXT_QUESTION action immediately.' :
-        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral. When you believe the bar is met, propose a 2-3 line summary before moving on.'
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
+        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
       `Output JSON only:`,
       `{`,
-      `  "action": "${isBackgroundQuestion ? 'SUMMARIZE_QUESTION | NEXT_QUESTION' : 'ASK_FOLLOWUP | SUMMARIZE_QUESTION | REQUEST_CLARIFY | NEXT_QUESTION | END'}",`,
+      `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "<${isBackgroundQuestion ? 'brief summary or acknowledgment' : 'ONE natural question OR a brief summary'}>",`,
+      `  "utterance": "<ONE natural question OR a brief summary>",`,
       `  "notes": ["optional extracted facts"]`,
       `}`
     ].join("\n");
@@ -1218,7 +1219,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           recordScores(state, qNow, completionAudit?.scores);
-          allowNextIfAuditPass(state, completionAudit?.verdict, backgroundQuestions, qNow);
+          allowNextIfAuditPass(state, completionAudit?.verdict);
           finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
           // ====== Presence Audit ======
@@ -1437,52 +1438,7 @@ async function auditQuestionCompletion(
     }
   
     try {
-      // Check if this is a background question and use easier audit rule
-      const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
-      
-      if (isBackgroundQuestion) {
-        console.log(`🎯 Using NO FOLLOW-UP audit rules for background question: "${currentQuestion}"`);
-      }
-      
-      let auditPrompt;
-      if (isBackgroundQuestion) {
-        // Background questions should NEVER ask follow-ups - always proceed to next question
-        auditPrompt = `
-  You are the Auditor for a BACKGROUND QUESTION. This is a simple, efficient question that should complete quickly.
-  
-  CURRENT QUESTION: "${currentQuestion}"
-  
-  BACKGROUND QUESTION RULE: Background questions should ALWAYS proceed to the next question. NEVER ask follow-up questions.
-  
-  CRITICAL: For background questions, the verdict should ALWAYS be "ALLOW_NEXT_QUESTION" regardless of the user's response.
-  
-  Background questions are designed to gather basic information quickly and move on. Even if the user's response is:
-  - Brief or incomplete
-  - Vague or unclear
-  - Off-topic or irrelevant
-  - "I don't know" or "I'm not sure"
-  
-  The response should ALWAYS proceed to the next question.
-  
-  OUTPUT STRICTLY AS JSON (no markdown/code fences):
-  
-  {
-    "question_id": "<ID or text>",
-    "scores": { "structure": 2, "specificity": 2, "depth": 2 },
-    "missing": [],
-    "notes": "Background question - always proceed, no follow-ups",
-    "verdict": "ALLOW_NEXT_QUESTION",
-    "confidence": 0.95
-  }
-  
-  Decision rule:
-  - ALWAYS return "ALLOW_NEXT_QUESTION" for background questions
-  - NEVER return "REQUIRE_MORE" for background questions
-  - NEVER include followUpQuestion field for background questions
-  `;
-      } else {
-        // Original strict PSS audit prompt for main questions
-        auditPrompt = `
+      const auditPrompt = `
   You are the Auditor. Decide if the CURRENT QUESTION has obtained a sufficient personal story (PSS).
   
   CURRENT QUESTION: "${currentQuestion}"
@@ -1520,7 +1476,6 @@ async function auditQuestionCompletion(
   - Stay strictly on the CURRENT QUESTION; ask for the missing slot or depth
   - Be natural and concrete (e.g., ask for time/people/result, numbers, obstacles, trade-offs)
   `;
-      }
   
       const auditMessages = [{ role: 'system', content: auditPrompt }];
   
@@ -1605,22 +1560,10 @@ async function auditQuestionCompletion(
       }
   
       const verdict = parsed.verdict || 'REQUIRE_MORE';
-      let scores = parsed.scores || { structure: 0, specificity: 0, depth: 0 };
-      let missing = Array.isArray(parsed.missing) ? parsed.missing.slice(0, 1) : [];
-      let notes = parsed.notes || '';
-      let confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.8;
-      
-      // Special handling for background questions - ensure they get appropriate scores
-      if (isBackgroundQuestion) {
-        // For background questions, ALWAYS proceed to next question - no follow-ups ever
-        verdict = 'ALLOW_NEXT_QUESTION';
-        scores = { structure: 2, specificity: 2, depth: 2 };
-        missing = [];
-        confidence = 0.95;
-        followUpQuestions = null; // Ensure no follow-up questions for background questions
-        // Add note that this was processed with background question rules
-        notes = 'Background question - always proceed, no follow-ups (easy rules applied)';
-      }
+      const scores = parsed.scores || { structure: 0, specificity: 0, depth: 0 };
+      const missing = Array.isArray(parsed.missing) ? parsed.missing.slice(0, 1) : [];
+      const notes = parsed.notes || '';
+      const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.8;
   
       const result = {
         question_id: parsed.question_id || currentQuestion || 'N/A',
