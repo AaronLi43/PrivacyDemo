@@ -506,9 +506,10 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
         '- This is a MAIN QUESTION - aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection)'
       }`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
+      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action. NO follow-ups allowed.' :
-        '- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral. When you believe the bar is met, propose a 2-3 line summary before moving on.'
+        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action.' :
+        '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
       `Output JSON only:`,
@@ -1183,23 +1184,8 @@ app.post('/api/chat', async (req, res) => {
   
             // Convert execution results to user output text
             if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
-              // Prevent follow-ups for background questions
-              const isBackgroundQuestion = backgroundQuestions.includes(qNow);
-              if (isBackgroundQuestion) {
-                // Force background questions to complete immediately
-                aiResponse = "Thank you for sharing that information. Let's move on to the next question.";
-                questionCompleted = true;
-                gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-                log.info('background question follow-up blocked, forcing completion', {
-                  phase: state.phase,
-                  bgIdx: state.bgIdx,
-                  mainIdx: state.mainIdx
-                });
-              } else {
-                // Allow follow-ups for main questions
-                registerFollowup(state, qNow);
-                aiResponse = parsedExec.utterance || aiResponse;
-              }
+              registerFollowup(state, qNow);
+              aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
@@ -1212,29 +1198,15 @@ app.post('/api/chat', async (req, res) => {
           // ====== Completion Audit (PSS) ======
           const compT0 = Date.now();
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
-          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
           console.log('isFinalQuestionValue', isFinalQuestionValue);
-          
-          // Skip completion audit for background questions - they complete immediately
-          if (isBackgroundQuestion) {
-            completionAudit = {
-              verdict: 'ALLOW_NEXT_QUESTION',
-              reason: 'Background question - automatic completion',
-              shouldProceed: true,
-              confidence: 1.0
-            };
-            log.info('background question - skipping completion audit, auto-completing');
-          } else {
-            completionAudit = await auditQuestionCompletion(
-              message,
-              aiResponse,
-              qNow,
-              session.conversationHistory,
-              isFinalQuestionValue,
-              followUpMode
-            );
-          }
-          
+          completionAudit = await auditQuestionCompletion(
+            message,
+            aiResponse,
+            qNow,
+            session.conversationHistory,
+            isFinalQuestionValue,
+            followUpMode
+          );
           const compDur = Date.now() - compT0;
   
           log.info('completion audit', {
@@ -1252,27 +1224,14 @@ app.post('/api/chat', async (req, res) => {
   
           // ====== Presence Audit ======
           const presT0 = Date.now();
-          
-          // Skip presence audit for background questions - they don't need follow-up questions
-          if (isBackgroundQuestion) {
-            presenceAudit = {
-              hasQuestion: false,
-              reason: 'Background question - no follow-up needed',
-              confidence: 1.0,
-              shouldRegenerate: false
-            };
-            log.info('background question - skipping presence audit, no follow-up needed');
-          } else {
-            presenceAudit = await auditQuestionPresence(
-              message,
-              aiResponse,
-              qNow,
-              session.conversationHistory,
-              isFinalQuestionValue,
-              followUpMode
-            );
-          }
-          
+          presenceAudit = await auditQuestionPresence(
+            message,
+            aiResponse,
+            qNow,
+            session.conversationHistory,
+            isFinalQuestionValue,
+            followUpMode
+          );
           const presDur = Date.now() - presT0;
   
           log.info('presence audit', {
@@ -1284,7 +1243,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           // ====== Regenerate if needed (presence) ======
-          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7 && !isBackgroundQuestion) {
+          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
             const regenT0 = Date.now();
             const regenerated = await regenerateResponseWithQuestions(
               message,
@@ -1295,7 +1254,7 @@ app.post('/api/chat', async (req, res) => {
               followUpMode
             );
             const regenDur = Date.now() - regenT0;
-
+  
             if (regenerated) {
               usedRegenerate = true;
               aiResponse = regenerated;
@@ -1303,12 +1262,10 @@ app.post('/api/chat', async (req, res) => {
             } else {
               log.warn('regenerate returned null; keep original');
             }
-          } else if (isBackgroundQuestion && presenceAudit?.shouldRegenerate) {
-            log.info('background question - regeneration blocked, keeping original response');
           }
   
           // ====== Polish if need more (completion) ======
-          if (completionAudit?.verdict === 'REQUIRE_MORE' && !isBackgroundQuestion) {
+          if (completionAudit?.verdict === 'REQUIRE_MORE') {
             const polT0 = Date.now();
             const polished = await polishResponseWithAuditFeedback(
               message,
@@ -1320,7 +1277,7 @@ app.post('/api/chat', async (req, res) => {
               followUpMode
             );
             const polDur = Date.now() - polT0;
-
+  
             if (polished) {
               usedPolish = true;
               aiResponse = polished;
@@ -1328,13 +1285,11 @@ app.post('/api/chat', async (req, res) => {
             } else {
               log.info('polish returned null (either passed or kept original)');
             }
-          } else if (isBackgroundQuestion && completionAudit?.verdict === 'REQUIRE_MORE') {
-            log.info('background question - polishing blocked, keeping original response');
           }
   
           // ====== Final gating by completion audit ======
           // Check if this is a background question and force completion
-          // isBackgroundQuestion is already declared above
+          const isBackgroundQuestion = backgroundQuestions.includes(qNow);
           
           if (isBackgroundQuestion) {
             // Force background questions to complete immediately
@@ -1483,7 +1438,54 @@ async function auditQuestionCompletion(
     }
   
     try {
-      const auditPrompt = `
+      // Check if this is a background question and use easier audit rule
+      const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
+      
+      if (isBackgroundQuestion) {
+        console.log(`🎯 Using EASY audit rules for background question: "${currentQuestion}"`);
+      }
+      
+      let auditPrompt;
+      if (isBackgroundQuestion) {
+        // Much easier audit rule for background questions - only ask follow-up if completely irrelevant
+        auditPrompt = `
+  You are the Auditor for a BACKGROUND QUESTION. This is a simple, efficient question that should complete quickly.
+  
+  CURRENT QUESTION: "${currentQuestion}"
+  
+  BACKGROUND QUESTION RULE: Only ask a follow-up question if the user's response is COMPLETELY IRRELEVANT to the question.
+  
+  Examples of RELEVANT responses (allow to proceed):
+  - Any answer that relates to the question topic, even if brief
+  - "I don't have experience with this" or "I'm not sure about this"
+  - Brief, incomplete, or vague answers that still address the question
+  
+  Examples of COMPLETELY IRRELEVANT responses (require follow-up):
+  - Answering a different question entirely
+  - Talking about something completely unrelated
+  - No response to the question at all
+  
+  OUTPUT STRICTLY AS JSON (no markdown/code fences):
+  
+  {
+    "question_id": "<ID or text>",
+    "scores": { "structure": 2, "specificity": 2, "depth": 2 },
+    "missing": [],
+    "notes": "Background question - easy completion rule applied",
+    "verdict": "ALLOW_NEXT_QUESTION" | "REQUIRE_MORE",
+    "confidence": 0.9,
+    "followUpQuestion": "ONE clarifying question if verdict=REQUIRE_MORE, else omit"
+  }
+  
+  Decision rule:
+  - ALLOW_NEXT_QUESTION if the response is relevant to the question (even if brief/incomplete)
+  - REQUIRE_MORE ONLY if the response is completely irrelevant or off-topic
+  
+  If REQUIRE_MORE, ask ONE simple clarifying question to get the user back on topic.
+  `;
+      } else {
+        // Original strict PSS audit prompt for main questions
+        auditPrompt = `
   You are the Auditor. Decide if the CURRENT QUESTION has obtained a sufficient personal story (PSS).
   
   CURRENT QUESTION: "${currentQuestion}"
@@ -1521,6 +1523,7 @@ async function auditQuestionCompletion(
   - Stay strictly on the CURRENT QUESTION; ask for the missing slot or depth
   - Be natural and concrete (e.g., ask for time/people/result, numbers, obstacles, trade-offs)
   `;
+      }
   
       const auditMessages = [{ role: 'system', content: auditPrompt }];
   
@@ -1605,10 +1608,22 @@ async function auditQuestionCompletion(
       }
   
       const verdict = parsed.verdict || 'REQUIRE_MORE';
-      const scores = parsed.scores || { structure: 0, specificity: 0, depth: 0 };
-      const missing = Array.isArray(parsed.missing) ? parsed.missing.slice(0, 1) : [];
-      const notes = parsed.notes || '';
-      const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.8;
+      let scores = parsed.scores || { structure: 0, specificity: 0, depth: 0 };
+      let missing = Array.isArray(parsed.missing) ? parsed.missing.slice(0, 1) : [];
+      let notes = parsed.notes || '';
+      let confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.8;
+      
+      // Special handling for background questions - ensure they get appropriate scores
+      if (isBackgroundQuestion) {
+        // For background questions, if the verdict is ALLOW_NEXT_QUESTION, ensure good scores
+        if (verdict === 'ALLOW_NEXT_QUESTION') {
+          scores = { structure: 2, specificity: 2, depth: 2 };
+          missing = [];
+          confidence = Math.max(confidence, 0.9);
+        }
+        // Add note that this was processed with background question rules
+        notes = notes ? `${notes} (Background question - easy rules applied)` : 'Background question - easy rules applied';
+      }
   
       const result = {
         question_id: parsed.question_id || currentQuestion || 'N/A',
