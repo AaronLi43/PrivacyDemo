@@ -1315,9 +1315,15 @@ app.post('/api/chat', async (req, res) => {
             // Background questions automatically advance after any user response
             questionCompleted = true;
             
-            // Only advance to next question if this isn't the first exchange
-            // This prevents the first question from being asked twice
-            if (session.conversationHistory.length > 1) {
+            // Check if the executor is trying to ask the same question again
+            // This prevents the first question from being asked twice in the same response
+            const isRepeatingQuestion = parsedExec && 
+              parsedExec.action === "NEXT_QUESTION" && 
+              (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you")) &&
+              parsedExec.utterance.trim() === qNow;
+            
+            if (!isRepeatingQuestion) {
+              // Normal advancement - move to next question
               gotoNextQuestion(state, backgroundQuestions, mainQuestions);
               
               // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
@@ -1335,7 +1341,7 @@ app.post('/api/chat', async (req, res) => {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              conversationLength: session.conversationHistory.length,
+              isRepeatingQuestion,
               newAllowed: Array.from(state.allowedActions)
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
