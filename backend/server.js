@@ -1180,6 +1180,7 @@ app.post('/api/chat', async (req, res) => {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
+              // For background questions, we'll show the next question in the final response
             }
           } else {
             log.warn('executor output not JSON; using raw text');
@@ -1314,6 +1315,17 @@ app.post('/api/chat', async (req, res) => {
             // Background questions automatically advance after any user response
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+            
+            // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
+            // show the next question instead of the follow-up utterance
+            if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
+                (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
+              const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+              if (nextQuestion) {
+                aiResponse = nextQuestion;
+              }
+            }
+            
             log.info('background question auto-advanced', {
               phase: state.phase,
               bgIdx: state.bgIdx,
