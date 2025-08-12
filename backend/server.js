@@ -1169,7 +1169,7 @@ app.post('/api/chat', async (req, res) => {
           // Parse Executor JSON, and execute action constraints
           parsedExec = parseExecutorOutput(aiResponse);
           if (parsedExec) {
-            enforceAllowedAction(state, parsedExec);
+            enforceAllowedAction(state, parsedExec, qNow, backgroundQuestions);
             log.info('executor parsed', parsedExec);
   
             // Convert execution results to user output text

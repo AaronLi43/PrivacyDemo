@@ -132,13 +132,16 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   }
   
   // Check if the current action is allowed; if not, force back to allowed actions
-  export function enforceAllowedAction(state, parsed) {
+  export function enforceAllowedAction(state, parsed, currentQuestion = null, backgroundQuestions = []) {
     if (!parsed || !parsed.action) return parsed;
     if (!state.allowedActions.has(parsed.action)) {
+      // Determine if current question is a background question
+      const isBackgroundQuestion = currentQuestion && backgroundQuestions.includes(currentQuestion);
+      
       // Deterministic fallback strategy: prefer NEXT_QUESTION for background questions, ASK_FOLLOWUP for main questions
-      if (state.allowedActions.has('NEXT_QUESTION')) {
+      if (isBackgroundQuestion && state.allowedActions.has('NEXT_QUESTION')) {
         parsed.action = 'NEXT_QUESTION';
-      } else if (state.allowedActions.has('ASK_FOLLOWUP')) {
+      } else if (!isBackgroundQuestion && state.allowedActions.has('ASK_FOLLOWUP')) {
         parsed.action = 'ASK_FOLLOWUP';
       } else {
         // Fallback to first available action
