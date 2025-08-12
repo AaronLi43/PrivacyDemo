@@ -1113,31 +1113,26 @@ app.post('/api/chat', async (req, res) => {
   
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
-      
-      // For the initial message, always start with the first background question
-      // For subsequent messages, use the currentQuestion parameter or get from state
-      let qNow;
-      if (session.conversationHistory.length === 1) {
-        // This is the initial message, start with first background question
-        qNow = backgroundQuestions[0];
-        // Ensure state is properly initialized for first question
-        state.phase = "background";
-        state.bgIdx = 0;
-      } else {
-        // Subsequent messages, use provided currentQuestion or get from state
-        qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-      }
-      
+      const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
+      
+      // Validate question progression
+      if (qNow && backgroundQuestions.includes(qNow)) {
+        const questionIndex = backgroundQuestions.indexOf(qNow);
+        log.info('background question validation', {
+          questionIndex,
+          bgIdx: state.bgIdx,
+          expectedIndex: state.bgIdx,
+          question: qNow
+        });
+      }
   
       log.info('orchestrator state', {
         phase: state.phase,
         bgIdx: state.bgIdx,
         mainIdx: state.mainIdx,
         qNow,
-        allowedActions: allowedActionsArr,
-        conversationHistoryLength: session.conversationHistory.length,
-        isInitialMessage: session.conversationHistory.length === 1
+        allowedActions: allowedActionsArr
       });
   
       // Build Executor system prompt
@@ -1330,28 +1325,37 @@ app.post('/api/chat', async (req, res) => {
           if (isBackgroundQuestion) {
             // Background questions automatically advance after any user response
             questionCompleted = true;
-            log.info('background question completed, advancing to next question', { 
-              currentQuestion: qNow,
-              phase: state.phase,
-              bgIdx: state.bgIdx 
-            });
             
+            // Store the current question before advancing
+            const currentQuestionBeforeAdvance = qNow;
+            
+            // Advance to next question
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             
-            // Always show the next question for background questions after advancement
+            // Get the next question after advancement
             const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-            if (nextQuestion) {
+            
+            // Always show the next question for background questions to prevent duplication
+            if (nextQuestion && nextQuestion !== currentQuestionBeforeAdvance) {
               aiResponse = nextQuestion;
-              log.info('background question advanced to next question', { 
-                nextQuestion,
-                newPhase: state.phase,
-                newBgIdx: state.bgIdx 
+              log.info('background question advanced - showing next question', {
+                previous: currentQuestionBeforeAdvance,
+                next: nextQuestion,
+                phase: state.phase,
+                bgIdx: state.bgIdx,
+                mainIdx: state.mainIdx
               });
             } else {
-              // If no next question, we've moved to main questions phase
-              log.info('background questions completed, moved to main questions phase', {
-                newPhase: state.phase,
-                newMainIdx: state.mainIdx
+              // Fallback: if no next question or same question, provide a transition message
+              if (state.phase === "main") {
+                aiResponse = "Thank you for sharing that background information. Now let's move to the main interview questions.";
+              } else {
+                aiResponse = "Thank you for sharing that. Let me ask you the next question.";
+              }
+              log.info('background question advanced - using transition message', {
+                phase: state.phase,
+                bgIdx: state.bgIdx,
+                mainIdx: state.mainIdx
               });
             }
             

@@ -2453,7 +2453,6 @@ class PrivacyDemoApp {
                     
                     // Only get the next question if we just completed a question or if we don't have a current question
                     if (this.state.justCompletedQuestion || this.state.currentQuestionIndex === null || this.state.currentQuestionIndex === undefined) {
-                        console.log('Getting next question - justCompletedQuestion:', this.state.justCompletedQuestion, 'currentQuestionIndex:', this.state.currentQuestionIndex);
                         const nextQuestionIndex = this.getNextUncompletedQuestionIndex();
                         
                         // If all questions are completed, end the conversation
@@ -2494,11 +2493,12 @@ class PrivacyDemoApp {
                     }
                     
                     // Check if this is the final question
-                    // Note: currentQuestionIndex is 0-based, and we're only handling main questions here
-                    // Background questions (3) are handled by the backend orchestrator
+                    // Note: currentQuestionIndex is 0-based, so we need to check against total questions - 1
+                    const bgCount = 3;
                     const mainCount = questions.length;
-                    const isFinalQuestion = (this.state.currentQuestionIndex === mainCount - 1);
-                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${mainCount} (main questions only) - Is final: ${isFinalQuestion}`);
+                    const totalCount = bgCount + mainCount;
+                    const isFinalQuestion = (this.state.currentQuestionIndex === totalCount - 1);
+                    console.log(`Current question ${this.state.currentQuestionIndex + 1}/${totalCount} (${bgCount} background + ${mainCount} main) - Is final: ${isFinalQuestion}`);
                     console.log(`Question text: "${currentQuestion}"`);
                     console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
                     console.log(`justCompletedQuestion flag: ${this.state.justCompletedQuestion}`);
@@ -2605,8 +2605,6 @@ class PrivacyDemoApp {
                     console.log('- Current question index:', this.state.currentQuestionIndex);
                     console.log('- Current question text:', currentQuestion);
                     console.log('- Is background question:', isBackgroundQuestion);
-                    console.log('- Completed question indices:', this.state.completedQuestionIndices);
-                    console.log('- Just completed question flag:', this.state.justCompletedQuestion);
                     console.log('- Response object keys:', Object.keys(response || {}));
                     console.log('- Full response:', response);
                     
@@ -2671,11 +2669,6 @@ class PrivacyDemoApp {
                         this.state.justCompletedQuestion = true; // Set flag to indicate we just completed a question
                         console.log(`Question ${this.state.currentQuestionIndex + 1} completed. Moving to next question.`);
                         console.log(`Completed questions: [${this.state.completedQuestionIndices.join(', ')}]`);
-                        
-                        // ADVANCE TO NEXT QUESTION INDEX
-                        this.state.currentQuestionIndex += 1;
-                        console.log(`Advanced to next question index: ${this.state.currentQuestionIndex}`);
-                        
                         const backgroundQuestionsCount = 3;
                         const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
                         const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
@@ -2703,10 +2696,11 @@ class PrivacyDemoApp {
                             this.stopConversationAndShowCongratulation();
                         } else {
                             // Show notification to user about progress
-                            // Note: Background questions (3) are handled by backend, so we only count main questions here
+                            const backgroundQuestionsCount = 3;
                             const mainQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                            const completedQuestionNumber = this.state.currentQuestionIndex + 1; // +1 because we already advanced the index
-                            this.showNotification(`✅ Question ${completedQuestionNumber}/${mainQuestionsCount} completed!`, 'success');
+                            const totalQuestions = backgroundQuestionsCount + mainQuestionsCount;
+                            const completedQuestionNumber = this.state.currentQuestionIndex + 1;
+                            this.showNotification(`✅ Question ${completedQuestionNumber}/${totalQuestions} completed!`, 'success');
                             
                             // Add a small delay to make the transition feel more natural
                             setTimeout(() => {
