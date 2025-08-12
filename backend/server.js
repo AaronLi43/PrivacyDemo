@@ -644,7 +644,7 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-// Chat API
+
 // app.post('/api/chat', async (req, res) => {
 //     try {
 //         const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false, sessionId } = req.body;
@@ -1098,7 +1098,7 @@ app.post('/api/chat', async (req, res) => {
       // Questions (background + main questions)
       const backgroundQuestions = [
         "Tell me about your educational background - what did you study in college or university?",
-        "I'd love to hear about your current work and how you got into it by job interviews?",
+        "I'd love to hear about your current work and how you got into it by job interviews.",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
       ];
       const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : [
