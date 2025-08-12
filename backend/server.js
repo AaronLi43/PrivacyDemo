@@ -508,7 +508,7 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
       `${isBackgroundQuestion ? 
-        '- For background questions: Ask the question, get a brief response, then use NEXT_QUESTION action. NO follow-ups allowed.' :
+        '- For background questions: Acknowledge the response briefly, then use NEXT_QUESTION action. NO follow-ups allowed.' :
         '- When you believe the bar is met, propose a 2-3 line summary before moving on.'
       }`,
       ``,
@@ -516,7 +516,7 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `{`,
       `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "<ONE natural question OR a brief summary>",`,
+      `  "utterance": "${isBackgroundQuestion ? '<Brief acknowledgment of response>' : '<ONE natural question OR a brief summary>'}",`,
       `  "notes": ["optional extracted facts"]`,
       `}`
     ].join("\n");
@@ -1108,7 +1108,7 @@ app.post('/api/chat', async (req, res) => {
       // Questions (background + main questions)
       const backgroundQuestions = [
         "Tell me about your educational background - what did you study in college or university?",
-        "I'd love to hear about your current work and how you got into it by job interviews?",
+        "Can you tell me about your current work and how you got into it by job interviews?",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
       ];
       const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : [
@@ -1204,6 +1204,10 @@ app.post('/api/chat', async (req, res) => {
             } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
+              // For background questions, show acknowledgment and prepare for next question
+              if (backgroundQuestions.includes(qNow)) {
+                aiResponse = parsedExec.utterance || "Thanks for sharing that!";
+              }
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
             }
           } else {
@@ -1333,11 +1337,19 @@ app.post('/api/chat', async (req, res) => {
             // Force background questions to complete immediately
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+            
+            // Get the next question and append it to the response
+            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+            if (nextQuestion) {
+              aiResponse = `${aiResponse}\n\n${nextQuestion}`;
+            }
+            
             log.info('background question forced to complete', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              newAllowed: Array.from(state.allowedActions)
+              newAllowed: Array.from(state.allowedActions),
+              nextQuestion: nextQuestion
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
             questionCompleted = true;
