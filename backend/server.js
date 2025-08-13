@@ -665,407 +665,12 @@ app.get('/api/config', (req, res) => {
 });
 
 
-// app.post('/api/chat', async (req, res) => {
-//     try {
-//         const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false, sessionId } = req.body;
-        
-//         if (!message || message.trim() === '') {
-//             return res.status(400).json({ error: 'Message is required and cannot be empty' });
-//         }
 
-//         // Get or create session
-//         const currentSessionId = sessionId || generateSessionId();
-//         const session = getSession(currentSessionId);
 
-//         // Add user message to history
-//         session.conversationHistory.push({
-//             role: 'user',
-//             content: message,
-//             timestamp: new Date().toISOString(),
-//             step: step
-//         });
-        
-//         console.log(`Chat API: Received message="${message}", questionMode=${questionMode}, currentQuestion="${currentQuestion}", sessionId=${currentSessionId}`);
 
-//         // Manage conversation context (reset if too long)
-//         manageConversationContext(currentSessionId);
 
-//         // Check if this is the first exchange (only one user message in history)
-//         const isFirstExchange = session.conversationHistory.length === 1;
-//         console.log(`Conversation history length: ${session.conversationHistory.length}, isFirstExchange: ${isFirstExchange}`);
-        
-//         // Generate AI response using OpenAI or fallback
-//         let aiResponse;
-//         let questionCompleted = false;
-//         let auditResult = null;
-//         let questionPresenceResult = null;
-        
-//         if (openaiClient) {
-//             try {
-//                 // Enhanced system prompt for the chatbot with question guidance
-//                 let systemPrompt = `You are a helpful, friendly, and knowledgeable AI assistant. Keep your responses short and concise.`;
-                
-//                 // If in question mode, enhance the system prompt with predefined questions
-//                 if (questionMode && predefinedQuestions && predefinedQuestions.length > 0) {
-//                     const finalQuestionNote = isFinalQuestion ? 
-//                         "\n\nFINAL QUESTION: This is the LAST question. You MUST include the final question in your response before any follow-up conversation.\n\nExample: 'That's really interesting! Now, let me ask you the final question: Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues? I'd love to hear about your experiences with this aspect of AI usage.'" : 
-//                         "";
                     
-//                     if (isFirstExchange) {
-//                         systemPrompt = `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.
 
-// Hard rules:
-// - Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.
-// - Be concise, one focused follow-up at a time; warm, curious, neutral.
-// - Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).
-// - When you believe the bar is met, propose a 2–3 line summary before moving on.
-
-// Output JSON only:
-// {
-//   "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",
-//   "question_id": "<ID or text>",
-//   "utterance": "<ONE natural question OR a brief summary>",
-//   "notes": ["optional extracted facts"]
-// }
-
-
-// CURRENT QUESTION: "${currentQuestion || 'N/A'}"
-// REMAINING QUESTIONS: [${predefinedQuestions.join('; ')}]${finalQuestionNote}
-// `;
-//                     } else {
-//                         // Check if current question is a background question
-//                         const isBackground = isBackgroundQuestion(currentQuestion);
-                        
-//                         if (isBackground) {
-//                             systemPrompt = `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.
-
-// Hard rules:
-// - Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.
-// - Be concise, one focused follow-up at a time; warm, curious, neutral.
-// - Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).
-// - When you believe the bar is met, propose a 2–3 line summary before moving on.
-
-// Output JSON only:
-// {
-//   "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",
-//   "question_id": "<ID or text>",
-//   "utterance": "<ONE natural question OR a brief summary>",
-//   "notes": ["optional extracted facts"]
-// }
-
-
-// CURRENT QUESTION: "${currentQuestion || 'N/A'}"
-// REMAINING QUESTIONS: [${predefinedQuestions.join('; ')}]${finalQuestionNote}
-// `;
-//                         } else {
-//                             systemPrompt = `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.
-
-// Hard rules:
-// - Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.
-// - Be concise, one focused follow-up at a time; warm, curious, neutral.
-// - Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).
-// - When you believe the bar is met, propose a 2–3 line summary before moving on.
-
-// Output JSON only:
-// {
-//   "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",
-//   "question_id": "<ID or text>",
-//   "utterance": "<ONE natural question OR a brief summary>",
-//   "notes": ["optional extracted facts"]
-// }
-
-
-// CURRENT QUESTION: "${currentQuestion || 'N/A'}"
-// REMAINING QUESTIONS: [${predefinedQuestions.join('; ')}]${finalQuestionNote}
-// `;
-//                         }
-//                     }
-//                 }
-
-//                 console.log(`System prompt type: ${isFirstExchange ? 'FIRST_EXCHANGE' : 'REGULAR'}`);
-
-//                 // Build messages array for OpenAI
-//                 const messages = [
-//                     { role: 'system', content: systemPrompt }
-//                 ];
-
-//                 // Add conversation history
-//                 session.conversationHistory.forEach(msg => {
-//                     messages.push({
-//                         role: msg.role,
-//                         content: msg.content
-//                     });
-//                 });
-
-//                 // If in question mode, add context to help the AI understand the current state
-//                 let userMessage = message;
-//                 if (questionMode && currentQuestion) {
-//                     // Check if this is the final follow-up of the final question
-//                     const isFinalFollowUpOfFinalQuestion = isFinalQuestion && followUpMode;
-                    
-//                     const finalQuestionContext = isFinalQuestion ? 
-//                         (isFinalFollowUpOfFinalQuestion ? 
-//                             " CRITICAL: This is the FINAL follow-up of the FINAL question - you MUST provide a wrap-up response that thanks the user and concludes the conversation. DO NOT ask any more questions. Your response should be something like: 'Thanks so much for sharing your journey with me today! It's been really insightful to learn about how AI has played a role in your career development. This concludes our conversation - thank you for your participation!'" :
-//                             " This is the FINAL question - engage in natural follow-up conversation with 3-4 questions before ending with a thank you and summary.") : 
-//                         "";
-                    
-//                     userMessage = `[CONTEXT: Current question is "${currentQuestion}". You are in a conversation flow with predefined questions. Be INTERACTIVE and CONVERSATIONAL - show genuine interest, ask follow-up questions, and engage naturally with their responses. Trust your judgment on when to move to the next question based on the natural flow of conversation.${finalQuestionContext}]\n\nUser: ${message}`;
-//                     console.log(`Question Mode Context: Current question="${currentQuestion}", Message="${userMessage}"`);
-//                 }
-
-//                 // Add the current user message
-//                 messages.push({ role: 'user', content: userMessage });
-
-//                 const completion = await openaiClient.chat.completions.create({
-//                     model: "gpt-4o",
-//                     messages: messages,
-//                     max_tokens: 1000,
-//                     temperature: 0.2
-//                 });
-
-//                 aiResponse = completion.choices[0].message.content;
-                
-//                 // Check if LLM signaled question completion
-//                 let mainLLMCompleted = false;
-                
-//                 // More robust NEXT_QUESTION detection and removal
-//                 const nextQuestionPatterns = [
-//                     /^NEXT_QUESTION:\s*/i,           // At start with colon
-//                     /^NEXT_QUESTION\s*/i,            // At start without colon
-//                     /\bNEXT_QUESTION:\s*/gi,         // Anywhere with colon
-//                     /\bNEXT_QUESTION\s*/gi           // Anywhere without colon
-//                 ];
-                
-//                 for (const pattern of nextQuestionPatterns) {
-//                     if (pattern.test(aiResponse)) {
-//                         console.log(`Found NEXT_QUESTION pattern: ${pattern.source}, removing and marking as completed`);
-//                         aiResponse = aiResponse.replace(pattern, '').trim();
-//                         mainLLMCompleted = true;
-//                         break; // Only need to find one pattern
-//                     }
-//                 }
-                
-//                 // Final cleanup: remove any remaining NEXT_QUESTION text that might have been missed
-//                 aiResponse = aiResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
-                
-//                 if (mainLLMCompleted) {
-//                     console.log('Question completed via NEXT_QUESTION signal');
-//                 } else if (questionMode && isFinalQuestion) {
-//                     // Check if the final question response indicates conversation completion
-//                     const endingPatterns = [
-//                         /thank you.*sharing.*with me/i,
-//                         /thank you.*participation/i,
-//                         /concludes our conversation/i,
-//                         /conversation.*complete/i,
-//                         /enjoyed learning about you/i,
-//                         /thank you.*time/i,
-//                         /thanks so much for sharing your journey/i,
-//                         /been really insightful to learn about/i
-//                     ];
-                    
-//                     const hasEndingPattern = endingPatterns.some(pattern => pattern.test(aiResponse));
-//                     if (hasEndingPattern) {
-//                         mainLLMCompleted = true;
-//                         console.log('Final question completed via conversation ending signal');
-//                     }
-                    
-//                     // Check if this is the final follow-up of the final question and the response contains wrap-up language
-//                     const isFinalFollowUpOfFinalQuestion = isFinalQuestion && followUpMode;
-//                     const hasWrapUpLanguage = isFinalFollowUpOfFinalQuestion && endingPatterns.some(pattern => pattern.test(aiResponse));
-//                     if (hasWrapUpLanguage) {
-//                         mainLLMCompleted = true;
-//                         console.log('Final follow-up of final question completed via wrap-up language');
-//                     }
-//                 }
-
-//                 // Audit LLM evaluation for question completion and question presence
-//                 if (ENABLE_AUDIT_LLM && questionMode && currentQuestion) {
-//                     console.log('Calling audit LLM for question completion evaluation...');
-//                     auditResult = await auditQuestionCompletion(message, aiResponse, currentQuestion, session.conversationHistory, isFinalQuestion, followUpMode);
-                    
-//                     // Check if this is a background question
-//                     const isBackground = isBackgroundQuestion(currentQuestion);
-                    
-//                     // If audit LLM recommends proceeding and confidence is high enough
-//                     if (auditResult && auditResult.shouldProceed && auditResult.confidence >= 0.7) {
-//                         console.log(`Audit LLM recommends proceeding to next question: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
-                        
-//                         // For now, just mark the question as completed and let the frontend handle the next question
-//                         // The frontend will automatically move to the next question in its flow
-//                         questionCompleted = true;
-//                         console.log('Question completed via audit LLM recommendation');
-//                     } else if (auditResult && !auditResult.shouldProceed && !followUpMode && !isBackground && auditResult.followUpQuestions && auditResult.followUpQuestions.length > 0) {
-//                         // Audit LLM suggests follow-up questions (only when not already in follow-up mode AND not a background question)
-//                         console.log(`Audit LLM suggests follow-up questions: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
-//                         console.log(`Follow-up questions: ${auditResult.followUpQuestions.join(', ')}`);
-                        
-//                         // Send audit feedback back to chatbot LLM to polish the follow-up question
-//                         const polishedResponse = await polishResponseWithAuditFeedback(
-//                             message, 
-//                             aiResponse, 
-//                             auditResult, 
-//                             currentQuestion, 
-//                             session.conversationHistory,
-//                             isFinalQuestion,
-//                             followUpMode
-//                         );
-                        
-//                         if (polishedResponse) {
-//                             aiResponse = polishedResponse;
-//                             console.log('Response polished with audit LLM feedback');
-//                         } else {
-//                             // Fallback to direct follow-up question if polishing fails
-//                             const firstFollowUpQuestion = auditResult.followUpQuestions[0];
-//                             if (firstFollowUpQuestion && typeof firstFollowUpQuestion === 'string' && firstFollowUpQuestion.trim().length > 0) {
-//                                 // Validate that it's actually a question and not reasoning text
-//                                 const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
-//                                 const endsWithQuestionMark = /\?$/;
-//                                 const isReasoningText = /(reason|confidence|brief explanation|minimal information|detailed response|topic sufficiently explored|follow-up conversation|conversation ready|adequately addressed|thoroughly addressed|audit decision|evaluation criteria|decision guidelines)/i;
-                                
-//                                 if ((questionWords.test(firstFollowUpQuestion) || endsWithQuestionMark.test(firstFollowUpQuestion)) && !isReasoningText.test(firstFollowUpQuestion)) {
-//                                     aiResponse = firstFollowUpQuestion;
-//                                     console.log('Added follow-up question via audit LLM recommendation');
-//                                 } else {
-//                                     console.log('First followUpQuestion appears to be reasoning text, using fallback response');
-//                                     aiResponse = "Could you share a bit more about this topic?";
-//                                 }
-//                             } else {
-//                                 console.log('No valid followUpQuestions found, using fallback response');
-//                                 aiResponse = "Could you share a bit more about this topic?";
-//                             }
-//                         }
-//                     } else if (auditResult && !auditResult.shouldProceed && isBackground) {
-//                         // For background questions, force completion even if audit suggests continuing
-//                         console.log(`Background question - forcing completion despite audit recommendation: ${auditResult.reason}`);
-//                         questionCompleted = true;
-//                         console.log('Background question completed (forced)');
-//                     } else if (auditResult) {
-//                         console.log(`Audit LLM recommends continuing current question: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
-                        
-//                         // Even when continuing, send audit feedback to improve the response
-//                         const polishedResponse = await polishResponseWithAuditFeedback(
-//                             message, 
-//                             aiResponse, 
-//                             auditResult, 
-//                             currentQuestion, 
-//                             session.conversationHistory,
-//                             isFinalQuestion,
-//                             followUpMode
-//                         );
-                        
-//                         if (polishedResponse) {
-//                             aiResponse = polishedResponse;
-//                             console.log('Response polished with audit LLM feedback');
-//                         }
-//                     }
-                    
-//                     // Check for question presence in the response
-//                     console.log('Calling audit LLM for question presence evaluation...');
-//                     const questionPresenceResult = await auditQuestionPresence(message, aiResponse, currentQuestion, session.conversationHistory, isFinalQuestion, followUpMode);
-                    
-//                     if (questionPresenceResult && questionPresenceResult.shouldRegenerate && questionPresenceResult.confidence >= 0.7) {
-//                         console.log(`Question presence audit recommends regeneration: ${questionPresenceResult.reason} (confidence: ${questionPresenceResult.confidence})`);
-                        
-//                         // Regenerate the response with explicit instruction to include questions
-//                         const regeneratedResponse = await regenerateResponseWithQuestions(
-//                             message, 
-//                             aiResponse, 
-//                             currentQuestion, 
-//                             session.conversationHistory,
-//                             isFinalQuestion,
-//                             followUpMode
-//                         );
-                        
-//                         if (regeneratedResponse) {
-//                             aiResponse = regeneratedResponse;
-//                             console.log('Response regenerated with questions via audit LLM recommendation');
-//                         }
-//                     } else if (questionPresenceResult) {
-//                         console.log(`Question presence audit result: ${questionPresenceResult.reason} (confidence: ${questionPresenceResult.confidence})`);
-//                     }
-//                 }
-
-//                 // Final decision: prioritize audit LLM decision over main LLM decision
-//                 if (auditResult && auditResult.shouldProceed === false && auditResult.confidence >= 0.7) {
-//                     // Audit LLM explicitly says not to proceed - respect this decision
-//                     console.log(`Audit LLM decision takes precedence: ${auditResult.reason} (confidence: ${auditResult.confidence})`);
-//                     questionCompleted = false;
-//                 } else if (mainLLMCompleted) {
-//                     // Only use main LLM's decision if audit LLM didn't explicitly say not to proceed
-//                     console.log('Using main LLM decision to proceed to next question');
-//                     questionCompleted = true;
-//                 }
-                
-//             } catch (aiError) {
-//                 console.error('AI API error:', aiError);
-//                 console.error('AI API error details:', aiError.message);
-//                 console.error('AI API error stack:', aiError.stack);
-//                 aiResponse = `I apologize, but I'm having trouble processing your request right now. Please try again later. (Error: ${aiError.message})`;
-//             }
-//         } else {
-//             // Fallback response when AI is not available
-//             if (questionMode && currentQuestion) {
-//                 aiResponse = `Thank you for sharing that information about "${message}". Let me ask you the next question: ${currentQuestion}`;
-//                 questionCompleted = true; // Force completion in fallback mode
-//             } else {
-//                 aiResponse = `This is a simulated response to: "${message}". In a real implementation, this would be processed by an AI model. To enable real AI responses, please configure a valid OPENAI_API_KEY environment variable.`;
-//             }
-//         }
-        
-//         session.conversationHistory.push({
-//             role: 'assistant',
-//             content: aiResponse,
-//             timestamp: new Date().toISOString(),
-//             step: step
-//         });
-
-//         // Check if privacy detection is needed (featured mode)
-//         let privacyDetection = null;
-//         if (session.currentMode === 'featured') {
-//             try {
-//                 // Use conversation context for enhanced privacy detection
-//                 privacyDetection = await detectPrivacyWithAI(message, session.conversationHistory);
-//                 if (!privacyDetection || privacyDetection.error) {
-//                     privacyDetection = detectPrivacyWithPatterns(message, session.conversationHistory);
-//                 }
-//             } catch (error) {
-//                 console.error('Privacy detection error in chat:', error);
-//                 privacyDetection = detectPrivacyWithPatterns(message, session.conversationHistory);
-//             }
-//         }
-
-//         // Log question completion status for debugging
-//         if (questionMode) {
-//             console.log(`Question completion status: ${questionCompleted}`);
-//             console.log(`Final AI response being sent: "${aiResponse}"`);
-//             if (auditResult) {
-//                 console.log(`Audit LLM evaluation: ${JSON.stringify(auditResult)}`);
-//             }
-//         }
-        
-//         res.json({
-//             success: true,
-//             bot_response: aiResponse,
-//             conversation_history: session.conversationHistory,
-//             step: step,
-//             privacy_detection: privacyDetection,
-//             question_completed: questionCompleted,
-//             audit_result: auditResult,
-//             follow_up_questions: auditResult && auditResult.followUpQuestions ? auditResult.followUpQuestions : null,
-//             question_presence_audit: questionPresenceResult || null,
-//             session_id: currentSessionId
-//         });
-//     } catch (error) {
-//         console.error('Chat API error:', error);
-//         console.error('Error details:', error.message);
-//         console.error('Error stack:', error.stack);
-//         res.status(500).json({ 
-//             error: 'Internal server error',
-//             details: error.message,
-//             timestamp: new Date().toISOString()
-//         });
-//     }
-// });
 
 
 // Chat API (full, with rich logs)
@@ -1116,8 +721,11 @@ app.post('/api/chat', async (req, res) => {
       manageConversationContext(currentSessionId);
   
       // Questions (background + main questions) - use global arrays for consistency
-      const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : predefinedQuestions.neutral);
-  
+    //   const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : predefinedQuestions.neutral);
+    const clientMainQs = Array.isArray(predefinedQuestions) ? predefinedQuestions : [];
+    const mainQuestions = clientMainQs.length
+    ? clientMainQs
+    : predefinedQuestions /* 这里指全局对象 */ .neutral;
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
@@ -1317,25 +925,43 @@ app.post('/api/chat', async (req, res) => {
           // ====== Final gating by completion audit ======
           // Check if this is a background question (reuse variable from above)
           
-          if (isBackgroundQuestion) {
-            // Background questions automatically advance after any user response
-            questionCompleted = true;
-            gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+        //   if (isBackgroundQuestion) {
+        //     // Background questions automatically advance after any user response
+        //     questionCompleted = true;
+        //     gotoNextQuestion(state, backgroundQuestions, mainQuestions);
             
-            // Get the next question and replace the AI response with it
-            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-            if (nextQuestion) {
-              aiResponse = nextQuestion;
+        //     // Get the next question and replace the AI response with it
+        //     const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+        //     if (nextQuestion) {
+        //       aiResponse = nextQuestion;
+        //     }
+            
+        //     log.info('background question auto-advanced', {
+        //       phase: state.phase,
+        //       bgIdx: state.bgIdx,
+        //       mainIdx: state.mainIdx,
+        //       newAllowed: Array.from(state.allowedActions),
+        //       nextQuestion: nextQuestion
+        //     });
+        //   } 
+
+        if (isBackgroundQuestion) {
+            const asked = state.perQuestion[qNow]?.asked === true;
+            if (!state.perQuestion[qNow]) state.perQuestion[qNow] = { followups: 0, lastScores: null };
+            if (!asked) {
+                // First time on this background question: deliver the current question only, do not advance
+                state.perQuestion[qNow].asked = true;
+                questionCompleted = false;
+                aiResponse = qNow; // Ask the current question instead of the next one
+            } else {
+                // User has already answered the current question: now advance
+                questionCompleted = true;
+                gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+                const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+                if (nextQuestion) aiResponse = nextQuestion;
             }
-            
-            log.info('background question auto-advanced', {
-              phase: state.phase,
-              bgIdx: state.bgIdx,
-              mainIdx: state.mainIdx,
-              newAllowed: Array.from(state.allowedActions),
-              nextQuestion: nextQuestion
-            });
-          } else if (shouldAdvance(completionAudit?.verdict)) {
+        }
+          else if (shouldAdvance(completionAudit?.verdict)) {
             // Main questions require audit approval to advance
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
