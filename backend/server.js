@@ -1128,6 +1128,275 @@ app.post('/api/chat', async (req, res) => {
         "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
       ]);
   
+      // Simple background question progression without orchestrator
+      // Store background progress in session
+      if (!session.backgroundProgress) {
+        session.backgroundProgress = {
+          currentIndex: 0,
+          isInBackgroundPhase: true
+        };
+      }
+      
+      const bgProgress = session.backgroundProgress;
+      
+      // Check if we're still in background phase
+      if (bgProgress.isInBackgroundPhase && bgProgress.currentIndex < backgroundQuestions.length) {
+        // Simple sequential background question flow
+        const currentBgQuestion = backgroundQuestions[bgProgress.currentIndex];
+        
+        // Check if the current question matches what we expect
+        if (currentQuestion === currentBgQuestion || !currentQuestion) {
+          // User responded to current background question, move to next
+          bgProgress.currentIndex++;
+          
+          if (bgProgress.currentIndex < backgroundQuestions.length) {
+            // More background questions to go
+            aiResponse = backgroundQuestions[bgProgress.currentIndex];
+            questionCompleted = false; // Stay in background phase
+          } else {
+            // All background questions completed, move to main questions
+            bgProgress.isInBackgroundPhase = false;
+            aiResponse = mainQuestions[0]; // Start with first main question
+            questionCompleted = true;
+          }
+          
+          log.info('background question progressed', {
+            currentIndex: bgProgress.currentIndex,
+            isInBackgroundPhase: bgProgress.isInBackgroundPhase,
+            nextQuestion: aiResponse
+          });
+          
+          // Skip orchestrator logic for background questions
+          // Just return the response
+        } else {
+          // This is not a background question, use orchestrator for main questions
+          // Continue with main question logic below
+        }
+      }
+      
+      // If not in background phase or background question not matched, use orchestrator for main questions
+      if (!bgProgress.isInBackgroundPhase || !backgroundQuestions.includes(currentQuestion)) {
+        // Orchestrator state for main questions
+        const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
+        state.phase = "main"; // Start in main phase
+        state.mainIdx = 0;
+        
+        const qNowMain = currentQuestion || getCurrentQuestion(state, [], mainQuestions);
+        const allowedActionsArr = buildAllowedActionsForPrompt(state);
+        
+        log.info('orchestrator state for main questions', {
+          phase: state.phase,
+          mainIdx: state.mainIdx,
+          qNow: qNowMain,
+          allowedActions: allowedActionsArr
+        });
+        
+        // Build Executor system prompt for main questions
+        const executorSystemPrompt = buildExecutorSystemPrompt(qNowMain, allowedActionsArr, { backgroundQuestions: [], mainQuestions });
+        const messages = [{ role: 'system', content: executorSystemPrompt }];
+        
+        // Avoid double-inserting last user turn
+        const historyExceptLast = session.conversationHistory.slice(0, -1);
+        historyExceptLast.forEach(m => messages.push({ role: m.role, content: m.content }));
+        messages.push({ role: 'user', content: message });
+        
+        log.info('prompt stats for main questions', {
+          sysPromptLen: executorSystemPrompt.length,
+          messagesCount: messages.length,
+          lastUserPreview: message.slice(0,120)
+        });
+        
+        // Initialize variables for main question processing
+        let aiResponse = '';
+        let completionAudit = null;
+        let presenceAudit = null;
+        let questionCompleted = false;
+        let usedRegenerate = false;
+        let usedPolish = false;
+        let parsedExec = null;
+        
+        if (openaiClient) {
+          try {
+            // ====== Executor call ======
+            const execT0 = Date.now();
+            const completion = await openaiClient.chat.completions.create({
+              model: "gpt-4o",
+              messages,
+              max_tokens: 700,
+              temperature: 0.3,
+              top_p: 0.3
+            });
+            aiResponse = (completion.choices?.[0]?.message?.content || '').trim();
+            const execDur = Date.now() - execT0;
+  
+            log.info('executor completed', {
+              ms: execDur,
+              aiResponsePreview: aiResponse.slice(0,180)
+            });
+  
+            // Parse Executor JSON, and execute action constraints
+            parsedExec = parseExecutorOutput(aiResponse);
+            if (parsedExec) {
+              enforceAllowedAction(state, parsedExec);
+              log.info('executor parsed', parsedExec);
+  
+              // Convert execution results to user response text
+              if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
+                registerFollowup(state, qNowMain);
+                aiResponse = parsedExec.utterance || aiResponse;
+              } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
+                aiResponse = parsedExec.utterance || aiResponse;
+              } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
+                // The pace is given to the audit+Orchestrator, not directly advancing/ending
+              }
+            } else {
+              log.warn('executor output not JSON; using raw text');
+            }
+  
+            // ====== Completion Audit (PSS) ======
+            const compT0 = Date.now();
+            const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
+            console.log('isFinalQuestionValue', isFinalQuestionValue);
+            
+            completionAudit = await auditQuestionCompletion(
+              message,
+              aiResponse,
+              qNowMain,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+            const compDur = Date.now() - compT0;
+  
+            log.info('completion audit', {
+              ms: compDur,
+              verdict: completionAudit?.verdict,
+              scores: completionAudit?.scores,
+              missing: completionAudit?.missing,
+              followUpQ: completionAudit?.followUpQuestions,
+              confidence: completionAudit?.confidence
+            });
+  
+            recordScores(state, qNowMain, completionAudit?.scores);
+            allowNextIfAuditPass(state, completionAudit?.verdict);
+            finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
+  
+            // ====== Presence Audit ======
+            const presT0 = Date.now();
+            presenceAudit = await auditQuestionPresence(
+              message,
+              aiResponse,
+              qNowMain,
+              session.conversationHistory,
+              isFinalQuestionValue,
+              followUpMode
+            );
+            const presDur = Date.now() - presT0;
+  
+            log.info('presence audit', {
+              ms: presDur,
+              hasQuestion: presenceAudit?.hasQuestion,
+              shouldRegenerate: presenceAudit?.shouldRegenerate,
+              reason: presenceAudit?.reason,
+              confidence: presenceAudit?.confidence
+            });
+  
+            // ====== Regenerate if needed (presence) ======
+            if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+              const regenT0 = Date.now();
+              const regenerated = await regenerateResponseWithQuestions(
+                message,
+                aiResponse,
+                qNowMain,
+                session.conversationHistory,
+                isFinalQuestionValue,
+                followUpMode
+              );
+              const regenDur = Date.now() - regenT0;
+  
+              if (regenerated) {
+                usedRegenerate = true;
+                aiResponse = regenerated;
+                log.info('regenerated response used', { ms: regenDur, aiResponsePreview: aiResponse.slice(0,160) });
+              } else {
+                log.info('regenerate returned null; keep original');
+              }
+            }
+  
+            // ====== Polish if need more (completion) ======
+            if (completionAudit?.verdict === 'REQUIRE_MORE') {
+              const polT0 = Date.now();
+              const polished = await polishResponseWithAuditFeedback(
+                message,
+                aiResponse,
+                completionAudit,
+                qNowMain,
+                session.conversationHistory,
+                isFinalQuestionValue,
+                followUpMode
+              );
+              const polDur = Date.now() - polT0;
+  
+              if (polished) {
+                usedRegenerate = true;
+                aiResponse = polished;
+                log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
+              } else {
+                log.info('polish returned null; keep original');
+              }
+            }
+  
+            // ====== Final gating by completion audit ======
+            if (shouldAdvance(completionAudit?.verdict)) {
+              // Main questions require audit approval to advance
+              questionCompleted = true;
+              gotoNextQuestion(state, [], mainQuestions);
+              
+              // Get the next question and replace the AI response with it
+              const nextQuestion = getCurrentQuestion(state, [], mainQuestions);
+              if (nextQuestion) {
+                aiResponse = nextQuestion;
+              }
+              
+              log.info('main question advanced via audit', {
+                phase: state.phase,
+                mainIdx: state.mainIdx,
+                nextQuestion: nextQuestion
+              });
+            } else {
+              questionCompleted = false;
+              const reachedCap = atFollowupCap(state, qNowMain);
+              log.info('stay on current main question', {
+                reachedCap,
+                allowed: Array.from(state.allowedActions),
+                missing: completionAudit?.missing
+              });
+            }
+  
+          } catch (err) {
+            log.error('executor/audit pipeline error', { error: err.message, stack: err.stack });
+            aiResponse = `I'm sorry—I hit an error. Please try again. (Error: ${err.message})`;
+          }
+                 } else {
+           // Fallback (no model)
+           aiResponse = questionMode && qNowMain
+             ? `Thanks for sharing that. Next question: ${qNowMain}`
+             : `This is a simulated response to: "${message}".`;
+           questionCompleted = !!qNowMain;
+           log.warn('openai client not configured; using fallback');
+         }
+       }
+        
+        log.info('prompt stats for main questions', {
+          sysPromptLen: executorSystemPrompt.length,
+          messagesCount: messages.length,
+          lastUserPreview: message.slice(0,120)
+        });
+        
+        // Continue with main question logic...
+        // (The rest of the existing orchestrator logic for main questions)
+      }
+  
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
