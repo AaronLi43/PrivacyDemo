@@ -319,6 +319,7 @@ let globalPiiCounters = {
 
 // Background questions (first 3 questions - no follow-ups needed)
 const backgroundQuestions = [
+    "Hi, we are going to ask you a few questions about your experience with GenAI tools. Are you ready?",
     "Tell me about your educational background - what did you study in college or university?",
     "I'd love to hear about your current work and how you got into it by job interviews?",
     "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
@@ -333,7 +334,8 @@ const predefinedQuestions = {
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+        "Thank you for sharing your experience with GenAI tools."
     ],
     neutral: [
         "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
@@ -342,7 +344,8 @@ const predefinedQuestions = {
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+        "Thank you for sharing your experience with GenAI tools."
     ],
     featured: [
         "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
@@ -351,7 +354,8 @@ const predefinedQuestions = {
         "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
         "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
         "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
+        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?",
+        "Thank you for sharing your experience with GenAI tools."
     ]
 };
 
