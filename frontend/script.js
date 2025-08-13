@@ -2640,8 +2640,8 @@ class PrivacyDemoApp {
                     // Check if current question is a background question
                     const backgroundQuestions = [
                         "Tell me about your educational background - what did you study in college or university?",
-                        "I'd love to hear about your current work - what do you do for a living?",
-                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+                        "I'd love to hear about your current work and how you got into it by job interviews?",
+                        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
                     ];
                     const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
                     
@@ -2686,7 +2686,7 @@ class PrivacyDemoApp {
                         hasNextQuestionSignal || 
                         hasEndingPattern ||
                         hasWrapUpLanguage ||
-                        (isBackgroundQuestion && this.state.conversationLog.length > 1) // Complete background questions after at least one exchange
+                        (isBackgroundQuestion && this.state.conversationLog.length > 2 && response.question_completed) // Complete background questions only when backend says so AND we have meaningful exchange
                     );
                     
                     console.log('Question completion check:');
@@ -2698,6 +2698,7 @@ class PrivacyDemoApp {
                     console.log('- conversationLog.length:', this.state.conversationLog.length);
                     console.log('- auditSaysNotToProceed:', auditSaysNotToProceed);
                     console.log('- shouldCompleteQuestion:', shouldCompleteQuestion);
+                    console.log('- Background question completion condition:', isBackgroundQuestion && this.state.conversationLog.length > 2 && response.question_completed);
                     
                     if (auditSaysNotToProceed) {
                         console.log('🛑 Audit LLM preventing question completion:', response.audit_result.reason);
