@@ -1180,18 +1180,38 @@ app.post('/api/chat', async (req, res) => {
           // Parse Executor JSON, and execute action constraints
           parsedExec = parseExecutorOutput(aiResponse);
           if (parsedExec) {
+            const originalAction = parsedExec.action;
             enforceAllowedAction(state, parsedExec, qNow, backgroundQuestions);
-            log.info('executor parsed', parsedExec);
+            log.info('executor parsed', {
+              originalAction,
+              enforcedAction: parsedExec.action,
+              isBackgroundQuestion: backgroundQuestions.includes(qNow),
+              question: qNow
+            });
   
             // Convert execution results to user output text
-            if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
+            // Check the ORIGINAL action, not the enforced action, to determine response handling
+            if (originalAction === "ASK_FOLLOWUP" || originalAction === "REQUEST_CLARIFY") {
               registerFollowup(state, qNow);
+              // For background questions, NEVER show follow-up questions - force appropriate response
+              if (backgroundQuestions.includes(qNow)) {
+                aiResponse = "Thank you for sharing that information. Let me ask you about your current work experience.";
+                log.info('background question follow-up blocked, using default response');
+              } else {
+                aiResponse = parsedExec.utterance || aiResponse;
+                log.info('main question follow-up allowed');
+              }
+            } else if (originalAction === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
-            } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
-              aiResponse = parsedExec.utterance || aiResponse;
-            } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
+            } else if (originalAction === "NEXT_QUESTION" || originalAction === "END") {
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
             }
+            
+            log.info('final response set', {
+              originalAction,
+              enforcedAction: parsedExec.action,
+              responsePreview: aiResponse.slice(0, 100)
+            });
           } else {
             log.warn('executor output not JSON; using raw text');
           }
