@@ -317,9 +317,8 @@ let globalPiiCounters = {
     EDUCATIONAL_RECORD: 0
 };
 
-// Background questions (first 3 questions - no follow-ups needed)
+// Background questions (3 questions - no follow-ups needed)
 const backgroundQuestions = [
-    "Hi, we are going to ask you a few questions about your experience with GenAI tools. Are you ready?",
     "Tell me about your educational background - what did you study in college or university?",
     "I'd love to hear about your current work and how you got into it by job interviews?",
     "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
@@ -1115,7 +1114,6 @@ app.post('/api/chat', async (req, res) => {
   
       // Questions (background + main questions) - use global array for consistency
       const backgroundQuestions = [
-        "Hi, we are going to ask you a few questions about your experience with GenAI tools. Are you ready?",
         "Tell me about your educational background - what did you study in college or university?",
         "I'd love to hear about your current work and how you got into it by job interviews?",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
