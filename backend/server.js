@@ -1328,21 +1328,37 @@ app.post('/api/chat', async (req, res) => {
             // Background questions automatically advance after any user response
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+            
+            // Get the next question and replace the AI response with it
+            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+            if (nextQuestion) {
+              aiResponse = nextQuestion;
+            }
+            
             log.info('background question auto-advanced', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              newAllowed: Array.from(state.allowedActions)
+              newAllowed: Array.from(state.allowedActions),
+              nextQuestion: nextQuestion
             });
           } else if (shouldAdvance(completionAudit?.verdict)) {
             // Main questions require audit approval to advance
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
+            
+            // Get the next question and replace the AI response with it
+            const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+            if (nextQuestion) {
+              aiResponse = nextQuestion;
+            }
+            
             log.info('main question advanced via audit', {
               phase: state.phase,
               bgIdx: state.bgIdx,
               mainIdx: state.mainIdx,
-              newAllowed: Array.from(state.allowedActions)
+              newAllowed: Array.from(state.allowedActions),
+              nextQuestion: nextQuestion
             });
           } else {
             questionCompleted = false;
