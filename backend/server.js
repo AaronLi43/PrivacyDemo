@@ -18,7 +18,7 @@ console.log('🔧 Node version:', process.version);
 
 import {
     initState, getCurrentQuestion, isBackgroundPhase, isFinalQuestion,
-    atFollowupCap, registerFollowup, recordScores,
+    atFollowupCap, registerFollowup, recordScores, resetAllowedForQuestion,
     buildAllowedActionsForPrompt, allowNextIfAuditPass, finalizeIfLastAndPassed,
     shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction
   } from './orchestrator.js';
@@ -488,6 +488,7 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
     const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
     const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
+    const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
   
     return [
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
@@ -496,6 +497,11 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
       `ALLOWED_ACTIONS: [${AA}]`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
+      ``,
+      `IMPORTANT: The CURRENT QUESTION is a ${isBackgroundQuestion ? 'BACKGROUND' : 'MAIN'} question.`,
+      `- BACKGROUND questions: Use NEXT_QUESTION after getting basic info. Do NOT use ASK_FOLLOWUP.`,
+      `- MAIN questions: Use ASK_FOLLOWUP to dig deeper into personal stories.`,
+      ``,
       `Hard rules:`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
       `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
@@ -644,7 +650,7 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-
+// Chat API
 // app.post('/api/chat', async (req, res) => {
 //     try {
 //         const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false, sessionId } = req.body;
@@ -1098,7 +1104,7 @@ app.post('/api/chat', async (req, res) => {
       // Questions (background + main questions)
       const backgroundQuestions = [
         "Tell me about your educational background - what did you study in college or university?",
-        "I'd love to hear about your current work and how you got into it by job interviews.",
+        "I'd love to hear about your current work and how you got into it by job interviews?",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
       ];
       const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : [
@@ -1114,6 +1120,11 @@ app.post('/api/chat', async (req, res) => {
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
+      
+      // Ensure allowed actions are properly set for the current question type
+      const isBackgroundQuestion = backgroundQuestions.includes(qNow);
+      resetAllowedForQuestion(state, isBackgroundQuestion);
+      
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
   
       log.info('orchestrator state', {
@@ -1180,7 +1191,6 @@ app.post('/api/chat', async (req, res) => {
               aiResponse = parsedExec.utterance || aiResponse;
             } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
-              // For background questions, we'll show the next question in the final response
             }
           } else {
             log.warn('executor output not JSON; using raw text');
@@ -1315,17 +1325,6 @@ app.post('/api/chat', async (req, res) => {
             // Background questions automatically advance after any user response
             questionCompleted = true;
             gotoNextQuestion(state, backgroundQuestions, mainQuestions);
-            
-            // If the executor tried to ask a follow-up but it got converted to NEXT_QUESTION,
-            // show the next question instead of the follow-up utterance
-            if (parsedExec && parsedExec.action === "NEXT_QUESTION" && 
-                (parsedExec.utterance.includes("?") || parsedExec.utterance.includes("Could you"))) {
-              const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-              if (nextQuestion) {
-                aiResponse = nextQuestion;
-              }
-            }
-            
             log.info('background question auto-advanced', {
               phase: state.phase,
               bgIdx: state.bgIdx,
