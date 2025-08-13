@@ -1466,6 +1466,40 @@ class PrivacyDemoApp {
         return sentences.slice(0, 2).join('. ').trim() + '.';
     }
 
+    // Helper function to extract actual response text from bot_response (handles JSON parsing)
+    extractResponseText(botResponse) {
+        if (!botResponse) return '';
+        
+        // Try to parse JSON response first
+        try {
+            // Check if the response is JSON
+            if (botResponse.trim().startsWith('{') && botResponse.trim().endsWith('}')) {
+                const parsedResponse = JSON.parse(botResponse);
+                console.log('Helper: Parsed JSON response:', parsedResponse);
+                
+                // Extract the actual response text based on action type
+                if (parsedResponse.action === 'REQUEST_CLARIFY') {
+                    return parsedResponse.utterance || parsedResponse.question_id || botResponse;
+                } else if (parsedResponse.action === 'ASK_FOLLOWUP') {
+                    return parsedResponse.utterance || botResponse;
+                } else if (parsedResponse.action === 'SUMMARIZE_QUESTION') {
+                    return parsedResponse.utterance || botResponse;
+                } else if (parsedResponse.action === 'NEXT_QUESTION') {
+                    return parsedResponse.utterance || botResponse;
+                } else {
+                    // For other actions, use utterance if available, otherwise fall back to original
+                    return parsedResponse.utterance || botResponse;
+                }
+            }
+        } catch (parseError) {
+            console.log('Helper: Response is not JSON, treating as plain text:', parseError.message);
+            // Continue with original botResponse if parsing fails
+        }
+        
+        // Return original response if not JSON or parsing failed
+        return botResponse;
+    }
+
 
 
 
@@ -1510,8 +1544,11 @@ class PrivacyDemoApp {
             console.log('📋 API response received:', response);
             
             if (response && response.bot_response) {
+                // Use helper function to extract actual response text
+                let botResponse = this.extractResponseText(response.bot_response);
+                console.log('Extracted response text (initial):', botResponse);
+                
                 // Remove any NEXT_QUESTION prefix that might be present
-                let botResponse = response.bot_response;
                 botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
                 
                 console.log('📋 Bot response:', botResponse);
@@ -2405,7 +2442,10 @@ class PrivacyDemoApp {
                     
                     if (response && response.bot_response) {
                         console.log('Raw bot response from server (follow-up):', response.bot_response);
-                        let botResponse = response.bot_response;
+                        
+                        // Use helper function to extract actual response text
+                        let botResponse = this.extractResponseText(response.bot_response);
+                        console.log('Extracted response text (follow-up):', botResponse);
                         
                         // Update the existing message entry instead of creating a new one
                         const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
@@ -2519,8 +2559,12 @@ class PrivacyDemoApp {
                     
                     if (response && response.bot_response) {
                         console.log('Raw bot response from server:', response.bot_response);
+                        
+                        // Use helper function to extract actual response text
+                        let botResponse = this.extractResponseText(response.bot_response);
+                        console.log('Extracted response text:', botResponse);
+                        
                         // Remove "NEXT_QUESTION:" prefix if present and handle transition
-                        let botResponse = response.bot_response;
                         let isQuestionTransition = false;
                         
                         // More robust NEXT_QUESTION detection and removal
@@ -2562,9 +2606,12 @@ class PrivacyDemoApp {
                         lastMessage.privacy = response.privacy_detection;
                     }
                     
+                    // Extract the actual response text for pattern matching (after JSON parsing)
+                    let actualResponseText = this.extractResponseText(response && response.bot_response ? response.bot_response : '');
+                    
                     // Check if the backend indicates a predefined question is completed
                     // Also check if the AI response contains NEXT_QUESTION signal or conversation ending
-                    const hasNextQuestionSignal = response && response.bot_response && /NEXT_QUESTION/i.test(response.bot_response);
+                    const hasNextQuestionSignal = actualResponseText && /NEXT_QUESTION/i.test(actualResponseText);
                     
                     // Check for conversation ending patterns (for final question)
                     const endingPatterns = [
@@ -2577,13 +2624,13 @@ class PrivacyDemoApp {
                         /thanks so much for sharing your journey/i,
                         /been really insightful to learn about/i
                     ];
-                    const hasEndingPattern = isFinalQuestion && response && response.bot_response && 
-                        endingPatterns.some(pattern => pattern.test(response.bot_response));
+                    const hasEndingPattern = isFinalQuestion && actualResponseText && 
+                        endingPatterns.some(pattern => pattern.test(actualResponseText));
                     
                     // Check if this is the final follow-up of the final question and contains wrap-up language
                     const isFinalFollowUpOfFinalQuestion = isFinalQuestion && this.state.inFollowUpMode;
-                    const hasWrapUpLanguage = isFinalFollowUpOfFinalQuestion && response && response.bot_response && 
-                        endingPatterns.some(pattern => pattern.test(response.bot_response));
+                    const hasWrapUpLanguage = isFinalFollowUpOfFinalQuestion && actualResponseText && 
+                        endingPatterns.some(pattern => pattern.test(actualResponseText));
                     
                     // Log audit LLM information if available
                     if (response.audit_result) {
@@ -2593,8 +2640,8 @@ class PrivacyDemoApp {
                     // Check if current question is a background question
                     const backgroundQuestions = [
                         "Tell me about your educational background - what did you study in college or university?",
-                        "I'd love to hear about your current work and how you got into it by job interviews?",
-                        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
+                        "I'd love to hear about your current work - what do you do for a living?",
+                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
                     ];
                     const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
                     
@@ -2781,8 +2828,11 @@ class PrivacyDemoApp {
                 const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
                 const response = await API.sendMessage(message, this.state.currentStep);
                 if (response && response.bot_response) {
+                    // Use helper function to extract actual response text
+                    let botResponse = this.extractResponseText(response.bot_response);
+                    console.log('Extracted response text (non-question mode):', botResponse);
+                    
                     // Remove any NEXT_QUESTION prefix that might be present (even in non-question mode)
-                    let botResponse = response.bot_response;
                     botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
                     lastMessage.bot = botResponse;
                 } else {
