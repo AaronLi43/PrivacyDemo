@@ -376,7 +376,9 @@ const requiredSlotsByQuestion = {
     // Q6
     [mainQuestions[5]]: ["policy_or_line","scenario","your_action","why","risk_assessment","reflection"],
     // Q7
-    [mainQuestions[6]]: ["scenario","why_private","how_used","safeguards","reflection"]
+    [mainQuestions[6]]: ["scenario","why_private","how_used","safeguards","reflection"],
+    // Q8
+    [mainQuestions[7]]: ["scenario","why_private","how_used","safeguards","reflection"]
   };
 
   const topicKeywords = {
@@ -386,7 +388,8 @@ const requiredSlotsByQuestion = {
     [mainQuestions[3]]: ["competitive edge","advantage","stand out","outperformed","edge"],
     [mainQuestions[4]]: ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
     [mainQuestions[5]]: ["crossed a line","policy","ethics","boundary","rule"],
-    [mainQuestions[6]]: ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"]
+    [mainQuestions[6]]: ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
+    [mainQuestions[7]]: ["scenario","why_private","how_used","safeguards","reflection"]
   };
 
 
@@ -661,7 +664,7 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-// Chat API
+
 // app.post('/api/chat', async (req, res) => {
 //     try {
 //         const { message, step = 0, questionMode = false, currentQuestion = null, predefinedQuestions = [], isFinalQuestion = false, followUpMode = false, sessionId } = req.body;
@@ -1112,21 +1115,8 @@ app.post('/api/chat', async (req, res) => {
       // Context maintenance
       manageConversationContext(currentSessionId);
   
-      // Questions (background + main questions) - use global array for consistency
-      const backgroundQuestions = [
-        "Tell me about your educational background - what did you study in college or university?",
-        "I'd love to hear about your current work and how you got into it by job interviews?",
-        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
-      ];
-      const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : [
-        "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?",
-        "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?",
-        "Have you ever considered or actually used GenAI during a live interview? What happened?",
-        "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.",
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?",
-        "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?"
-      ]);
+      // Questions (background + main questions) - use global arrays for consistency
+      const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : predefinedQuestions.neutral);
   
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
