@@ -5095,6 +5095,8 @@ class PrivacyDemoApp {
         const popup = document.getElementById('survey-popup');
         popup.style.display = 'flex';
         console.log('🔍 Survey popup displayed');
+
+        this.initSurveyValidation();
         
         // Apply copy/paste settings to all textarea elements in the survey - DISABLED
         setTimeout(() => {
@@ -5216,6 +5218,11 @@ class PrivacyDemoApp {
 
     // Handle survey submission
     handleSurveySubmit() {
+
+        if (!this.isSurveyComplete()) {
+            this.showNotification('⚠️ Please answer all survey questions before submitting.', 'warning');
+            return;
+        }
         const form = document.getElementById('survey-form');
         const formData = new FormData(form);
         
@@ -5287,6 +5294,86 @@ class PrivacyDemoApp {
             }, 500);
         }
     }
+
+    initSurveyValidation() {
+        const form = document.getElementById('survey-form');
+        const submitBtn = document.getElementById('survey-submit-btn');
+        if (!form || !submitBtn) return;
+
+        // Disable the submit button initially
+        submitBtn.disabled = true;
+
+        // Bind listeners to all visible fields (textarea / select / input)
+        const fields = form.querySelectorAll('textarea, select, input');
+        const handler = () => this.updateSurveySubmitState();
+        fields.forEach(el => {
+            el.addEventListener('input', handler);
+            el.addEventListener('change', handler);
+        });
+
+        // Initial evaluation
+        this.updateSurveySubmitState();
+    }
+
+    // Toggle the availability of the Done button
+    updateSurveySubmitState() {
+        const submitBtn = document.getElementById('survey-submit-btn');
+        if (!submitBtn) return;
+        submitBtn.disabled = !this.isSurveyComplete();
+    }
+
+    // Check if the survey is complete (only required for questions that are actually visible)
+    isSurveyComplete() {
+        const form = document.getElementById('survey-form');
+        if (!form) return false;
+        
+        // Only check visible fields (hidden mode-specific questions are not counted)
+        const isVisible = (el) => {
+            // offsetParent==null is considered invisible; also ignore disabled fields
+            if (!el || el.disabled || el.type === 'hidden') return false;
+            if (el.offsetParent === null) return false;
+            return true;
+        };
+
+        // Handle radio/checkbox groups: aggregate by name
+        const radioNamesChecked = new Set();
+        const radioNames = new Set();
+
+        const fields = form.querySelectorAll('textarea, select, input');
+        for (const el of fields) {
+            if (!isVisible(el)) continue;
+
+            if (el.tagName === 'TEXTAREA') {
+                if (!el.value || el.value.trim() === '') return false;
+            } else if (el.tagName === 'SELECT') {
+                if (!el.value || el.value === '') return false;
+            } else if (el.tagName === 'INPUT') {
+                if (el.type === 'radio') {
+                    if (el.name) {
+                        radioNames.add(el.name);
+                        if (el.checked) radioNamesChecked.add(el.name);
+                    }
+                } else if (el.type === 'checkbox') {
+                    // If a question requires "at least one checked", you can use the container data-required-any; by default, it is not required
+                    const group = el.closest('[data-required-any="true"]');
+                    if (group) {
+                        const anyChecked = group.querySelectorAll('input[type="checkbox"]:checked').length > 0;
+                        if (!anyChecked) return false;
+                           }
+                } else {
+                    if (!el.value || el.value.trim() === '') return false;
+                }
+            }
+        }
+
+        // All radio groups must have at least one selected item
+        for (const name of radioNames) {
+            if (!radioNamesChecked.has(name)) return false;
+        }
+
+               return true;
+    }
+
 
     // Redirect to thanks page
     redirectToThanksPage() {
@@ -5726,6 +5813,8 @@ function stripRawIfNoConsent(exportData, consentOriginalData) {
       return exportData;
     }
   }
+
+
   
 
 // Expose all popup functions globally
