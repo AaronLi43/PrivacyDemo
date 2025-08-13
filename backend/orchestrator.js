@@ -1,16 +1,15 @@
 // orchestrator.js
-// Lightweight FSM: background → main → done
+// Lightweight FSM: main → done
 // Responsibilities: decide current question, allowed actions, follow-up count, whether to advance
 
 export function initState(session, { maxFollowups = { background: 0, main: 3 } } = {}) {
     if (!session.state) {
       session.state = {
-        phase: "background",        // "background" | "main" | "done"
-        bgIdx: 0,
+        phase: "main",
         mainIdx: 0,
-        allowedActions: new Set(["SUMMARIZE_QUESTION", "NEXT_QUESTION"]), // Background questions start with correct actions
+        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]),// Allowed actions for main questions
         perQuestion: {},            // question -> { followups: number, lastScores: null }
-        maxFollowups: { ...maxFollowups }, // Ensure we copy the values
+        maxFollowups: { main: (maxFollowups?.main ?? 3) },
         lastAudit: null,
         lastPresence: null
       };
@@ -20,28 +19,18 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     return session.state;
   }
   
-  export function getCurrentQuestion(state, backgroundQuestions, mainQuestions) {
-    if (state.phase === "background") {
-      // If we're at the end of background questions, return null to indicate transition needed
-      if (state.bgIdx >= backgroundQuestions.length) {
-        return null;
-      }
-      return backgroundQuestions[state.bgIdx] || null;
-    }
+  export function getCurrentQuestion(state, mainQuestions) {
     if (state.phase === "main") return mainQuestions[state.mainIdx] || null;
     return null;
   }
   
-  export function isBackgroundPhase(state) {
-    return state.phase === "background";
-  }
   
   export function isFinalQuestion(state, mainQuestions) {
     return state.phase === "main" && state.mainIdx === mainQuestions.length - 1;
   }
   
   export function atFollowupCap(state, question) {
-    const cap = isBackgroundPhase(state) ? state.maxFollowups.background : state.maxFollowups.main;
+    const cap = state.maxFollowups.main;
     const cur = state.perQuestion[question]?.followups || 0;
     return cur >= cap;
   }
@@ -56,33 +45,29 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     state.perQuestion[question].lastScores = scores || null;
   }
   
-  export function resetAllowedForQuestion(state, isBackgroundQuestion = false) {
-    if (isBackgroundQuestion) {
-      // Background questions should not allow follow-ups - only allow moving to next question
-      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
-    } else {
-      // Main questions can have follow-ups
-      state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
-    }
+  export function resetAllowedForQuestion(state) {
+    // Main questions can have follow-ups
+    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
   }
   
   export function buildAllowedActionsForPrompt(state) {
     return Array.from(state.allowedActions);
   }
     
-// Audit access: as long as the PSS audit passes, allow NEXT_QUESTION; otherwise remove
+// Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
+
   export function allowNextIfAuditPass(state, completionAuditVerdict) {
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION") {
-      state.allowedActions.add("NEXT_QUESTION");
+      state.allowedActions.add("ASK_FOLLOWUP");
     } else {
-      state.allowedActions.delete("NEXT_QUESTION");
+      state.allowedActions.delete("ASK_FOLLOWUP");
     }
   }
   
   // After passing the final question, switch to summary/end actions
   export function finalizeIfLastAndPassed(state, mainQuestions, completionAuditVerdict) {
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION" && isFinalQuestion(state, mainQuestions)) {
-      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "END"]);
+      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "REQUEST_CLARIFY", "END"]);
     }
   }
   
@@ -91,25 +76,17 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     return completionAuditVerdict === "ALLOW_NEXT_QUESTION";
   }
   
-  // Move to the next question; background runs automatically into main questions; main questions run into done
-  export function gotoNextQuestion(state, backgroundQuestions, mainQuestions) {
-    if (state.phase === "background") {
-      state.bgIdx += 1;
-      if (state.bgIdx >= backgroundQuestions.length) {
-        state.phase = "main";
-        state.bgIdx = backgroundQuestions.length; // Keep it at the end
-        state.mainIdx = 0; // Start main questions
-      }
-    } else if (state.phase === "main") {
+  // Move to the next question; main questions run into done
+  export function gotoNextQuestion(state, mainQuestions) {
+    if (state.phase === "main") {
       state.mainIdx += 1;
       if (state.mainIdx >= mainQuestions.length) {
         state.phase = "done";
       }
     }
     // After entering the next question, reset allowed actions and per-question follow-up count
-    const nextQuestion = getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-    const isNextBackground = backgroundQuestions.includes(nextQuestion);
-    resetAllowedForQuestion(state, isNextBackground);
+    getCurrentQuestion(state, mainQuestions);
+    resetAllowedForQuestion(state);
   }
   
   export function storeAudits(state, { completionAudit, presenceAudit }) {
@@ -139,15 +116,16 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   export function enforceAllowedAction(state, parsed) {
     if (!parsed || !parsed.action) return parsed;
     if (!state.allowedActions.has(parsed.action)) {
-      // Deterministic fallback strategy: prefer NEXT_QUESTION for background questions, ASK_FOLLOWUP for main questions
-      if (state.allowedActions.has('NEXT_QUESTION')) {
-        parsed.action = 'NEXT_QUESTION';
-      } else if (state.allowedActions.has('ASK_FOLLOWUP')) {
-        parsed.action = 'ASK_FOLLOWUP';
-      } else {
-        // Fallback to first available action
-        parsed.action = Array.from(state.allowedActions)[0] || "SUMMARIZE_QUESTION";
-      }
+// Deterministic fallback strategy for main-only flow
+    if (state.allowedActions.has("ASK_FOLLOWUP")) {
+      parsed.action = "ASK_FOLLOWUP";
+    } else if (state.allowedActions.has("SUMMARIZE_QUESTION")) {
+      parsed.action = "SUMMARIZE_QUESTION";
+      } else if (state.allowedActions.has("REQUEST_CLARIFY")) {
+      parsed.action = "REQUEST_CLARIFY";
+    } else {
+      parsed.action = Array.from(state.allowedActions)[0] || "REQUEST_CLARIFY";
+    }
     }
     return parsed;
   }
