@@ -8,22 +8,26 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         phase: "background",        // "background" | "main" | "done"
         bgIdx: 0,
         mainIdx: 0,
-        allowedActions: new Set(["REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]), // Background questions start with NEXT_QUESTION allowed
+        allowedActions: new Set(["SUMMARIZE_QUESTION", "NEXT_QUESTION"]), // Background questions start with correct actions
         perQuestion: {},            // question -> { followups: number, lastScores: null }
         maxFollowups: { ...maxFollowups }, // Ensure we copy the values
         lastAudit: null,
         lastPresence: null
       };
       
-      // Initialize allowed actions based on the current question type
-      const isBackgroundQuestion = true; // We start in background phase
-      resetAllowedForQuestion(session.state, isBackgroundQuestion);
+      // No need to call resetAllowedForQuestion since we already set the correct actions above
     }
     return session.state;
   }
   
   export function getCurrentQuestion(state, backgroundQuestions, mainQuestions) {
-    if (state.phase === "background") return backgroundQuestions[state.bgIdx] || null;
+    if (state.phase === "background") {
+      // If we're at the end of background questions, return null to indicate transition needed
+      if (state.bgIdx >= backgroundQuestions.length) {
+        return null;
+      }
+      return backgroundQuestions[state.bgIdx] || null;
+    }
     if (state.phase === "main") return mainQuestions[state.mainIdx] || null;
     return null;
   }
@@ -93,6 +97,8 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       state.bgIdx += 1;
       if (state.bgIdx >= backgroundQuestions.length) {
         state.phase = "main";
+        state.bgIdx = backgroundQuestions.length; // Keep it at the end
+        state.mainIdx = 0; // Start main questions
       }
     } else if (state.phase === "main") {
       state.mainIdx += 1;

@@ -1113,8 +1113,9 @@ app.post('/api/chat', async (req, res) => {
       // Context maintenance
       manageConversationContext(currentSessionId);
   
-      // Questions (background + main questions)
+      // Questions (background + main questions) - use global array for consistency
       const backgroundQuestions = [
+        "Hi, we are going to ask you a few questions about your experience with GenAI tools. Are you ready?",
         "Tell me about your educational background - what did you study in college or university?",
         "I'd love to hear about your current work and how you got into it by job interviews?",
         "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
