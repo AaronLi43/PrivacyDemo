@@ -351,7 +351,7 @@ const predefinedQuestions = {
         "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
     ]
 };
-const GLOBAL_PREDEFINED = predefinedQuestions; // 避免与 req.body 同名导致遮蔽
+const GLOBAL_PREDEFINED = predefinedQuestions; 
 // Default main questions used for static mappings and prompts
 // Note: Dynamic per-request main questions are still computed later where needed
 const mainQuestions = GLOBAL_PREDEFINED.neutral;
