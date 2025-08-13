@@ -2593,8 +2593,8 @@ class PrivacyDemoApp {
                     // Check if current question is a background question
                     const backgroundQuestions = [
                         "Tell me about your educational background - what did you study in college or university?",
-                        "I'd love to hear about your current work - what do you do for a living?",
-                        "How long have you been exploring AI tools like ChatGPT, Claude, or similar platforms?"
+                        "I'd love to hear about your current work and how you got into it by job interviews?",
+                        "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
                     ];
                     const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
                     
