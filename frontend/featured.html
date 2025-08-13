@@ -520,182 +520,204 @@
         <p class="survey-intro">Please complete this brief survey to help us understand your experience. Your responses will be included in the exported data.</p>
         
         <form id="survey-form">
-          <!-- Overall Experiences (For all three groups) -->
-          <div class="survey-question">
-            <label for="q1">Did you have any concerns about your privacy during or after the interview? If yes, please elaborate.</label>
-            <textarea id="q1" name="q1" class="form-control" rows="3" placeholder="Please describe any privacy concerns you had..."></textarea>
-          </div>
+         <!-- Overall Experiences (all groups) -->
+<div class="survey-question">
+  <label for="q1">Did you have any concerns about your privacy during or after the interview? If yes, please elaborate.</label>
+  <textarea id="q1" name="q1" class="form-control" rows="4" placeholder="Please describe any privacy concerns you had..."></textarea>
+</div>
 
-          <div class="survey-question">
-            <label for="q2">Were there any points during the conversation where you hesitated to answer due to privacy concerns? If so, please elaborate.</label>
-            <textarea id="q2" name="q2" class="form-control" rows="3" placeholder="Please describe any moments where you hesitated..."></textarea>
-          </div>
+<div class="survey-question">
+  <label for="q2">Were there any points during the conversation where you hesitated to answer due to privacy concerns? If so, please elaborate.</label>
+  <textarea id="q2" name="q2" class="form-control" rows="4" placeholder="Please describe any moments where you hesitated..."></textarea>
+</div>
 
-          <div class="survey-question">
-            <label for="q3">Did you ever feel the chatbot was collecting too much or irrelevant information? Why or why not?</label>
-            <textarea id="q3" name="q3" class="form-control" rows="3" placeholder="Please share your thoughts on the information collection..."></textarea>
-          </div>
+<!-- Overall Likert group -->
+<div class="survey-question">
+  <p><strong>To what extent do you agree with the following statements?<br>(1 = Strongly Disagree, 5 = Strongly Agree)</strong></p>
+</div>
 
-          <div class="survey-question">
-            <label for="q4">I felt comfortable sharing personal information with the chatbot.</label>
-            <select id="q4" name="q4" class="form-control">
-              <option value="">Select your level of agreement...</option>
-              <option value="1">1 - Strongly Disagree</option>
-              <option value="2">2 - Disagree</option>
-              <option value="3">3 - Neutral</option>
-              <option value="4">4 - Agree</option>
-              <option value="5">5 - Strongly Agree</option>
-            </select>
-          </div>
+<div class="survey-question">
+  <label for="q3">I felt comfortable sharing personal information with the chatbot.</label>
+  <select id="q3" name="q3" class="form-control">
+    <option value="">Select your level of agreement...</option>
+    <option value="1">1 - Strongly Disagree</option>
+    <option value="2">2 - Disagree</option>
+    <option value="3">3 - Neutral</option>
+    <option value="4">4 - Agree</option>
+    <option value="5">5 - Strongly Agree</option>
+  </select>
+</div>
 
-          <div class="survey-question">
-            <label for="q5">I would use this system again for discussing sensitive topics.</label>
-            <select id="q5" name="q5" class="form-control">
-              <option value="">Select your level of agreement...</option>
-              <option value="1">1 - Strongly Disagree</option>
-              <option value="2">2 - Disagree</option>
-              <option value="3">3 - Neutral</option>
-              <option value="4">4 - Agree</option>
-              <option value="5">5 - Strongly Agree</option>
-            </select>
-          </div>
+<div class="survey-question">
+  <label for="q4">I would like to discuss sensitive topics in the next interview with the chatbot.</label>
+  <select id="q4" name="q4" class="form-control">
+    <option value="">Select your level of agreement...</option>
+    <option value="1">1 - Strongly Disagree</option>
+    <option value="2">2 - Disagree</option>
+    <option value="3">3 - Neutral</option>
+    <option value="4">4 - Agree</option>
+    <option value="5">5 - Strongly Agree</option>
+  </select>
+</div>
 
-          <!-- Naive Mode Specific Questions -->
-          <div id="naive-specific-questions" class="mode-specific-questions" style="display: none;">
-            <div class="survey-question">
-              <label for="q6">Did you remove or change any parts of the conversation for privacy reasons? If yes, please describe what changes you made and why.</label>
-              <textarea id="q6" name="q6" class="form-control" rows="3" placeholder="Please describe any changes you made for privacy reasons..."></textarea>
-            </div>
+<!-- Naive Mode Specific Questions -->
+<div id="naive-specific-questions" class="mode-specific-questions" style="display: none;">
+  <div class="survey-question">
+    <label for="q5">What did you remove or change in the conversation and why?</label>
+    <textarea id="q5" name="q5" class="form-control" rows="4" placeholder="Describe what you removed/changed and the reasons..."></textarea>
+  </div>
 
-            <div class="survey-question">
-              <label for="q7">Do you feel your final edited version better reflects what you were comfortable sharing? Please explain.</label>
-              <textarea id="q7" name="q7" class="form-control" rows="3" placeholder="Please explain how the editing affected your comfort level..."></textarea>
-            </div>
+  <div class="survey-question">
+    <label for="q6">How comfortable do you feel about sharing your final edited version?</label>
+    <textarea id="q6" name="q6" class="form-control" rows="4" placeholder="Share how comfortable you feel and why..."></textarea>
+  </div>
 
-            <div class="survey-question">
-              <label for="q8">The editing features improved my sense of privacy control.</label>
-              <select id="q8" name="q8" class="form-control">
-                <option value="">Select your level of agreement...</option>
-                <option value="1">1 - Strongly Disagree</option>
-                <option value="2">2 - Disagree</option>
-                <option value="3">3 - Neutral</option>
-                <option value="4">4 - Agree</option>
-                <option value="5">5 - Strongly Agree</option>
-              </select>
-            </div>
+  <!-- Naive Likert group -->
+  <div class="survey-question">
+    <p><strong>To what extent do you agree with the following statements?<br>(1 = Strongly Disagree, 5 = Strongly Agree)</strong></p>
+  </div>
 
-            <div class="survey-question">
-              <label for="q9">I was able to clearly understand how to use the editing features to protect my privacy.</label>
-              <select id="q9" name="q9" class="form-control">
-                <option value="">Select your level of agreement...</option>
-                <option value="1">1 - Strongly Disagree</option>
-                <option value="2">2 - Disagree</option>
-                <option value="3">3 - Neutral</option>
-                <option value="4">4 - Agree</option>
-                <option value="5">5 - Strongly Agree</option>
-              </select>
-            </div>
-          </div>
+  <div class="survey-question">
+    <label for="q7">The editing features improved my sense of privacy control.</label>
+    <select id="q7" name="q7" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
 
-          <!-- Featured Mode Specific Questions -->
-          <div id="featured-specific-questions" class="mode-specific-questions" style="display: none;">
-            <div class="survey-question">
-              <label for="q10">Were there any AI-suggested edits that made you feel more exposed or more protected? Please explain.</label>
-              <textarea id="q10" name="q10" class="form-control" rows="3" placeholder="Please describe how AI suggestions affected your feelings..."></textarea>
-            </div>
+  <div class="survey-question">
+    <label for="q8">I was able to clearly understand how to use the editing features to protect my privacy.</label>
+    <select id="q8" name="q8" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
 
-            <div class="survey-question">
-              <label for="q11">Did you accept or reject any AI-suggested edits because of privacy concerns? Please describe how those suggestions influenced your final version.</label>
-              <textarea id="q11" name="q11" class="form-control" rows="3" placeholder="Please describe your decisions about AI suggestions..."></textarea>
-            </div>
+  <div class="survey-question">
+    <label for="q9">The free editing made me more confident about what I shared.</label>
+    <select id="q9" name="q9" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
+</div>
 
-            <div class="survey-question">
-              <label for="q12">The AI-assisted editing improved my sense of privacy control.</label>
-              <select id="q12" name="q12" class="form-control">
-                <option value="">Select your level of agreement...</option>
-                <option value="1">1 - Strongly Disagree</option>
-                <option value="2">2 - Disagree</option>
-                <option value="3">3 - Neutral</option>
-                <option value="4">4 - Agree</option>
-                <option value="5">5 - Strongly Agree</option>
-              </select>
-            </div>
+<!-- Featured Mode Specific Questions -->
+<div id="featured-specific-questions" class="mode-specific-questions" style="display: none;">
+  <div class="survey-question">
+    <label for="q10">What did you remove or change in the conversation based on the AI suggestions and why?</label>
+    <textarea id="q10" name="q10" class="form-control" rows="4" placeholder="Describe what you removed/changed due to AI suggestions and why..."></textarea>
+  </div>
 
-            <div class="survey-question">
-              <label for="q13">I was able to clearly understand how the AI suggestions helped me protect my privacy.</label>
-              <select id="q13" name="q13" class="form-control">
-                <option value="">Select your level of agreement...</option>
-                <option value="1">1 - Strongly Disagree</option>
-                <option value="2">2 - Disagree</option>
-                <option value="3">3 - Neutral</option>
-                <option value="4">4 - Agree</option>
-                <option value="5">5 - Strongly Agree</option>
-              </select>
-            </div>
+  <div class="survey-question">
+    <label for="q11">How comfortable do you feel about sharing your final edited version?</label>
+    <textarea id="q11" name="q11" class="form-control" rows="4" placeholder="Share how comfortable you feel and why..."></textarea>
+  </div>
 
-            <div class="survey-question">
-              <label for="q14">The AI-assisted editing made me more confident about what I shared.</label>
-              <select id="q14" name="q14" class="form-control">
-                <option value="">Select your level of agreement...</option>
-                <option value="1">1 - Strongly Disagree</option>
-                <option value="2">2 - Disagree</option>
-                <option value="3">3 - Neutral</option>
-                <option value="4">4 - Agree</option>
-                <option value="5">5 - Strongly Agree</option>
-              </select>
-            </div>
-          </div>
+  <!-- Featured Likert group -->
+  <div class="survey-question">
+    <p><strong>To what extent do you agree with the following statements?<br>(1 = Strongly Disagree, 5 = Strongly Agree)</strong></p>
+  </div>
 
-          <!-- Demographic Questions (Unchanged) -->
-          <div class="survey-question">
-            <label for="q15">What is your age group?</label>
-            <select id="q15" name="q15" class="form-control">
-              <option value="">Select your age group...</option>
-              <option value="18-29">18-29</option>
-              <option value="30-39">30-39</option>
-              <option value="40-49">40-49</option>
-              <option value="50-59">50-59</option>
-              <option value=">=60">>=60</option>
-              <option value="Prefer not to disclose">Prefer not to disclose</option>
-            </select>
-          </div>
+  <div class="survey-question">
+    <label for="q12">The AI-assisted editing improved my sense of privacy control.</label>
+    <select id="q12" name="q12" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
 
-          <div class="survey-question">
-            <label for="q16">What is your gender?</label>
-            <select id="q16" name="q16" class="form-control">
-              <option value="">Select your gender...</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Non-binary">Non-binary</option>
-              <option value="Prefer not to disclose">Prefer not to disclose</option>
-            </select>
-          </div>
+  <div class="survey-question">
+    <label for="q13">I was able to clearly understand how the AI suggestions helped me protect my privacy.</label>
+    <select id="q13" name="q13" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
 
-          <div class="survey-question">
-            <label for="q17">What is your race and ethnicity?</label>
-            <select id="q17" name="q17" class="form-control">
-              <option value="">Select your race and ethnicity...</option>
-              <option value="Black">Black</option>
-              <option value="White">White</option>
-              <option value="Asian">Asian</option>
-              <option value="Hispanic">Hispanic</option>
-              <option value="Native American">Native American</option>
-              <option value="Prefer not to disclose">Prefer not to disclose</option>
-            </select>
-          </div>
+  <div class="survey-question">
+    <label for="q14">The AI-assisted editing made me more confident about what I shared.</label>
+    <select id="q14" name="q14" class="form-control">
+      <option value="">Select your level of agreement...</option>
+      <option value="1">1 - Strongly Disagree</option>
+      <option value="2">2 - Disagree</option>
+      <option value="3">3 - Neutral</option>
+      <option value="4">4 - Agree</option>
+      <option value="5">5 - Strongly Agree</option>
+    </select>
+  </div>
+</div>
 
-          <div class="survey-question">
-            <label for="q18">What is your educational level?</label>
-            <select id="q18" name="q18" class="form-control">
-              <option value="">Select your educational level...</option>
-              <option value="No diploma or less than 12th grade">No diploma or less than 12th grade</option>
-              <option value="High school">High school</option>
-              <option value="College level">College level</option>
-              <option value="Associate's degree">Associate's degree</option>
-              <option value="Bachelor's degree">Bachelor's degree</option>
-              <option value="Graduate or professional degree">Graduate or professional degree</option>
-            </select>
-          </div>
+<!-- Demographic Questions (same for all groups) -->
+<div class="survey-question">
+  <label for="q15">What is your age group?</label>
+  <select id="q15" name="q15" class="form-control">
+    <option value="">Select your age group...</option>
+    <option value="18-29">18-29</option>
+    <option value="30-39">30-39</option>
+    <option value="40-49">40-49</option>
+    <option value="50-59">50-59</option>
+    <option value=">=60">&gt;=60</option>
+    <option value="Prefer not to disclose">Prefer not to disclose</option>
+  </select>
+</div>
+
+<div class="survey-question">
+  <label for="q16">What is your gender?</label>
+  <select id="q16" name="q16" class="form-control">
+    <option value="">Select your gender...</option>
+    <option value="Male">Male</option>
+    <option value="Female">Female</option>
+    <option value="Non-binary">Non-binary</option>
+    <option value="Prefer not to disclose">Prefer not to disclose</option>
+  </select>
+</div>
+
+<div class="survey-question">
+  <label for="q17">What is your race and ethnicity?</label>
+  <select id="q17" name="q17" class="form-control">
+    <option value="">Select your race and ethnicity...</option>
+    <option value="Black">Black</option>
+    <option value="White">White</option>
+    <option value="Asian">Asian</option>
+    <option value="Hispanic">Hispanic</option>
+    <option value="Native American">Native American</option>
+    <option value="Prefer not to disclose">Prefer not to disclose</option>
+  </select>
+</div>
+
+<div class="survey-question">
+  <label for="q18">What is your educational level?</label>
+  <select id="q18" name="q18" class="form-control">
+    <option value="">Select your educational level...</option>
+    <option value="No diploma or less than 12th grade">No diploma or less than 12th grade</option>
+    <option value="High school">High school</option>
+    <option value="College level">College level</option>
+    <option value="Associate's degree">Associate's degree</option>
+    <option value="Bachelor's degree">Bachelor's degree</option>
+    <option value="Graduate or professional degree">Graduate or professional degree</option>
+  </select>
+</div>
 
           <div class="survey-actions">
             <button type="submit" id="survey-submit-btn" class="btn btn-success">

@@ -2911,14 +2911,14 @@ class PrivacyDemoApp {
                 exportData = {
                     metadata: {
                         mode: 'featured',
-                        export_timestamp: this.state.currentStep,
+                        export_timestamp: new Date().toISOString(),
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
                     survey_data: {
-                        ...this.state.surveyData,
+                        ...(this.state.surveyData || {}),
                         questions: this.state.predefinedQuestions[this.state.mode]
                     }
                 };
@@ -2929,11 +2929,12 @@ class PrivacyDemoApp {
                 }
             }
 
-            console.log('Export data generated:', exportData);
+            const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
+            console.log('Export data generated:', safeExport);
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                const response = await API.uploadToS3(safeExport, this.state.prolificId);
                 if (response.success) {
                     console.log('Successfully uploaded to S3:', response.filename);
                     this.showNotification('📤 Data uploaded to S3 successfully', 'success');
@@ -2945,7 +2946,7 @@ class PrivacyDemoApp {
                 // Fallback to local download if S3 upload fails
                 const filename = `conversation_log_${this.state.currentStep}.json`;
                 console.log('Falling back to local download:', filename);
-                API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                API.downloadFile(JSON.stringify(safeExport, null, 2), filename);
                 this.showNotification('📥 Export completed (local download)', 'success');
             }
         } catch (error) {
@@ -2972,14 +2973,14 @@ class PrivacyDemoApp {
                 exportData = {
                     metadata: {
                         mode: 'featured',
-                        export_timestamp: this.state.currentStep,
+                        export_timestamp: new Date().toISOString(),
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
                     survey_data: {
-                        ...this.state.surveyData,
+                        ...(this.state.surveyData || {}),
                         questions: this.state.predefinedQuestions[this.state.mode]
                     }
                 };
@@ -2989,12 +2990,12 @@ class PrivacyDemoApp {
                     exportData.original_conversation = this.state.originalLog;
                 }
             }
-
-            console.log('Export data generated:', exportData);
+            const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
+            console.log('Export data generated:', safeExport);
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                const response = await API.uploadToS3(safeExport, this.state.prolificId);
                 if (response.success) {
                     console.log('Successfully uploaded to S3:', response.filename);
                     this.showNotification('📤 Data uploaded to S3 successfully!', 'success');
@@ -3007,7 +3008,7 @@ class PrivacyDemoApp {
                 const filename = `conversation_log_${this.state.currentStep}.json`;
                 console.log('Falling back to local download:', filename);
                 try {
-                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    API.downloadFile(JSON.stringify(safeExport, null, 2), filename);
                     console.log('Download initiated successfully');
                     this.showNotification('📁 Data downloaded successfully!', 'success');
                 } catch (downloadError) {
@@ -3203,7 +3204,8 @@ class PrivacyDemoApp {
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
+                const response = await API.uploadToS3(safeExport, this.state.prolificId);
                 if (response.success) {
                     console.log('Successfully uploaded analysis to S3:', response.filename);
                     this.showNotification(`📤 Analysis data uploaded to S3 successfully! Found ${totalIssues} privacy issues.`, 'success');
@@ -3216,7 +3218,7 @@ class PrivacyDemoApp {
                 const filename = `conversation_analysis_${this.state.currentStep}.json`;
                 console.log('Falling back to local download:', filename);
                 try {
-                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    API.downloadFile(JSON.stringify(safeExport, null, 2), filename);
                     console.log('Analysis download initiated successfully');
                     this.showNotification(`📁 Analysis data downloaded successfully! Found ${totalIssues} privacy issues.`, 'success');
                 } catch (downloadError) {
@@ -3275,7 +3277,9 @@ class PrivacyDemoApp {
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(exportData, this.state.prolificId);
+                const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
+                const response = await API.uploadToS3(safeExport, this.state.prolificId);
+
                 if (response.success) {
                     console.log('Successfully uploaded comprehensive data to S3:', response.filename);
                     this.showNotification('📤 Comprehensive data uploaded to S3 successfully!', 'success');
@@ -3288,7 +3292,7 @@ class PrivacyDemoApp {
                 const filename = `conversation_log_comprehensive_${this.state.currentStep}.json`;
                 console.log('Falling back to local download:', filename);
                 try {
-                    API.downloadFile(JSON.stringify(exportData, null, 2), filename);
+                    API.downloadFile(JSON.stringify(safeExport, null, 2), filename);
                     console.log('Comprehensive download initiated successfully');
                     this.showNotification('📁 Comprehensive data downloaded successfully!', 'success');
                 } catch (downloadError) {
@@ -3451,26 +3455,42 @@ class PrivacyDemoApp {
         const pendingAction = this.state.pendingExportAction;
         this.closeConsentPopup();
         
-        if (pendingAction) {
-            console.log('Executing action:', pendingAction);
+        // if (pendingAction) {
+        //     console.log('Executing action:', pendingAction);
             
-            if (pendingAction === 'survey') {
-                // Survey disabled - skip to export
-                console.log('Survey disabled - proceeding directly to export');
-                this.exportDirect();
-            } else if (pendingAction === 'exportDirect') {
-                // Survey disabled - export directly
-                console.log('Survey disabled - exporting directly');
-                this.exportDirect();
-            } else if (pendingAction === 'exportComprehensive') {
-                // Survey disabled - export directly
-                console.log('Survey disabled - exporting directly');
-                this.exportComprehensive();
-            } else if (pendingAction === 'analyzeAndExport') {
-                this.analyzeAndExport();
-            }
-        } else {
+        //     if (pendingAction === 'survey') {
+        //         // Survey disabled - skip to export
+        //         console.log('Survey disabled - proceeding directly to export');
+        //         this.exportDirect();
+        //     } else if (pendingAction === 'exportDirect') {
+        //         // Survey disabled - export directly
+        //         console.log('Survey disabled - exporting directly');
+        //         this.exportDirect();
+        //     } else if (pendingAction === 'exportComprehensive') {
+        //         // Survey disabled - export directly
+        //         console.log('Survey disabled - exporting directly');
+        //         this.exportComprehensive();
+        //     } else if (pendingAction === 'analyzeAndExport') {
+        //         this.analyzeAndExport();
+        //     }
+        // } else {
+        //     console.log('No pending action found');
+        // }
+
+        if (!pendingAction) {
             console.log('No pending action found');
+            return;
+        }
+
+        // Correct flow: If consent is given, proceed to the Post-Task Survey; after submitting the survey, then export and redirect
+        if (consentGiven) {
+            // Continue using the same pendingAction (exportDirect/exportComprehensive/analyzeAndExport)
+            this.state.pendingExportAction = pendingAction;
+            this.showSurveyPopup(pendingAction);
+        } else {
+            // If consent is not given, you can choose to end the session or still allow export but mark consent=false
+            // Here we show a warning and end the session
+            this.showNotification('You declined data collection. The session will end.', 'warning');
         }
     }
 
@@ -3506,7 +3526,7 @@ class PrivacyDemoApp {
         const exportData = {
             metadata: {
                 mode: 'naive',
-                export_timestamp: this.state.currentStep,
+                export_timestamp: new Date().toISOString(),
                 total_messages: conversationToExport.length,
                 has_edits: this.state.editMode,
                 edited_messages_count: editedMessages,
@@ -3520,7 +3540,7 @@ class PrivacyDemoApp {
             },
             conversation: conversationToExport,
             survey_data: {
-                ...this.state.surveyData,
+                ...(this.state.surveyData || {}),
                 questions: this.state.predefinedQuestions[this.state.mode]
             }
         };
@@ -3541,7 +3561,7 @@ class PrivacyDemoApp {
         const exportData = {
             metadata: {
                 mode: 'neutral',
-                export_timestamp: this.state.currentStep,
+                export_timestamp: new Date().toISOString(),
                 total_messages: conversationToExport.length,
                 consent_given: this.state.consentGiven,
                 consent_details: {
@@ -3552,7 +3572,7 @@ class PrivacyDemoApp {
             },
             conversation: conversationToExport,
             survey_data: {
-                ...this.state.surveyData,
+                ...(this.state.surveyData || {}),
                 questions: this.state.predefinedQuestions[this.state.mode]
             }
         };
@@ -3571,6 +3591,7 @@ class PrivacyDemoApp {
         
         // Use current conversation data (including edits) for export
         const conversationToExport = this.state.conversationLog;
+        const allowRaw = this.state.consentGiven === true;
         
         for (let i = 0; i < conversationToExport.length; i++) {
             const currentTurn = conversationToExport[i]; // Current (potentially edited) messages
@@ -3582,8 +3603,8 @@ class PrivacyDemoApp {
                 bot: currentTurn.bot, // Use current (potentially edited) bot message
                 userPrivacy: analyzedTurn ? analyzedTurn.userPrivacy : null, // Include user privacy analysis
                 botPrivacy: analyzedTurn ? analyzedTurn.botPrivacy : null, // Include bot privacy analysis
-                original_user: originalTurn.user, // Keep original for reference
-                original_bot: originalTurn.bot, // Keep original bot for reference
+                original_user: allowRaw ? originalTurn.user : null, // Keep original for reference
+                original_bot: allowRaw ? originalTurn.bot : null, // Keep original bot for reference
                 user_edited: currentTurn.user_edited || false, // Track if user message was edited
                 bot_edited: currentTurn.bot_edited || false, // Track if bot message was edited
                 has_edits: (currentTurn.user_edited || currentTurn.bot_edited) || false // Flag if any message was edited
@@ -3593,7 +3614,7 @@ class PrivacyDemoApp {
         const exportData = {
             metadata: {
                 mode: 'featured_with_analysis',
-                export_timestamp: this.state.currentStep,
+                export_timestamp: new Date().toISOString(),
                 total_messages: exportLog.length,
                 privacy_issues: this.state.analyzedLog.filter(turn => turn.hasPrivacyIssues).length,
                 has_edits: this.state.editMode,
@@ -3606,7 +3627,7 @@ class PrivacyDemoApp {
             conversation: exportLog,
             privacy_analysis: this.state.analyzedLog,
             survey_data: {
-                ...this.state.surveyData,
+                ...(this.state.surveyData || {}),
                 questions: this.state.predefinedQuestions[this.state.mode]
             }
         };
@@ -3627,7 +3648,7 @@ class PrivacyDemoApp {
         const exportData = {
             metadata: {
                 mode: 'featured',
-                export_timestamp: this.state.currentStep,
+                export_timestamp: new Date().toISOString(),
                 total_messages: conversationToExport.length,
                 privacy_analysis_performed: this.state.analyzedLog.length > 0,
                 privacy_issues_found: this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length,
@@ -3641,7 +3662,7 @@ class PrivacyDemoApp {
             },
             conversation: conversationToExport,
             survey_data: {
-                ...this.state.surveyData,
+                ...(this.state.surveyData || {}),
                 questions: this.state.predefinedQuestions[this.state.mode]
             },
             privacy_choices: this.state.privacyChoices
@@ -5648,6 +5669,43 @@ function closeFreeEditPopup() {
         popup.classList.remove('show');
     }
 }
+
+// PATCH: Remove original/raw fields from export if user did not consent to raw data
+function stripRawIfNoConsent(exportData, consentOriginalData) {
+    try {
+      const data = JSON.parse(JSON.stringify(exportData)); // Deep copy to avoid side effects
+      if (!consentOriginalData) {
+        // Top level original conversation
+        if ('original_conversation' in data) data.original_conversation = null;
+  
+        // Common nested fields: logs / items / entries etc.
+        const tryStripInArray = (arr) => {
+          if (!Array.isArray(arr)) return;
+          for (const item of arr) {
+            if (!item || typeof item !== 'object') continue;
+            delete item.original_user;
+            delete item.original_bot;
+            delete item.raw; // If someone puts the whole raw here
+            // Recursively handle nested fields
+            for (const k of Object.keys(item)) {
+              const v = item[k];
+              if (Array.isArray(v)) tryStripInArray(v);
+            }
+          }
+        };
+  
+        tryStripInArray(data.logs);
+        tryStripInArray(data.items);
+        tryStripInArray(data.entries);
+        tryStripInArray(data.exportLog);
+      }
+      return data;
+    } catch (e) {
+      console.warn('stripRawIfNoConsent failed, fallback to original data', e);
+      return exportData;
+    }
+  }
+  
 
 // Expose all popup functions globally
 window.closePrivacyPopup = closePrivacyPopup;
