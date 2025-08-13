@@ -1535,29 +1535,39 @@ class PrivacyDemoApp {
             console.log('📋 Sending initial message to API...');
             
             // Send initial message to start the conversation
-            const response = await API.sendMessage("Hello, I'm ready to answer your questions.", this.state.currentStep, {
-                questionMode: true,
-                currentQuestion: currentQuestion,
-                predefinedQuestions: predefinedQuestions
-            });
+            // const response = await API.sendMessage("Hello, I'm ready to answer your questions.", this.state.currentStep, {
+            //     questionMode: true,
+            //     currentQuestion: currentQuestion,
+            //     predefinedQuestions: predefinedQuestions
+            // });
+
+            const response = await API.sendMessage(
+                "__START__",
+                this.state.currentStep,
+                { questionMode: true, action: "START_QUESTION_MODE" } // 不再传 currentQuestion / predefinedQuestions
+              );
             
             console.log('📋 API response received:', response);
             
             if (response && response.bot_response) {
                 // Use helper function to extract actual response text
-                let botResponse = this.extractResponseText(response.bot_response);
-                console.log('Extracted response text (initial):', botResponse);
+                // let botResponse = this.extractResponseText(response.bot_response);
+                let botResponse = this.extractResponseText(response.bot_response).replace(/\bNEXT_QUESTION\b/gi, '').trim();
+
                 
                 // Remove any NEXT_QUESTION prefix that might be present
-                botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
+                // botResponse = botResponse.replace(/\bNEXT_QUESTION\b/gi, '').trim();
                 
                 console.log('📋 Bot response:', botResponse);
                 
-                this.state.conversationLog.push({
-                    user: '',
-                    bot: botResponse,
-                    timestamp: new Date().toISOString()
-                });
+                // this.state.conversationLog.push({
+                //     user: '',
+                //     bot: botResponse,
+                //     timestamp: new Date().toISOString()
+                // });
+
+                this.state.conversationLog.push({ user: '', bot: botResponse, timestamp: new Date().toISOString() });
+
                 
                 console.log('✅ Conversation started successfully');
             } else {
