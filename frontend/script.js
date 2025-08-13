@@ -3773,14 +3773,25 @@ class PrivacyDemoApp {
     updateChatHeader() {
         const chatHeaderTitle = document.getElementById('chat-header-title');
         if (chatHeaderTitle) {
+            const modeQuestionTitles = {
+               naive:    'Main Interview Questions · You can edit later',
+                neutral:  'Main Interview Questions · No edit; consent→survey at export',
+                featured: 'Main Interview Questions · Real-time privacy tips ON'
+            };
+            const modeIdleTitles = {
+                naive:    'Chat Interface · Free edit available after questions',
+                neutral:  'Chat Interface · Analysis runs at export',
+                featured: 'Chat Interface · Real-time privacy detection'
+            };
+
             if (this.state.questionMode && !this.state.questionsCompleted) {
                 if (this.state.inFollowUpMode) {
                     chatHeaderTitle.innerHTML = '<i class="fas fa-question-circle"></i> Follow-up Questions';
                 } else {
-                    chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Interview Questions';
+                    chatHeaderTitle.innerHTML = `<i class="fas fa-comments"></i> ${modeQuestionTitles[this.state.mode]}`;
                 }
             } else {
-                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
+                chatHeaderTitle.innerHTML = `<i class="fas fa-comments"></i> ${modeIdleTitles[this.state.mode]}`;
             }
         }
     }
@@ -4186,12 +4197,22 @@ class PrivacyDemoApp {
             // Reset header for normal mode
             chatHeader.classList.remove('edit-mode');
             
-            // Set appropriate header based on current mode
-            if (this.state.questionMode) {
-                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Main Interview Questions';
-                mainHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Main Interview Questions';
+            const modeQuestionTitles = {
+                naive:    'Main Interview Questions · You can edit later',
+                neutral:  'Main Interview Questions · No edit; consent→survey at export',
+                featured: 'Main Interview Questions · Real-time privacy tips ON'
+            };
+            const modeIdleTitles = {
+                naive:    'Chat Interface · Free edit available after questions',
+                neutral:  'Chat Interface · Analysis runs at export',
+                featured: 'Chat Interface · Real-time privacy detection'
+            };
+
+            if (this.state.questionMode && !this.state.questionsCompleted) {
+                chatHeaderTitle.innerHTML = `<i class="fas fa-comments"></i> ${modeQuestionTitles[this.state.mode]}`;
+                mainHeaderTitle.innerHTML = `<i class="fas fa-comments"></i> ${modeQuestionTitles[this.state.mode]}`;
             } else {
-                chatHeaderTitle.innerHTML = '<i class="fas fa-comments"></i> Chat Interface';
+                chatHeaderTitle.innerHTML = `<i class="fas fa-comments"></i> ${modeIdleTitles[this.state.mode]}`;
                 mainHeaderTitle.innerHTML = '<i class="fas fa-lock"></i> Chatbot';
             }
             
