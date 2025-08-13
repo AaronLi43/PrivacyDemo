@@ -18,7 +18,7 @@ console.log('🔧 Node version:', process.version);
 
 import {
     initState, getCurrentQuestion, isBackgroundPhase, isFinalQuestion,
-    atFollowupCap, registerFollowup, recordScores, resetAllowedForQuestion,
+    atFollowupCap, registerFollowup, recordScores,
     buildAllowedActionsForPrompt, allowNextIfAuditPass, finalizeIfLastAndPassed,
     shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction
   } from './orchestrator.js';
@@ -486,33 +486,41 @@ function getNextQuestionFromArray(predefinedQuestions, currentIndex = 0) {
 // Executor System Prompt
 export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], questionContext = {}) {
     const { backgroundQuestions = [], mainQuestions = [] } = questionContext;
-    const AA = allowedActions.length ? allowedActions.join(", ") : "ASK_FOLLOWUP, REQUEST_CLARIFY, SUMMARIZE_QUESTION";
     const remaining = mainQuestions.filter(q => q !== currentQuestion);
+    
+    // Check if current question is a background question
     const isBackgroundQuestion = backgroundQuestions.includes(currentQuestion);
-  
+    
+    // Filter allowed actions based on question type
+    let filteredActions = allowedActions;
+    if (isBackgroundQuestion) {
+      // For background questions, only allow actions that don't involve follow-ups
+      filteredActions = allowedActions.filter(action => 
+        action === 'SUMMARIZE_QUESTION' || action === 'NEXT_QUESTION'
+      );
+    }
+    
+    const AA = filteredActions.length ? filteredActions.join(", ") : "SUMMARIZE_QUESTION, NEXT_QUESTION";
+    
     return [
       `BACKGROUND QUESTIONS: [${backgroundQuestions.map(q => `"${q}"`).join(", ")}]`,
       `CURRENT QUESTION: "${currentQuestion || 'N/A'}"`,
+      `QUESTION TYPE: ${isBackgroundQuestion ? 'BACKGROUND' : 'MAIN'}`,
       `REMAINING QUESTIONS: [${remaining.map(q => `"${q}"`).join("; ")}]`,
       `ALLOWED_ACTIONS: [${AA}]`,
       ``,
       `You are the Executor. Your job is to elicit a concrete personal story for the CURRENT QUESTION.`,
-      ``,
-      `IMPORTANT: The CURRENT QUESTION is a ${isBackgroundQuestion ? 'BACKGROUND' : 'MAIN'} question.`,
-      `- BACKGROUND questions: Use NEXT_QUESTION after getting basic info. Do NOT use ASK_FOLLOWUP.`,
-      `- MAIN questions: Use ASK_FOLLOWUP to dig deeper into personal stories.`,
-      ``,
       `Hard rules:`,
       `- Stay on the CURRENT QUESTION only; do NOT introduce other predefined questions.`,
-      `- Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.`,
+      `- ${isBackgroundQuestion ? 'BACKGROUND QUESTIONS: Collect basic information and move to next question after any response. Do NOT ask follow-up questions.' : 'MAIN QUESTIONS: Be concise and conversational, one focused follow-up at a time; warm, curious, neutral.'}`,
       `- Aim for: time/place/people/task/action/result + ≥2 depth points (tradeoff/difficulty/failed attempt/reflection).`,
       `- When you believe the bar is met, propose a 2-3 line summary before moving on.`,
       ``,
       `Output JSON only:`,
       `{`,
-      `  "action": "ASK_FOLLOWUP" | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "NEXT_QUESTION" | "END",`,
+      `  "action": "${isBackgroundQuestion ? 'NEXT_QUESTION' : 'ASK_FOLLOWUP'} | "SUMMARIZE_QUESTION" | "REQUEST_CLARIFY" | "END",`,
       `  "question_id": "<ID or text>",`,
-      `  "utterance": "<ONE natural question OR a brief summary>",`,
+      `  "utterance": "${isBackgroundQuestion ? 'Brief acknowledgment and transition to next question' : 'ONE natural question OR a brief summary'}",`,
       `  "notes": ["optional extracted facts"]`,
       `}`
     ].join("\n");
@@ -1120,11 +1128,6 @@ app.post('/api/chat', async (req, res) => {
       // Orchestrator state
       const state = initState(session, { maxFollowups: { background: 0, main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, backgroundQuestions, mainQuestions);
-      
-      // Ensure allowed actions are properly set for the current question type
-      const isBackgroundQuestion = backgroundQuestions.includes(qNow);
-      resetAllowedForQuestion(state, isBackgroundQuestion);
-      
       const allowedActionsArr = buildAllowedActionsForPrompt(state);
   
       log.info('orchestrator state', {
@@ -1180,38 +1183,18 @@ app.post('/api/chat', async (req, res) => {
           // Parse Executor JSON, and execute action constraints
           parsedExec = parseExecutorOutput(aiResponse);
           if (parsedExec) {
-            const originalAction = parsedExec.action;
-            enforceAllowedAction(state, parsedExec, qNow, backgroundQuestions);
-            log.info('executor parsed', {
-              originalAction,
-              enforcedAction: parsedExec.action,
-              isBackgroundQuestion: backgroundQuestions.includes(qNow),
-              question: qNow
-            });
+            enforceAllowedAction(state, parsedExec);
+            log.info('executor parsed', parsedExec);
   
             // Convert execution results to user output text
-            // Check the ORIGINAL action, not the enforced action, to determine response handling
-            if (originalAction === "ASK_FOLLOWUP" || originalAction === "REQUEST_CLARIFY") {
+            if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
               registerFollowup(state, qNow);
-              // For background questions, NEVER show follow-up questions - force appropriate response
-              if (backgroundQuestions.includes(qNow)) {
-                aiResponse = "Thank you for sharing that information. Let me ask you about your current work experience.";
-                log.info('background question follow-up blocked, using default response');
-              } else {
-                aiResponse = parsedExec.utterance || aiResponse;
-                log.info('main question follow-up allowed');
-              }
-            } else if (originalAction === "SUMMARIZE_QUESTION") {
               aiResponse = parsedExec.utterance || aiResponse;
-            } else if (originalAction === "NEXT_QUESTION" || originalAction === "END") {
+            } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
+              aiResponse = parsedExec.utterance || aiResponse;
+            } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
               // The pace is given to the audit+Orchestrator, not directly advancing/ending
             }
-            
-            log.info('final response set', {
-              originalAction,
-              enforcedAction: parsedExec.action,
-              responsePreview: aiResponse.slice(0, 100)
-            });
           } else {
             log.warn('executor output not JSON; using raw text');
           }

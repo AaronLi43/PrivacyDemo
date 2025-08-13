@@ -217,7 +217,7 @@ runTest('Action Enforcement - Valid', () => {
   const state = initState({});
   const validAction = { action: 'NEXT_QUESTION', utterance: 'test' };
   
-  const enforced = enforceAllowedAction(state, validAction, null, []);
+  const enforced = enforceAllowedAction(state, validAction);
   
   return enforced.action === 'NEXT_QUESTION';
 });
@@ -226,9 +226,7 @@ runTest('Action Enforcement - Invalid', () => {
   const state = initState({});
   const invalidAction = { action: 'INVALID_ACTION', utterance: 'test' };
   
-  // Simulate a background question to test fallback behavior
-  const backgroundQuestion = "Tell me about your educational background";
-  const enforced = enforceAllowedAction(state, invalidAction, backgroundQuestion, [backgroundQuestion]);
+  const enforced = enforceAllowedAction(state, invalidAction);
   
   return enforced.action === 'NEXT_QUESTION'; // Should fallback to allowed action for background questions
 });
