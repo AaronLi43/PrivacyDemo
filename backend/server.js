@@ -16,6 +16,12 @@ console.log('🔧 Process ID:', process.pid);
 console.log('🔧 Current working directory:', process.cwd());
 console.log('🔧 Node version:', process.version);
 
+// CORS debugging
+console.log('🔧 CORS Debug Mode:', process.env.CORS_DEBUG === 'true' ? 'ENABLED' : 'DISABLED');
+if (process.env.CORS_DEBUG === 'true') {
+    console.log('🔧 CORS Debug: All origins will be allowed for debugging');
+}
+
 import {
     WELCOME_TEXT, initState, getCurrentQuestion, isFinalQuestion,
     atFollowupCap, registerFollowup, recordScores,
@@ -119,8 +125,6 @@ let corsOrigins = process.env.CORS_ORIGINS ?
     [
         'https://privacy-demo-flame.vercel.app',
         'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
-        'https://privacy-demo-flame.vercel.app',
-        'https://privacy-demo-git-main-privacy-demo-flame.vercel.app',
         'https://privacy-demo-flame-git-main-privacy-demo-flame.vercel.app',
         'https://privacy-demo-flame-git-feature-privacy-demo-flame.vercel.app',
         'https://privacy-demo-flame-git-develop-privacy-demo-flame.vercel.app',
@@ -168,6 +172,24 @@ app.use(cors({
             return callback(null, true);
         }
         
+        // Additional check for the specific Vercel domain mentioned in the error
+        if (origin === 'https://privacy-demo-flame.vercel.app') {
+            console.log('🔧 CORS: Specific Vercel domain allowed:', origin);
+            return callback(null, true);
+        }
+        
+        // Fallback: Allow all Vercel domains for this project
+        if (origin.includes('vercel.app') && origin.includes('privacy-demo')) {
+            console.log('🔧 CORS: Vercel domain fallback allowed:', origin);
+            return callback(null, true);
+        }
+        
+        // CORS Debug Mode: Allow all origins when debugging
+        if (process.env.CORS_DEBUG === 'true') {
+            console.log('🔧 CORS Debug: Allowing origin in debug mode:', origin);
+            return callback(null, true);
+        }
+        
         console.log('🔧 CORS: Origin blocked:', origin);
         console.log('🔧 CORS: Allowed origins:', corsOrigins);
         return callback(new Error('Not allowed by CORS'));
@@ -175,7 +197,8 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    preflightContinue: false
 }));
 
 console.log('🔧 CORS middleware applied with origins:', corsOrigins);
@@ -188,7 +211,41 @@ console.log('🔧 CORS middleware configuration:', {
 });
 
 // Handle preflight requests explicitly
-app.options('*', cors());
+app.options('*', cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin
+        if (!origin) {
+            return callback(null, true);
+        }
+        
+        // Check if origin is in our allowed list
+        if (corsOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Check for Vercel preview deployments
+        if (origin.includes('vercel.app') && origin.includes('privacy-demo')) {
+            return callback(null, true);
+        }
+        
+        // Additional check for the specific Vercel domain
+        if (origin === 'https://privacy-demo-flame.vercel.app') {
+            return callback(null, true);
+        }
+        
+        // CORS Debug Mode: Allow all origins when debugging
+        if (process.env.CORS_DEBUG === 'true') {
+            console.log('🔧 CORS Debug: Allowing origin in preflight debug mode:', origin);
+            return callback(null, true);
+        }
+        
+        return callback(null, true); // Allow all for preflight
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+    optionsSuccessStatus: 200
+}));
 
 // Log all requests for debugging
 app.use((req, res, next) => {
@@ -199,6 +256,15 @@ app.use((req, res, next) => {
         'access-control-request-headers': req.headers['access-control-request-headers'],
         'user-agent': req.headers['user-agent']
     });
+    
+    // Set CORS headers for all responses as a fallback
+    if (req.headers.origin) {
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    }
+    
     next();
 });
 
@@ -214,6 +280,13 @@ const upload = multer({
 // Test route to verify CORS is working
 app.get('/api/test-cors', (req, res) => {
     console.log('🔧 Test CORS route hit from origin:', req.headers.origin);
+    
+    // Set CORS headers explicitly for this endpoint
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    
     res.json({ 
         message: 'CORS test successful', 
         origin: req.headers.origin,
@@ -623,6 +696,12 @@ app.get('/api/predefined_questions/:mode', (req, res) => {
     try {
         const { mode } = req.params;
         
+        // Set CORS headers explicitly for this endpoint
+        res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+        
         if (!predefinedQuestions[mode]) {
             return res.status(400).json({ error: 'Invalid mode' });
         }
@@ -656,6 +735,12 @@ app.get('/api/debug_context', (req, res) => {
 
 // Configuration API
 app.get('/api/config', (req, res) => {
+    // Set CORS headers explicitly for this endpoint
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    
     res.json({
         audit_llm_enabled: true, // Always enable audit LLM for the study
         openai_available: openaiClient !== null,
