@@ -27,7 +27,7 @@ import {
     atFollowupCap, registerFollowup, recordScores,
     buildAllowedActionsForPrompt, allowNextIfAuditPass, finalizeIfLastAndPassed,
     shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction,
-    applyHeuristicsFromAudits, buildOrchestratorDirectives, composeAssistantMessage
+    applyHeuristicsFromAudits, buildOrchestratorDirectives, composeAssistantMessage, peekNextQuestion
   } from './orchestrator.js';
 
 

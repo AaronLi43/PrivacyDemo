@@ -218,16 +218,16 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         skip_if_no_experience: true,
         avoid_outcome_for_background_only: backgroundOnly || false
     };
-    }
+  }
     
   export function buildOrchestratorDirectives(state) {
     return {
         allowedActions: buildAllowedActionsForPrompt(state),
         styleHints: state.styleHints || {}
     };
-    }
+  }
 
-function peekNextQuestion(state, mainQuestions) {
+export function peekNextQuestion(state, mainQuestions) {
       const idx = (state.mainIdx ?? 0) + 1;
       return mainQuestions?.[idx] || null;
     }
