@@ -1600,7 +1600,7 @@ class PrivacyDemoApp {
         const modeDescriptions = {
             naive: '💡 Naive Mode: You can edit your conversation log before exporting!',
             neutral: '⚖️ Neutral Mode: Privacy analysis runs when you export the conversation log!',
-            featured: '🔒 Featured Mode: Real-time privacy detection with interactive corrections!'
+            featured: '🔒 Featured Mode: Post-Hoc privacy detection with interactive corrections!'
         };
         
         modeInfo.innerHTML = `<p><strong>${modeIcons[this.state.mode]} ${modeDescriptions[this.state.mode]}</strong></p>`;
@@ -3776,12 +3776,12 @@ class PrivacyDemoApp {
             const modeQuestionTitles = {
                naive:    'Main Interview Questions · You can edit later',
                 neutral:  'Main Interview Questions · No edit; consent→survey at export',
-                featured: 'Main Interview Questions · Real-time privacy tips ON'
+                featured: 'Main Interview Questions · Post-Hoc privacy tips ON'
             };
             const modeIdleTitles = {
                 naive:    'Chat Interface · Free edit available after questions',
                 neutral:  'Chat Interface · Analysis runs at export',
-                featured: 'Chat Interface · Real-time privacy detection'
+                featured: 'Chat Interface · Post-Hoc privacy detection'
             };
 
             if (this.state.questionMode && !this.state.questionsCompleted) {
@@ -4200,12 +4200,12 @@ class PrivacyDemoApp {
             const modeQuestionTitles = {
                 naive:    'Main Interview Questions · You can edit later',
                 neutral:  'Main Interview Questions · No edit; consent→survey at export',
-                featured: 'Main Interview Questions · Real-time privacy tips ON'
+                featured: 'Main Interview Questions · Post-Hoc privacy tips ON'
             };
             const modeIdleTitles = {
                 naive:    'Chat Interface · Free edit available after questions',
                 neutral:  'Chat Interface · Analysis runs at export',
-                featured: 'Chat Interface · Real-time privacy detection'
+                featured: 'Chat Interface · Post-Hoc privacy detection'
             };
 
             if (this.state.questionMode && !this.state.questionsCompleted) {
