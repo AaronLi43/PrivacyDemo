@@ -2,16 +2,20 @@
 // Lightweight FSM: main → done
 // Responsibilities: decide current question, allowed actions, follow-up count, whether to advance
 
+export const WELCOME_TEXT =
+  "Welcome to the study! We’re excited to learn about how you’ve used AI for job interviews and your thoughts on the ethical considerations involved. Your input will help researchers better understand this important and emerging use of AI in real-world contexts. There are no right or wrong answers; every experience you share will provide valuable insights.\n\nFirst of all, I’d like to learn a bit more about your background before we discuss your specific experiences using AI for job interviews.";
+
 export function initState(session, { maxFollowups = { background: 0, main: 3 } } = {}) {
     if (!session.state) {
       session.state = {
         phase: "main",
         mainIdx: 0,
-        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]),// Allowed actions for main questions
+        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]),// Allowed actions for main questions
         perQuestion: {},            // question -> { followups: number, lastScores: null }
         maxFollowups: { main: (maxFollowups?.main ?? 3) },
         lastAudit: null,
-        lastPresence: null
+        lastPresence: null,
+        styleHints: {}
       };
       
       // No need to call resetAllowedForQuestion since we already set the correct actions above
@@ -47,7 +51,7 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   
   export function resetAllowedForQuestion(state) {
     // Main questions can have follow-ups
-    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION"]);
+    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
   }
   
   export function buildAllowedActionsForPrompt(state) {
@@ -58,23 +62,25 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
 
   export function allowNextIfAuditPass(state, completionAuditVerdict) {
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION") {
-      state.allowedActions.add("ASK_FOLLOWUP");
+      state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
     } else {
-      state.allowedActions.delete("ASK_FOLLOWUP");
+      state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY"]);
     }
   }
   
   // After passing the final question, switch to summary/end actions
   export function finalizeIfLastAndPassed(state, mainQuestions, completionAuditVerdict) {
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION" && isFinalQuestion(state, mainQuestions)) {
-      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "REQUEST_CLARIFY", "END"]);
+      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "END"]);
     }
   }
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
-  export function shouldAdvance(completionAuditVerdict) {
-    return completionAuditVerdict === "ALLOW_NEXT_QUESTION";
-  }
+  export function shouldAdvance(completionAuditVerdict, state, question) {
+    const pass = completionAuditVerdict === "ALLOW_NEXT_QUESTION";
+    const skipped = !!(state?.perQuestion?.[question]?.skip);
+    return pass || skipped;
+    }
   
   // Move to the next question; main questions run into done
   export function gotoNextQuestion(state, mainQuestions) {
@@ -113,20 +119,115 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   }
   
   // Check if the current action is allowed; if not, force back to allowed actions
-  export function enforceAllowedAction(state, parsed) {
+  export function enforceAllowedAction(state, parsed, currentQuestion) {
     if (!parsed || !parsed.action) return parsed;
+
+    // If the follow-up cap is reached, do not ask follow-ups
+    if (parsed.action === "ASK_FOLLOWUP" && currentQuestion && atFollowupCap(state, currentQuestion)) {
+      parsed.action = state.allowedActions.has("SUMMARIZE_QUESTION")
+        ? "SUMMARIZE_QUESTION"
+        : (state.allowedActions.has("REQUEST_CLARIFY") ? "REQUEST_CLARIFY" : "NEXT_QUESTION");
+    }
+    
     if (!state.allowedActions.has(parsed.action)) {
-// Deterministic fallback strategy for main-only flow
-    if (state.allowedActions.has("ASK_FOLLOWUP")) {
-      parsed.action = "ASK_FOLLOWUP";
-    } else if (state.allowedActions.has("SUMMARIZE_QUESTION")) {
-      parsed.action = "SUMMARIZE_QUESTION";
-      } else if (state.allowedActions.has("REQUEST_CLARIFY")) {
-      parsed.action = "REQUEST_CLARIFY";
-    } else {
-      parsed.action = Array.from(state.allowedActions)[0] || "REQUEST_CLARIFY";
-    }
-    }
+// Fallback priority: REQUEST_CLARIFY > SUMMARIZE_QUESTION > NEXT_QUESTION
+    if (state.allowedActions.has("REQUEST_CLARIFY")) parsed.action = "REQUEST_CLARIFY";
+    else if (state.allowedActions.has("SUMMARIZE_QUESTION")) parsed.action = "SUMMARIZE_QUESTION";
+    else if (state.allowedActions.has("NEXT_QUESTION")) parsed.action = "NEXT_QUESTION";
+    else parsed.action = Array.from(state.allowedActions)[0] || "REQUEST_CLARIFY";
+   }
+    
     return parsed;
   }
   
+
+  // ---- Compose a single assistant message that always includes the question ----
+  const BRIDGES = ["Thanks—that helps.", "Got it, that’s helpful.", "Appreciate the detail.", "That makes sense."];
+  function bridge() { return BRIDGES[Math.floor(Math.random() * BRIDGES.length)]; }
+  
+  function ensureEndsWithQuestion(s) {
+    const base = (s || "").trim();
+    if (!base) return "?";
+    const qIdx = base.indexOf("?");
+    if (qIdx >= 0) return base.slice(0, qIdx + 1); // keep up to the first '?'
+    return base + "?";
+  }
+  function stripAllQuestions(s) { return (s || "").replace(/\?/g, "."); }
+  function nextQuestionLine(q) {
+    if (!q) return "";
+    const t = q.trim();
+    return t.endsWith("?") ? t : (t + "?");
+  }
+  
+  // styleHints: { prefer_transition, gentle_tone, ask_outcome_only_if_event, skip_if_no_experience, avoid_outcome_for_background_only }
+  export function composeAssistantMessage(state, parsed, ctx) {
+    const {
+      currentQuestion, nextQuestion, styleHints = {}, isFirstAssistantReply = false,
+      welcomeText // welcome text
+    } = ctx || {};
+    // On the first round: send welcome + the first question in ONE message.
+    // Be robust to callers that pass only currentQuestion (not nextQuestion).
+    if (isFirstAssistantReply && parsed?.action === "NEXT_QUESTION" && welcomeText) {
+      const firstQ = nextQuestion || currentQuestion;
+      if (firstQ) return `${welcomeText}\n\n${nextQuestionLine(firstQ)}`;
+    }
+
+    const pref = styleHints.prefer_transition ? (bridge() + " ") : "";
+    const action = parsed?.action || "REQUEST_CLARIFY";
+    const utter = (parsed?.utterance || "").trim();
+
+    if (action === "NEXT_QUESTION") {
+      return `${pref}Next question:\n${nextQuestionLine(nextQuestion)}`;
+    }
+
+    if (action === "SUMMARIZE_QUESTION") {
+      // If allowed/about to advance: summary (no question mark) + next question (same message)
+      if (state.allowedActions?.has("NEXT_QUESTION") && nextQuestion) {
+        const recap = stripAllQuestions(utter || "Quick recap:");
+        return `${pref}${recap}\n\nNext question:\n${nextQuestionLine(nextQuestion)}`;
+      }
+      // Otherwise: convert summary to lightweight clarification question (single question mark)
+      return `${pref}${ensureEndsWithQuestion(utter || "Could you clarify a bit more about that")}`;
+    }
+
+    if (action === "ASK_FOLLOWUP" || action === "REQUEST_CLARIFY") {
+      return `${pref}${ensureEndsWithQuestion(utter || "Could you share a specific example")}`;
+    }
+
+    if (action === "END") {
+      return "Thanks so much—that’s all we need for now.";
+    }
+    // fallback
+    return `${pref}${ensureEndsWithQuestion(utter || "Could you tell me a bit more")}`;
+  }
+
+  export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
+    const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience);
+    const backgroundOnly = !!(presenceAudit?.background_only);
+    
+    if (noExp) {
+        // Skip this question: only allow advancing/transitioning to summary
+        state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+        state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
+    }
+    state.styleHints = {
+        ...state.styleHints,
+        prefer_transition: true,
+        gentle_tone: true,
+        ask_outcome_only_if_event: true,
+        skip_if_no_experience: true,
+        avoid_outcome_for_background_only: backgroundOnly || false
+    };
+    }
+    
+  export function buildOrchestratorDirectives(state) {
+    return {
+        allowedActions: buildAllowedActionsForPrompt(state),
+        styleHints: state.styleHints || {}
+    };
+    }
+
+function peekNextQuestion(state, mainQuestions) {
+      const idx = (state.mainIdx ?? 0) + 1;
+      return mainQuestions?.[idx] || null;
+    }

@@ -17,10 +17,11 @@ console.log('🔧 Current working directory:', process.cwd());
 console.log('🔧 Node version:', process.version);
 
 import {
-    initState, getCurrentQuestion, isFinalQuestion,
+    WELCOME_TEXT, initState, getCurrentQuestion, isFinalQuestion,
     atFollowupCap, registerFollowup, recordScores,
     buildAllowedActionsForPrompt, allowNextIfAuditPass, finalizeIfLastAndPassed,
-    shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction
+    shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction,
+    applyHeuristicsFromAudits, buildOrchestratorDirectives, composeAssistantMessage
   } from './orchestrator.js';
 
 
@@ -281,7 +282,10 @@ function getSession(sessionId) {
             FINANCIAL_INFORMATION: 0,
             EDUCATIONAL_RECORD: 0
         },
-        detectedEntities: {} // Track detected entities to ensure consistent placeholders
+        detectedEntities: {}, // Track detected entities to ensure consistent placeholders
+        uiFlags: { hasWelcomed: false, followupsPerQuestion: {} },
+        qEpoch: 0,          // Increment each time we advance
+        qStatus: {},        // { [questionTextLower]: 'active' | 'completed' | 'skipped' }
         });
     }
     return sessions.get(sessionId);
@@ -715,6 +719,8 @@ app.post('/api/chat', async (req, res) => {
       });
   
       log.info('session ready', { currentSessionId, prevLen, newLen: session.conversationHistory.length });
+
+      const isFirstAssistantReply = (prevLen === 1);
   
       // Context maintenance
       manageConversationContext(currentSessionId);
@@ -782,18 +788,27 @@ app.post('/api/chat', async (req, res) => {
           // Parse Executor JSON, and execute action constraints
           parsedExec = parseExecutorOutput(aiResponse);
           if (parsedExec) {
-            enforceAllowedAction(state, parsedExec);
-            log.info('executor parsed', parsedExec);
-  
-            // Convert execution results to user output text
-            if (parsedExec.action === "ASK_FOLLOWUP" || parsedExec.action === "REQUEST_CLARIFY") {
-              registerFollowup(state, qNow);
-              aiResponse = parsedExec.utterance || aiResponse;
-            } else if (parsedExec.action === "SUMMARIZE_QUESTION") {
-              aiResponse = parsedExec.utterance || aiResponse;
-            } else if (parsedExec.action === "NEXT_QUESTION" || parsedExec.action === "END") {
-              // The pace is given to the audit+Orchestrator, not directly advancing/ending
+            // Early "no follow-up on completed questions" enforcement (see section B explanation)
+            const curKey = getQuestionKey(qNow);
+            if (
+              parsedExec.action === "ASK_FOLLOWUP" &&
+              session.qStatus[curKey] && session.qStatus[curKey] !== 'active'
+            ) {
+              parsedExec.action = state.allowedActions.has("NEXT_QUESTION")
+                ? "NEXT_QUESTION"
+                : (state.allowedActions.has("SUMMARIZE_QUESTION") ? "SUMMARIZE_QUESTION" : "REQUEST_CLARIFY");
             }
+          
+            parsedExec = enforceAllowedAction(state, parsedExec, qNow);
+            log.info('executor parsed', parsedExec);
+          
+            aiResponse = composeAssistantMessage(state, parsedExec, {
+              currentQuestion: getCurrentQuestion(state, mainQuestions),
+              nextQuestion: peekNextQuestion(state, mainQuestions),
+              styleHints: state.styleHints || {},
+              isFirstAssistantReply,
+              welcomeText: WELCOME_TEXT
+            });
           } else {
             log.warn('executor output not JSON; using raw text');
           }
@@ -850,8 +865,8 @@ app.post('/api/chat', async (req, res) => {
           });
   
           recordScores(state, qNow, completionAudit?.scores);
-          allowNextIfAuditPass(state, completionAudit?.verdict);
-          finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
+        //   allowNextIfAuditPass(state, completionAudit?.verdict);
+        //   finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
           // ====== Presence Audit ======
           const presT0 = Date.now();
@@ -876,14 +891,25 @@ app.post('/api/chat', async (req, res) => {
         //     );
         //   }
 
-          presenceAudit = await auditQuestionPresence(
-            message,
-            aiResponse,
-            qNow,
-            session.conversationHistory,
-            isFinalQuestionValue,
-            followUpMode
-          );
+        //   presenceAudit = await auditQuestionPresence(
+        //     message,
+        //     aiResponse,
+        //     qNow,
+        //     session.conversationHistory,
+        //     isFinalQuestionValue,
+        //     followUpMode
+        //   );
+
+        // const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
+        const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
+        presenceAudit = await auditQuestionPresence(
+                     message,
+                     /* draft */ aiResponse,
+                     qNow,
+                     session.conversationHistory,
+                     isFinalQuestionValue,
+                     presenceFollowUpMode
+                   );
 
           const presDur = Date.now() - presT0;
   
@@ -940,25 +966,46 @@ app.post('/api/chat', async (req, res) => {
             }
           }
   
-       
+          // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
+          storeAudits(state, { completionAudit, presenceAudit });
+          applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit });
+          allowNextIfAuditPass(state, completionAudit?.verdict);
+          finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
 
-        // No isBackgroundQuestion variable; assume all questions are main questions and use audit verdict to control advancement
-        if (shouldAdvance(completionAudit?.verdict)) {
-          // Main questions require audit approval to advance
-          questionCompleted = true;
+        // Adapted to use new advancement logic and composeAssistantMessage for next question transition
+        const currentQuestion = qNow;
+        const qKey = getQuestionKey(currentQuestion);
+        if (shouldAdvance(completionAudit?.verdict, state, currentQuestion)) {
+          // Freeze old question
+          session.qStatus = session.qStatus || {};
+          session.qStatus[qKey] = session.qStatus[qKey] || "completed";
+
+          // Advance to next question
           gotoNextQuestion(state, mainQuestions);
 
-          // Get the next question and replace the AI response with it
-          const nextQuestion = getCurrentQuestion(state, mainQuestions);
-          if (nextQuestion) {
-            aiResponse = nextQuestion;
+          // Activate new question
+          const nextQ = getCurrentQuestion(state, mainQuestions);
+          if (nextQ) {
+            const nk = nextQ.trim().toLowerCase();
+            session.qStatus[nk] = "active";
           }
+
+          // Compose transition + next question message
+          aiResponse = composeAssistantMessage(state, { action: "NEXT_QUESTION" }, {
+            currentQuestion: null,
+            nextQuestion: getCurrentQuestion(state, mainQuestions),
+            styleHints: state.styleHints || {},
+            isFirstAssistantReply: false,
+            welcomeText: WELCOME_TEXT
+          });
+
+          questionCompleted = true;
 
           log.info('main question advanced via audit', {
             phase: state.phase,
             mainIdx: state.mainIdx,
             newAllowed: Array.from(state.allowedActions),
-            nextQuestion: nextQuestion
+            nextQuestion: getCurrentQuestion(state, mainQuestions)
           });
         } else {
           questionCompleted = false;
@@ -992,7 +1039,7 @@ app.post('/api/chat', async (req, res) => {
       });
   
       // Save audits in state (for debugging/UI)
-      storeAudits(state, { completionAudit, presenceAudit });
+    //   storeAudits(state, { completionAudit, presenceAudit });
   
       log.info('finalize response', {
         questionCompleted,
@@ -1002,6 +1049,14 @@ app.post('/api/chat', async (req, res) => {
       });
   
       const t1 = Date.now();
+      const curKey = getQuestionKey(qNow);
+      if ((/[\?\uff1f]\s*$/.test(aiResponse) || parsedExec?.action === "ASK_FOLLOWUP")
+          && session.qStatus[curKey] && session.qStatus[curKey] !== 'active') {
+        const nextQ = getCurrentQuestion(state, mainQuestions);
+        if (nextQ) {
+          aiResponse = `Thanks—that helps. Next question:\n${nextQ.endsWith("?")?nextQ:(nextQ+"?")}`;
+        }
+      }
       res.json({
         success: true,
         bot_response: aiResponse,
@@ -2629,4 +2684,12 @@ function getOtherQuestionKeywords(currentQuestion) {
   return Object.entries(QUESTION_KEYWORDS)
     .filter(([q]) => q !== currentQuestion)
     .flatMap(([, arr]) => arr);
+}
+
+function getQuestionKey(q){ return (q||'').trim().toLowerCase(); }
+function canAskFollowup(session, qNow, epochAtDecision){
+    const key = getQuestionKey(qNow);
+    const st = session.qStatus[key] || 'active';
+    const sameEpoch = session.qEpoch === epochAtDecision;
+    return st === 'active' && sameEpoch;
 }
