@@ -539,10 +539,33 @@ const FOLLOWUPS_BY_QUESTION = {
     ]
 };
 
+function normalizeQuestionKey(s) {
+    return (s || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/[“”"’'`´·(){}\[\].,:;!?\-_/\\]+/g, "")
+        .trim();
+}
 
-
+const NORMALIZED_FU_MAP = new Map(
+    Object.entries(FOLLOWUPS_BY_QUESTION).map(([k, v]) => [normalizeQuestionKey(k), v])
+);
 function getFollowupsForQuestion(q) {
-    return FOLLOWUPS_BY_QUESTION[q] || [];
+    const byKey = NORMALIZED_FU_MAP.get(normalizeQuestionKey(q));
+    if (byKey && byKey.length) return byKey;
+    // 兜底：做一次极简“相似度”找最像的主问题，避免彻底拿不到
+    const qKey = normalizeQuestionKey(q);
+    let best = null, bestScore = -1;
+    for (const [k, v] of NORMALIZED_FU_MAP.entries()) {
+        // 共享 token 数 / 总 token 数，粗略相似度
+        const a = new Set(qKey.split(" "));
+        const b = new Set(k.split(" "));
+        const inter = [...a].filter(t => b.has(t)).length;
+        const union = new Set([...a, ...b]).size;
+        const score = union ? inter / union : 0;
+        if (score > bestScore) { bestScore = score; best = v; }
+    }
+    return best || [];
 }
 function getFollowupKey(q, fid) {
     return `${getQuestionKey(q)}::${fid}`;
@@ -983,6 +1006,14 @@ app.post('/api/chat', async (req, res) => {
       if (openaiClient) {
         try {
             if (isFirstAssistantReply) {
+
+                if (!session.flags) session.flags = {};
+                if (!session.flags.welcomeSent) {
+                    const welcomePrefix =
+                        state?.welcomeText ||
+                        "Hi! Thanks for joining—I'll ask a few short questions and some small follow-ups to keep us on track.";
+                }
+
                 const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
                 if (firstQ) {
                   const { prefix, suffix } = await polishFollowupConnectors({
@@ -1062,7 +1093,7 @@ app.post('/api/chat', async (req, res) => {
           
 
 
-          completionAudit = await auditQuestionCompletion(
+          const completionAudit = await auditQuestionCompletion(
             message,
             aiResponse,
             qNow,
@@ -1071,38 +1102,66 @@ app.post('/api/chat', async (req, res) => {
             followUpMode,
             session
           );
-
-          const compDur = Date.now() - compT0;
-  
-          log.info('completion audit', {
-            ms: compDur,
-            verdict: completionAudit?.verdict,
-            scores: completionAudit?.scores,
-            missing: completionAudit?.missing,
-            followUpQ: completionAudit?.followUpQuestions,
-            confidence: completionAudit?.confidence
+          const allFUs = getFollowupsForQuestion(qNow);        
+          const coveredIds = new Set(
+          (completionAudit?.coverage_map || [])
+            .filter(it => it?.covered)
+            .map(it => it.id)
+          );
+          const pending = allFUs.filter(f => !coveredIds.has(f.id));
+          
+          // log for debugging
+          console.log("[coverage]", {
+            q: qNow,
+            covered: [...coveredIds],
+            pending: pending.map(f => f.id),
+            verdict: completionAudit?.verdict
           });
-  
-          recordScores(state, qNow, completionAudit?.scores);
-          if (completionAudit?.next_followup?.prompt) {
-            // >>> POLISH TRIGGER <<< Only add prefix/suffix connectors; do not modify the follow-up content itself.
-            const { prefix, suffix } = await polishFollowupConnectors({
-              followupPrompt: completionAudit.next_followup.prompt,
-              currentQuestion: qNow,
-              conversationHistory: session.conversationHistory,
-              styleHints: state.styleHints || {}
-            });
-            aiResponse = [prefix, completionAudit.next_followup.prompt, suffix]
-              .filter(Boolean)
-              .join(' ')
-              .replace(/\s+/g, ' ')
-              .trim();
-            session.lastPolish = {
-              followup_id: completionAudit.next_followup.id,
-              prefix, suffix
-            };
-            usedPolish = true;
-          }
+          // Strict gate: If there are uncovered follow-ups, only ask the next follow-up and do not proceed to the next main question.
+          if (pending.length > 0) {
+            let nextFU = null;
+            // Use the next_followup suggested by the audit LLM, but it must be in the pending list.
+            if (completionAudit?.next_followup) {
+              nextFU = pending.find(f => f.id === completionAudit.next_followup) || null;
+            }
+            // Otherwise, fall back: take the first uncovered follow-up in order.
+            if (!nextFU) nextFU = pending[0];
+          // Add a slight transition phrase, but do not modify the follow-up content itself.
+          const { prefix, suffix } = await polishFollowupConnectors({
+            followupPrompt: nextFU.prompt,
+            currentQuestion: qNow,
+            conversationHistory: session.conversationHistory,
+            styleHints: state?.styleHints || {}
+          });
+          const core = nextFU.prompt.trim().endsWith("?") ? nextFU.prompt.trim() : (nextFU.prompt.trim() + "?");
+         const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
+          const right = suffix ? (" " + suffix.trim()) : "";
+          const aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?");
+          session.conversationHistory.push({ role: "assistant", content: aiResponse, followup_id: nextFU.id });
+          return res.json({ ok: true, message: aiResponse, done: false });
+        }
+        
+        
+
+        //   if (completionAudit?.next_followup?.prompt) {
+        //     // >>> POLISH TRIGGER <<< Only add prefix/suffix connectors; do not modify the follow-up content itself.
+        //     const { prefix, suffix } = await polishFollowupConnectors({
+        //       followupPrompt: completionAudit.next_followup.prompt,
+        //       currentQuestion: qNow,
+        //       conversationHistory: session.conversationHistory,
+        //       styleHints: state.styleHints || {}
+        //     });
+        //     aiResponse = [prefix, completionAudit.next_followup.prompt, suffix]
+        //       .filter(Boolean)
+        //       .join(' ')
+        //       .replace(/\s+/g, ' ')
+        //       .trim();
+        //     session.lastPolish = {
+        //       followup_id: completionAudit.next_followup.id,
+        //       prefix, suffix
+        //     };
+        //     usedPolish = true;
+        //   }
         //   allowNextIfAuditPass(state, completionAudit?.verdict);
         //   finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
@@ -1160,7 +1219,7 @@ app.post('/api/chat', async (req, res) => {
           });
   
           // ====== Regenerate if needed (presence) ======
-          if (presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
+          if (pending.length === 0 && presenceAudit?.shouldRegenerate && presenceAudit.confidence >= 0.7) {
             const regenT0 = Date.now();
             const regenerated = await regenerateResponseWithQuestions(
               message,
