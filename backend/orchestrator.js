@@ -27,6 +27,39 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     }
     return session.state;
   }
+
+
+  const TAG_TO_ACTION = {
+    No_able_answer: "NEXT_QUESTION"
+    };
+    
+    function tagsToActions(tags) {
+    const out = new Set();
+    if (Array.isArray(tags)) {
+    for (const t of tags) {
+    const act = TAG_TO_ACTION[t];
+    if (act) out.add(act);
+    }
+    }
+    return out;
+    }
+
+    function shouldAutoAdvanceByTags(state) {
+    return tagsToActions(state?.lastTags).has("NEXT_QUESTION");
+    }
+
+    function wantsImmediateNext(state, completionAuditVerdict) {
+    return completionAuditVerdict === "ALLOW_NEXT_QUESTION" || shouldAutoAdvanceByTags(state);
+    }
+
+    function applyTagActionMapping(state) {
+    const acts = tagsToActions(state?.lastTags);
+    if (acts.has("NEXT_QUESTION")) {
+    clearPendingFollowup(state);
+    // Allow "next question/summary", consistent with ALLOW_NEXT_QUESTION behavior
+    state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+    }
+    }
   
 // Tag helper
 export function hasTag(state, tag) {
@@ -83,8 +116,8 @@ export function hasTag(state, tag) {
     
 // Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
  export function allowNextIfAuditPass(state, completionAuditVerdict) {
-    // If audit passes (all follow-ups covered) OR tagged No_able_answer, allow advancing to next question/summary
-    if (completionAuditVerdict === "ALLOW_NEXT_QUESTION" || hasTag(state, "No_able_answer")) {
+    // Use the helper function to determine if we should immediately advance to next question (supports verdict or tag)
+    if (wantsImmediateNext(state, completionAuditVerdict)) {
       clearPendingFollowup(state);
       state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
       return;
@@ -106,8 +139,8 @@ export function hasTag(state, tag) {
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
   export function shouldAdvance(completionAuditVerdict, state, question) {
-    // Also advance if tagged No_able_answer (server has already skipped event-dependent follow-ups)
-    const pass = completionAuditVerdict === "ALLOW_NEXT_QUESTION" || hasTag(state, "No_able_answer");
+    // Use the helper function to determine if we should immediately advance to next question (supports verdict or tag)
+    const pass = wantsImmediateNext(state, completionAuditVerdict);
     const skipped = !!(state?.perQuestion?.[question]?.skip);
     return pass || skipped;
   }
@@ -148,11 +181,7 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
   storeAudits(state, { completionAudit, presenceAudit });
   if (Array.isArray(orchestrator_tags)) {
     state.lastTags = orchestrator_tags;
-    if (hasTag(state, "No_able_answer")) {
-      clearPendingFollowup(state);
-      // Directly allow transition: next question or summary
-      state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
-    }
+    applyTagActionMapping(state);
   }
 }
   
@@ -186,8 +215,10 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
         : (state.allowedActions.has("REQUEST_CLARIFY") ? "REQUEST_CLARIFY" : "NEXT_QUESTION");
     }
 
-    // NEW: if tagged No_able_answer, never allow further follow-ups on this question
-    if (!hasPendingFollowup(state) && parsed.action === "ASK_FOLLOWUP" && hasTag(state, "No_able_answer")) {
+    // If the tag mapping points to NEXT_QUESTION, do not allow further follow-ups
+    if (!hasPendingFollowup(state) && parsed.action === "ASK_FOLLOWUP" && shouldAutoAdvanceByTags(state)) {
+
+
       parsed.action = state.allowedActions.has("SUMMARIZE_QUESTION")
       ? "SUMMARIZE_QUESTION"
       : (state.allowedActions.has("NEXT_QUESTION") ? "NEXT_QUESTION" : "REQUEST_CLARIFY");
@@ -272,9 +303,8 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
     }
 
     if (action === "ASK_FOLLOWUP" || action === "REQUEST_CLARIFY") {
-
-      // If tagged No_able_answer but still falls into ask follow-up/clarify path, give a lightweight clarification question (without changing follow-up text)
-      if (!hasPendingFollowup(state) && hasTag(state, "No_able_answer") && nextQuestion) {
+      // If the tag-action mapping points to NEXT_QUESTION, but still falls into ask follow-up/clarify path, do a lightweight transition and enter the next question
+      if (!hasPendingFollowup(state) && shouldAutoAdvanceByTags(state) && nextQuestion) {
         // Use a transition + directly enter the next question to avoid digging into non-existent experiences
         return `${pref}Thanks—that’s clear.\n\nNext question:\n${nextQuestionLine(nextQuestion)}`;
       }
@@ -289,7 +319,8 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
   }
 
   export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
-    const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || hasTag(state, "No_able_answer"));
+    const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || shouldAutoAdvanceByTags(state));
+
 
     const backgroundOnly = !!(presenceAudit?.background_only);
     
@@ -315,7 +346,7 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
       styleHints: state.styleHints || {},
       // Pass pending follow-up explicitly to executor prompt constructor (if you use it in server)
       pendingFollowup: hasPendingFollowup(state) ? { ...state.pendingFollowup } : null,
-      // NEW: pass tags to downstream prompt builders/executors if needed
+      // pass tags to downstream prompt builders/executors if needed
       tags: Array.isArray(state.lastTags) ? [...state.lastTags] : []
     };
   }
