@@ -676,20 +676,84 @@ function convertToNewPlaceholderFormat(piiCategory) {
     return formatMap[piiCategory] || piiCategory;
 }
 
-function detectNoExperience(utterance, currentQuestion) {
+
+async function detectNoExperienceLLM(userMessage, currentQuestion, conversationHistory = []) {
+
+    if (!openaiClient) return null; // fall back when no key
+    const sys = ["You are a strict classifier that decides if the user CANNOT provide a substantive answer to the CURRENT QUESTION.",
+    "Return ONLY valid JSON:",
+    "{\"label\":\"NO_ABLE_ANSWER\"|\"HAS_ANSWER\",\"reason\":\"...\",\"reason_type\":\"no_experience\"|\"refusal\",\"evidence\":[\"...\"]}",
+    "Label NO_ABLE_ANSWER in EITHER case:",
+    " (A) no relevant personal experience to share;",
+    " (B) explicit refusal/inability to share details now (privacy/confidentiality/NDA/not comfortable/would rather not say).",
+    "ALWAYS mark refusal phrasing like: 'sorry I cannot share it', 'I'd rather not say', 'prefer not to disclose', 'I can't discuss that', 'that's private/confidential', 'not comfortable sharing', 'under NDA'.",
+    "Be conservative; only return HAS_ANSWER if the user indicates they CAN share a concrete example."
+   ].join("\n");
+   const usr = [
+     `CURRENT QUESTION: "${currentQuestion || ''}"`,
+     `RECENT:`,
+     ...conversationHistory.slice(-8).map(m => `${m.role}: ${m.content}`),
+     ``,
+     `USER_LATEST: ${userMessage}`
+   ].join("\n");
+   try {
+     const r = await openaiClient.chat.completions.create({
+       model: "gpt-4o-mini",
+       temperature: 0.0,
+       max_tokens: 160,
+       messages: [{ role: "system", content: sys }, { role: "user", content: usr }]
+     });
+     let raw = r.choices?.[0]?.message?.content?.trim() || "";
+     if (raw.startsWith("```")) raw = raw.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+
+     const parsed = JSON.parse(raw);
+     if (parsed && (parsed.label === "NO_ABLE_ANSWER" || parsed.label === "HAS_ANSWER")) return parsed;
+        } catch (e) {
+          console.warn("LLM no-exp detect failed:", e.message);
+        }
+        return null;
+
+        
+      }
+
+// Unified detector: no experience OR refusal → both map to No_able_answer tag
+async function detectNoExperience(utterance, currentQuestion, conversationHistory = []) {
     const t = (utterance || "").toLowerCase();
     // Typical negative expressions
     const NEGATE = /\b(never|not really|not at all|n\/a|no experience|no usage)\b/;
-
     const NO_INTERVIEW = /\b(no (job )?interview|haven't had .*interview|not .*interview(ed)?)\b/;
+    // NEW: explicit refusal to share
+    const REFUSAL = /\b(?:sorry[, ]*)?(?:i\s*(?:would rather|would prefer|prefer)\s*not\s*(?:to\s*)?(?:say|share|disclose)|i\s*(?:can't|cannot|won't)\s*(?:say|share|discuss|go into)|not\s*comfortable\s*(?:sharing|talking)|that's\s*(?:private|confidential)|under\s*nda)\b/;
+    const eventyQ = isEventBasedMainQuestion(currentQuestion);
+  
+    // 1) Try LLM classifier first
 
-    // Only enable for "event-based main questions": Q3(use AI), Q4(close call), Q6(hide use)
-    const qkey = normalizeQuestionKey(currentQuestion);
-    const eventyQ = /(use ai|used ai|close call|hide)/.test(qkey);
-
-    const noExp = (NEGATE.test(t) || NO_INTERVIEW.test(t)) && eventyQ;
-    return { no_experience: !!noExp, reason: noExp ? t : "" };
-}
+    const llm = await detectNoExperienceLLM(utterance, currentQuestion, conversationHistory);
+    if (llm && llm.label === "NO_ABLE_ANSWER") {
+        const cause = llm.reason_type === "refusal" ? "refusal" : "no_experience";
+        return {
+            no_experience: true,
+            cause,
+            reason: llm.reason || (cause === "refusal" ? "LLM: refusal" : "LLM: no_experience"),
+            tag: "No_able_answer",
+            evidence: llm.evidence || []
+        };
+    }
+ 
+   // 2) Fallback to heuristics
+   const isRefusal = REFUSAL.test(t);
+   const isNoExp = (NEGATE.test(t) || NO_INTERVIEW.test(t)) && eventyQ;
+   if (isRefusal || isNoExp) {
+        return {
+            no_experience: true,
+            cause: isRefusal ? "refusal" : "no_experience",
+            reason: t,
+            tag: "No_able_answer",
+            evidence: []
+        };
+    }
+    return { no_experience: false, cause: undefined, reason: "", evidence: [] };
+    } 
 
 function markFollowupSkipped(session, q, fid, reason = "inapplicable") {
     if (!session.followupStatus) session.followupStatus = {};
@@ -1189,14 +1253,19 @@ app.post('/api/chat', async (req, res) => {
             .map(it => it.id)
           );
 
-          const deny = detectNoExperience(message, qNow);
-if (deny.no_experience) {
-  for (const fu of allFUs) {
-    if (isEventDependentFollowup(fu) && !isCoveredOrSkipped(session, qNow, fu.id)) {
-      markFollowupSkipped(session, qNow, fu.id, "no_experience: " + deny.reason);
-    }
-  }
-}
+          const deny = await detectNoExperience(message, qNow, session.conversationHistory);
+          if (deny.no_experience) {
+            // If the user refused to answer, skip all follow-ups for this question.
+            // If the user has no experience, keep the original logic: for event-based questions, skip all; otherwise, only skip event-dependent follow-ups.
+            const eventBased = isEventBasedMainQuestion(qNow);
+            const skipAll = (deny.cause === "refusal") || eventBased;
+            for (const fu of allFUs) {
+              const shouldSkip = skipAll || isEventDependentFollowup(fu);
+              if (shouldSkip && !isCoveredOrSkipped(session, qNow, fu.id)) {
+                markFollowupSkipped(session, qNow, fu.id, `${deny.cause || 'no_experience'}: ${deny.reason || 'LLM'}`);
+              }
+            }
+          }
 
 // Both covered and skipped follow-ups are considered "completed", no longer pending
 const pending = allFUs.filter(
@@ -1211,6 +1280,17 @@ const pending = allFUs.filter(
             pending: pending.map(f => f.id),
             verdict: completionAudit?.verdict
           });
+
+
+          if (pending.length === 0 && deny?.no_experience) {
+            // 把 verdict 改成放行，并添加 tag，供 orchestrator/UI 使用
+            if (completionAudit && typeof completionAudit === "object") {
+              completionAudit.verdict = "ALLOW_NEXT_QUESTION"; 
+              completionAudit.notes = (completionAudit.notes ? completionAudit.notes + " | " : "") + `tag: No_able_answer (${deny.cause || 'unknown'})`;
+              completionAudit.tags = Array.isArray(completionAudit.tags) ? completionAudit.tags : [];
+              if (!completionAudit.tags.includes("No_able_answer")) completionAudit.tags.push("No_able_answer");
+            }
+          }
           // Strict gate: If there are uncovered follow-ups, only ask the next follow-up and do not proceed to the next main question.
           if (pending.length > 0) {
             let nextFU = null;
@@ -1492,6 +1572,8 @@ const pending = allFUs.filter(
         privacy_detection: null,
         question_completed: questionCompleted,
         audit_result: completionAudit || null,
+        orchestrator_tags: (completionAudit && completionAudit.tags) ? completionAudit.tags : (deny?.tag ? [deny.tag] : []),
+        no_answer_cause: deny?.cause || null, // optional diagnostic
         followup_coverage: completionAudit?.coverage_map || [],
         next_followup: completionAudit?.next_followup || null,
         pending_followup_exists: !!completionAudit?.next_followup,
@@ -3140,3 +3222,25 @@ function canAskFollowup(session, qNow, epochAtDecision){
     const sameEpoch = session.qEpoch === epochAtDecision;
     return st === 'active' && sameEpoch;
 }
+
+
+
+
+
+
+
+
+
+
+
+      function isEventBasedMainQuestion(q) {
+        const qkey = normalizeQuestionKey(q);
+        // Event-based main question: use AI's specific experience / dangerous moment / hidden use
+        return /(use ai|used ai|close call|hide)/.test(qkey);
+      }      
+
+
+
+
+
+      
