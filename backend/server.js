@@ -30,7 +30,8 @@ import {
     allowNextIfAuditPass, finalizeIfLastAndPassed,
     shouldAdvance, gotoNextQuestion,
     parseExecutorOutput, enforceAllowedAction,
-    composeAssistantMessage, buildOrchestratorDirectives
+    composeAssistantMessage, buildOrchestratorDirectives,
+    buildAllowedActionsForPrompt
 } from './orchestrator.js';
 
 
@@ -832,7 +833,7 @@ app.post('/api/chat', async (req, res) => {
         hasMessage: !!message,
         step, questionMode, isFinalQuestionFlag, followUpMode,
         currentQuestionProvided: !!currentQuestion,
-        predefinedCount: Array.isArray(predefinedQuestions) ? clientPredefined.length : 0,
+        predefinedCount: Array.isArray(clientPredefined) ? clientPredefined.length : 0,
         sessionIdProvided: !!sessionId
       });
   
@@ -1240,6 +1241,7 @@ app.post('/api/chat', async (req, res) => {
         }
       }
 
+      const t1 = Date.now();
       res.json({
         success: true,
         bot_response: aiResponse,
