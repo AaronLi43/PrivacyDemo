@@ -676,6 +676,48 @@ function convertToNewPlaceholderFormat(piiCategory) {
     return formatMap[piiCategory] || piiCategory;
 }
 
+function detectNoExperience(utterance, currentQuestion) {
+    const t = (utterance || "").toLowerCase();
+    // Typical negative expressions
+    const NEGATE = /\b(never|not really|not at all|n\/a|no experience|no usage)\b/;
+
+    const NO_INTERVIEW = /\b(no (job )?interview|haven't had .*interview|not .*interview(ed)?)\b/;
+
+    // Only enable for "event-based main questions": Q3(use AI), Q4(close call), Q6(hide use)
+    const qkey = normalizeQuestionKey(currentQuestion);
+    const eventyQ = /(use ai|used ai|close call|hide)/.test(qkey);
+
+    const noExp = (NEGATE.test(t) || CHEAT.test(t) || NO_INTERVIEW.test(t)) && eventyQ;
+    return { no_experience: !!noExp, reason: noExp ? t : "" };
+}
+
+function markFollowupSkipped(session, q, fid, reason = "inapplicable") {
+    if (!session.followupStatus) session.followupStatus = {};
+    const key = normalizeQuestionKey(q) + "::" + fid;
+    session.followupStatus[key] = { status: "skipped_na", reason, ts: Date.now() };
+}
+function isCoveredOrSkipped(session, q, fid) {
+    const key = normalizeQuestionKey(q) + "::" + fid;
+    const s = session.followupStatus?.[key];
+    if (!s) return false;
+    if (s === "covered") return true; // Compatible with old values
+    return typeof s === "object" && (s.status === "covered" || s.status === "skipped_na");
+}
+
+const EVENT_KW = new Set([
+    "when",
+    "interview_timeline_and_when_ai_used",
+    "what_ai_used",
+    "how_ai_used",
+    "incident_when",
+    "what_trouble_ai_got_you_in",
+    "who_hiding_from",
+    "what_ai_uses_you_try_hide_from_them"
+]);
+function isEventDependentFollowup(fu) {
+    return (fu.keywords || []).some(k => EVENT_KW.has(String(k).toLowerCase()));
+}
+
 // Helper function to get the next placeholder number for a PII category
 function getNextPlaceholderNumber(piiCategory, sessionId) {
     const session = getSession(sessionId);
@@ -1146,7 +1188,21 @@ app.post('/api/chat', async (req, res) => {
             .filter(it => it?.covered)
             .map(it => it.id)
           );
-          const pending = allFUs.filter(f => !coveredIds.has(f.id));
+
+          const deny = detectNoExperience(message, qNow);
+if (deny.no_experience) {
+  for (const fu of allFUs) {
+    if (isEventDependentFollowup(fu) && !isCoveredOrSkipped(session, qNow, fu.id)) {
+      markFollowupSkipped(session, qNow, fu.id, "no_experience: " + deny.reason);
+    }
+  }
+}
+
+// Both covered and skipped follow-ups are considered "completed", no longer pending
+const pending = allFUs.filter(
+  f => !coveredIds.has(f.id) && !isCoveredOrSkipped(session, qNow, f.id)
+);
+        //   const pending = allFUs.filter(f => !coveredIds.has(f.id));
           
           // log for debugging
           console.log("[coverage]", {
@@ -1480,7 +1536,6 @@ app.post('/api/privacy_detection', async (req, res) => {
         
         // For simple patterns (names, emails, phones), prefer pattern-based detection for consistency
         const simplePatterns = [
-            /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/, // Full Name
             /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, // Email
             /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, // Phone Number
             /\b\d{3}-\d{2}-\d{4}\b/, // SSN
@@ -2157,6 +2212,9 @@ Current user message: "${userMessage}"${contextInfo}`;
         detectionData.text_with_placeholders = updatedTextWithPlaceholders;
         
         // Step 2: Abstraction LLM - Create abstracted text with placeholders
+        const placeholderList = (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
+            .map(p => p && p.placeholder)
+            .filter(Boolean);
         const abstractionPrompt = `Rewrite the text to abstract the protected information, without changing other parts.
 
 For example:
@@ -2165,7 +2223,9 @@ Output JSON: {"results": [{"protected": "CMU", "abstracted": "MIT"}, {"protected
 
 Current input:
 <Text>${detectionData.text_with_placeholders}</Text>
-<ProtectedInformation>${detectionData.affected_text}</ProtectedInformation>
+Placeholders to replace (comma-separated, use EXACT matches):
+<ProtectedInformation>${placeholderList.join(',')}</ProtectedInformation>
+<AffectedText>${detectionData.affected_text || ''}</AffectedText>
 
 Create abstracted text by replacing the protected information with realistic but fake data (not generic terms). Use "results" as the main key in the JSON object with an array of objects containing "protected" and "abstracted" fields.
 
@@ -2205,9 +2265,23 @@ Use this exact format:
         try {
             const abstractionData = JSON.parse(cleanedAbstractionResponse);
             
-            // Handle new results array format
-            if (abstractionData.results && Array.isArray(abstractionData.results)) {
-                const results = abstractionData.results;
+
+
+                // Handle new results array format
+                if (abstractionData.results && Array.isArray(abstractionData.results)) {
+                    // Prefer placeholders; if model returned originals, map them back to placeholders
+                    const originalToPlaceholder = new Map(
+                        (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
+                            .map(p => [p.original_text, p.placeholder])
+                    );
+                    let results = abstractionData.results.map(r => {
+                        if (r && typeof r.protected === 'string'
+                            && !String(detectionData.text_with_placeholders).includes(r.protected)
+                            && originalToPlaceholder.has(r.protected)) {
+                            return { ...r, protected: originalToPlaceholder.get(r.protected) };
+                        }
+                        return r;
+                    });
                 if (results.length > 0) {
                     // Convert results array to the expected format
                     const protectedTexts = results.map(r => r.protected).join(',');

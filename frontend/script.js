@@ -4427,6 +4427,16 @@ class PrivacyDemoApp {
                 if (turn.userPrivacy.safer_versions) {
                     placeholderVersion = turn.userPrivacy.safer_versions.replacing;
                     fakeDataVersion = turn.userPrivacy.safer_versions.abstraction;
+
+                    // If fake data version is missing or the same as placeholder version, it is "unavailable" (not rendered & disabled buttons)
+                    if (
+                        !fakeDataVersion ||
+                        (typeof fakeDataVersion === 'string' &&
+                         typeof placeholderVersion === 'string' &&
+                         fakeDataVersion.trim() === placeholderVersion.trim()) 
+                    ) {
+                        fakeDataVersion = '';
+                    }
                 } else {
                     // Fallback: use the 'after' variable if safer_versions is not available
                     placeholderVersion = after;
@@ -4507,6 +4517,16 @@ class PrivacyDemoApp {
                 if (turn.botPrivacy.safer_versions) {
                     placeholderVersion = turn.botPrivacy.safer_versions.replacing;
                     fakeDataVersion = turn.botPrivacy.safer_versions.abstraction;
+
+                    // If fake data version is missing or the same as placeholder version, it is "unavailable" (not rendered & disabled buttons)
+                    if (
+                        !fakeDataVersion ||
+                        (typeof fakeDataVersion === 'string' &&
+                         typeof placeholderVersion === 'string' &&
+                         fakeDataVersion.trim() === placeholderVersion.trim()) 
+                    ) {
+                        fakeDataVersion = '';
+                    }
                 } else {
                     // Fallback: use the 'after' variable if safer_versions is not available
                     placeholderVersion = after;
@@ -4590,7 +4610,15 @@ class PrivacyDemoApp {
                     if (choice === 'accept') {
                         after = analyzedTurn.userPrivacy.safer_versions.replacing;
                     } else if (choice === 'accept_fake') {
-                        after = analyzedTurn.userPrivacy.safer_versions.abstraction;
+                        const repl = analyzedTurn.userPrivacy.safer_versions.replacing || '';
+                        const abs  = analyzedTurn.userPrivacy.safer_versions.abstraction || '';
+                        if (abs && abs.trim() && abs.trim() !== repl.trim()) {
+                            after = abs;
+                        } else {
+                            // Fake data version is unavailable or identical to placeholder version: prompt and revert to placeholder version
+                            this.showNotification('ℹ️ Fake Data is unavailable or identical to Placeholder. Using Placeholder instead.', 'info');
+                            after = repl || analyzedTurn.user;
+                        }
                     }
                 } else if (analyzedTurn.userPrivacy.suggestion) {
                     // Fallback to parsing suggestion (for backward compatibility)
@@ -4626,7 +4654,14 @@ class PrivacyDemoApp {
                     if (choice === 'accept') {
                         after = analyzedTurn.botPrivacy.safer_versions.replacing;
                     } else if (choice === 'accept_fake') {
-                        after = analyzedTurn.botPrivacy.safer_versions.abstraction;
+                        const repl = analyzedTurn.botPrivacy.safer_versions.replacing || '';
+                        const abs  = analyzedTurn.botPrivacy.safer_versions.abstraction || '';
+                        if (abs && abs.trim() && abs.trim() !== repl.trim()) {
+                            after = abs;
+                        } else {
+                            this.showNotification('ℹ️ Fake Data is unavailable or identical to Placeholder. Using Placeholder instead.', 'info');
+                            after = repl || analyzedTurn.bot;
+                        }
                     }
                 } else if (analyzedTurn.botPrivacy.suggestion) {
                     // Fallback to parsing suggestion (for backward compatibility)
