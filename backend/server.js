@@ -553,11 +553,11 @@ const NORMALIZED_FU_MAP = new Map(
 function getFollowupsForQuestion(q) {
     const byKey = NORMALIZED_FU_MAP.get(normalizeQuestionKey(q));
     if (byKey && byKey.length) return byKey;
-    // 兜底：做一次极简“相似度”找最像的主问题，避免彻底拿不到
+    // Fallback: perform a minimal similarity search to find the most similar main question, to avoid returning nothing
     const qKey = normalizeQuestionKey(q);
     let best = null, bestScore = -1;
     for (const [k, v] of NORMALIZED_FU_MAP.entries()) {
-        // 共享 token 数 / 总 token 数，粗略相似度
+        // Shared token count / total token count, rough similarity score
         const a = new Set(qKey.split(" "));
         const b = new Set(k.split(" "));
         const inter = [...a].filter(t => b.has(t)).length;
@@ -928,7 +928,8 @@ app.post('/api/chat', async (req, res) => {
         clientPredefined = [],             // 7 main questions
         isFinalQuestionFlag = false,       // Reserved field (not involved in pass judgment)
         followUpMode = true,               // We default to follow-up mode, requiring "exactly one question"
-        sessionId
+        sessionId,
+        action = null                      // Action parameter for special message handling
       } = req.body || {};
   
       log.info('incoming params', {
@@ -936,12 +937,47 @@ app.post('/api/chat', async (req, res) => {
         step, questionMode, isFinalQuestionFlag, followUpMode,
         currentQuestionProvided: !!currentQuestion,
         predefinedCount: Array.isArray(clientPredefined) ? clientPredefined.length : 0,
-        sessionIdProvided: !!sessionId
+        sessionIdProvided: !!sessionId,
+        action: action
       });
   
       if (!message || message.trim() === '') {
         log.warn('empty message');
         return res.status(400).json({ error: 'Message is required and cannot be empty' });
+      }
+
+      // Special handling for START_QUESTION_MODE action
+      if (message === "__START__" && action === "START_QUESTION_MODE") {
+        log.info('handling START_QUESTION_MODE action');
+        
+        // Get the first question for the current mode
+        const state = initState(session, { maxFollowups: { main: 3 } });
+        const firstQuestion = getCurrentQuestion(state, unifiedQuestions);
+        
+        if (firstQuestion) {
+          const welcomeMessage = "Welcome! I'm ready to ask you some questions. Let's begin with the first one.";
+          const fullMessage = `${welcomeMessage}\n\n${firstQuestion}`;
+          
+          // Add to conversation history
+          session.conversationHistory.push({
+            role: 'assistant',
+            content: fullMessage,
+            timestamp: new Date().toISOString(),
+            step
+          });
+          
+          return res.json({
+            success: true,
+            bot_response: fullMessage,
+            conversation_history: session.conversationHistory,
+            step,
+            question_completed: false,
+            pending_followup_exists: false,
+            allowed_actions: Array.from(state.allowedActions),
+            interview_finished: false,
+            session_id: currentSessionId
+          });
+        }
       }
   
       // Session
@@ -1138,7 +1174,17 @@ app.post('/api/chat', async (req, res) => {
           const right = suffix ? (" " + suffix.trim()) : "";
           const aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?");
           session.conversationHistory.push({ role: "assistant", content: aiResponse, followup_id: nextFU.id });
-          return res.json({ ok: true, message: aiResponse, done: false });
+          return res.json({
+            success: true,
+            bot_response: aiResponse,
+            conversation_history: session.conversationHistory,
+            step,
+            question_completed: false,
+            pending_followup_exists: true,
+            allowed_actions: Array.from(state.allowedActions),
+            interview_finished: false,
+            session_id: currentSessionId
+          });
         }
         
         
