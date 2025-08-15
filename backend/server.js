@@ -31,7 +31,8 @@ import {
     shouldAdvance, gotoNextQuestion,
     parseExecutorOutput, enforceAllowedAction,
     composeAssistantMessage, buildOrchestratorDirectives,
-    buildAllowedActionsForPrompt
+    buildAllowedActionsForPrompt,
+    isFinalQuestion
 } from './orchestrator.js';
 
 
