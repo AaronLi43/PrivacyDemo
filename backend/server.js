@@ -1146,6 +1146,7 @@ app.post('/api/chat', async (req, res) => {
       let usedRegenerate = false;
       let usedPolish = false;
       let parsedExec = null;
+      let deny = null;
   
       if (openaiClient) {
         try {
