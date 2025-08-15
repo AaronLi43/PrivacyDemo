@@ -15,7 +15,11 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         maxFollowups: { main: (maxFollowups?.main ?? 3) },
         lastAudit: null,
         lastPresence: null,
-        styleHints: {}
+        styleHints: {},
+        // Current question's "pending" follow-up (determined by server's next_followup)
+        pendingFollowup: null,
+        // Recent follow-up coverage (for debugging/visualization only)
+        followupCoverage: []
       };
       
       // No need to call resetAllowedForQuestion since we already set the correct actions above
@@ -38,6 +42,13 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     const cur = state.perQuestion[question]?.followups || 0;
     return cur >= cap;
   }
+
+  export function hasPendingFollowup(state) {
+    return !!(state?.pendingFollowup && state.pendingFollowup.prompt);
+  }
+  export function clearPendingFollowup(state) {
+    state.pendingFollowup = null;
+  }
   
   export function registerFollowup(state, question) {
     if (!state.perQuestion[question]) state.perQuestion[question] = { followups: 0, lastScores: null };
@@ -51,18 +62,29 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   
   export function resetAllowedForQuestion(state) {
     // Main questions can have follow-ups
-    state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
+    // If there's a pending follow-up (determined by server's next_followup), only allow asking that follow-up
+    if (hasPendingFollowup(state)) {
+      state.allowedActions = new Set(["ASK_FOLLOWUP"]);
+    } else {
+      state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
+    }
   }
   
   export function buildAllowedActionsForPrompt(state) {
-    return Array.from(state.allowedActions);
+     return hasPendingFollowup(state) ? ["ASK_FOLLOWUP"] : Array.from(state.allowedActions);
   }
     
 // Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
-
-  export function allowNextIfAuditPass(state, completionAuditVerdict) {
+ export function allowNextIfAuditPass(state, completionAuditVerdict) {
+    // If audit passes (all follow-ups covered), allow advancing to next question/summary; otherwise tighten based on pendingFollowup
     if (completionAuditVerdict === "ALLOW_NEXT_QUESTION") {
+      clearPendingFollowup(state);
       state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+      return;
+    }
+    // Audit failed: if there's a pending follow-up, only allow ASK_FOLLOWUP; otherwise allow regular clarification
+    if (hasPendingFollowup(state)) {
+      state.allowedActions = new Set(["ASK_FOLLOWUP"]);
     } else {
       state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY"]);
     }
@@ -91,6 +113,7 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       }
     }
     // After entering the next question, reset allowed actions and per-question follow-up count
+    clearPendingFollowup(state);
     getCurrentQuestion(state, mainQuestions);
     resetAllowedForQuestion(state);
   }
@@ -98,6 +121,18 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   export function storeAudits(state, { completionAudit, presenceAudit }) {
     state.lastAudit = completionAudit || null;
     state.lastPresence = presenceAudit || null;
+    // NEW: Sync follow-up coverage state and next pending follow-up (align with server audit result)
+    if (completionAudit?.coverage_map) {
+      state.followupCoverage = completionAudit.coverage_map;
+    }
+    if (completionAudit?.next_followup && completionAudit.next_followup.prompt) {
+      state.pendingFollowup = {
+        id: completionAudit.next_followup.id,
+        prompt: completionAudit.next_followup.prompt
+      };
+    } else if (completionAudit?.verdict === "ALLOW_NEXT_QUESTION") {
+      clearPendingFollowup(state);
+    }
   }
   
   // Parse Executor's JSON output (with error tolerance) and perform basic action validation
@@ -123,18 +158,22 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     if (!parsed || !parsed.action) return parsed;
 
     // If the follow-up cap is reached, do not ask follow-ups
-    if (parsed.action === "ASK_FOLLOWUP" && currentQuestion && atFollowupCap(state, currentQuestion)) {
+     if (!hasPendingFollowup(state) && parsed.action === "ASK_FOLLOWUP" && currentQuestion && atFollowupCap(state, currentQuestion)) {
+
       parsed.action = state.allowedActions.has("SUMMARIZE_QUESTION")
         ? "SUMMARIZE_QUESTION"
         : (state.allowedActions.has("REQUEST_CLARIFY") ? "REQUEST_CLARIFY" : "NEXT_QUESTION");
     }
     
+    if (hasPendingFollowup(state)) {
+      parsed.action = "ASK_FOLLOWUP";
+    }
     if (!state.allowedActions.has(parsed.action)) {
 // Fallback priority: REQUEST_CLARIFY > SUMMARIZE_QUESTION > NEXT_QUESTION
-    if (state.allowedActions.has("REQUEST_CLARIFY")) parsed.action = "REQUEST_CLARIFY";
-    else if (state.allowedActions.has("SUMMARIZE_QUESTION")) parsed.action = "SUMMARIZE_QUESTION";
-    else if (state.allowedActions.has("NEXT_QUESTION")) parsed.action = "NEXT_QUESTION";
-    else parsed.action = Array.from(state.allowedActions)[0] || "REQUEST_CLARIFY";
+      if (state.allowedActions.has("REQUEST_CLARIFY")) parsed.action = "REQUEST_CLARIFY";
+      else if (state.allowedActions.has("SUMMARIZE_QUESTION")) parsed.action = "SUMMARIZE_QUESTION";
+      else if (state.allowedActions.has("NEXT_QUESTION")) parsed.action = "NEXT_QUESTION";
+      else parsed.action = Array.from(state.allowedActions)[0] || "REQUEST_CLARIFY";
    }
     
     return parsed;
@@ -172,9 +211,22 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       if (firstQ) return `${welcomeText}\n\n${nextQuestionLine(firstQ)}`;
     }
 
-    const pref = styleHints.prefer_transition ? (bridge() + " ") : "";
+    const addBridge = styleHints.prefer_transition && !hasPendingFollowup(state);
+    const pref = addBridge ? (bridge() + " ") : "";
     const action = parsed?.action || "REQUEST_CLARIFY";
-    const utter = (parsed?.utterance || "").trim();
+    let utter = (parsed?.utterance || "").trim();
+
+    // If there's a pending follow-up, override utterance to ensure "only ask that"
+    if (hasPendingFollowup(state)) {
+      const fu = state.pendingFollowup?.prompt || "";
+      if (fu) {
+        utter = fu;
+      }
+      // Return the original follow-up question without any prefix/suffix,
+      // and let the server's polishFollowupConnectors add the connector, ensuring "not changing the follow-up question itself"
+      const q = ensureEndsWithQuestion((utter || "").trim());
+      return q;
+    }
 
     if (action === "NEXT_QUESTION") {
       return `${pref}Next question:\n${nextQuestionLine(nextQuestion)}`;
@@ -209,6 +261,7 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         // Skip this question: only allow advancing/transitioning to summary
         state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
         state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
+        clearPendingFollowup(state);
     }
     state.styleHints = {
         ...state.styleHints,
@@ -222,8 +275,10 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     
   export function buildOrchestratorDirectives(state) {
     return {
-        allowedActions: buildAllowedActionsForPrompt(state),
-        styleHints: state.styleHints || {}
+      allowedActions: buildAllowedActionsForPrompt(state),
+      styleHints: state.styleHints || {},
+      // Pass pending follow-up explicitly to executor prompt constructor (if you use it in server)
+      pendingFollowup: hasPendingFollowup(state) ? { ...state.pendingFollowup } : null
     };
   }
 

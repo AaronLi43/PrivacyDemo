@@ -23,12 +23,15 @@ if (process.env.CORS_DEBUG === 'true') {
 }
 
 import {
-    WELCOME_TEXT, initState, getCurrentQuestion, isFinalQuestion,
-    atFollowupCap, registerFollowup, recordScores,
-    buildAllowedActionsForPrompt, allowNextIfAuditPass, finalizeIfLastAndPassed,
-    shouldAdvance, gotoNextQuestion, storeAudits, parseExecutorOutput, enforceAllowedAction,
-    applyHeuristicsFromAudits, buildOrchestratorDirectives, composeAssistantMessage, peekNextQuestion
-  } from './orchestrator.js';
+    WELCOME_TEXT,
+    initState, getCurrentQuestion, peekNextQuestion,
+    hasPendingFollowup, atFollowupCap, clearPendingFollowup,
+    storeAudits, applyHeuristicsFromAudits,
+    allowNextIfAuditPass, finalizeIfLastAndPassed,
+    shouldAdvance, gotoNextQuestion,
+    parseExecutorOutput, enforceAllowedAction,
+    composeAssistantMessage, buildOrchestratorDirectives
+} from './orchestrator.js';
 
 
 
@@ -359,6 +362,7 @@ function getSession(sessionId) {
         uiFlags: { hasWelcomed: false, followupsPerQuestion: {} },
         qEpoch: 0,          // Increment each time we advance
         qStatus: {},        // { [questionTextLower]: 'active' | 'completed' | 'skipped' }
+        followupStatus: {}  // { "<questionKey>::<followupId>": "covered" }
         });
     }
     return sessions.get(sessionId);
@@ -401,74 +405,108 @@ let globalPiiCounters = {
 //     "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
 // ];
 
-// Main predefined questions stored on server
+// Main predefined questions stored on server - unified since all modes use the same questions
+const unifiedQuestions = [
+    "Tell me about your educational background - what did you study in college or university?",
+    "I'd love to hear about your current work and how you got into it by job interviews?",
+    "Can you walk me through a specific time when you used AI before and during job interviews?",
+    "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
+    "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
+    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+];
+
+// Maintain backward compatibility by mapping all modes to the same questions
 const predefinedQuestions = {
-    naive: [
-        "Tell me about your educational background - what did you study in college or university?",
-        "I’d love to hear about your current work and how you got into it by job interviews?",
-        "Can you walk me through a specific time when you used AI before and during job interviews?",
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
-        "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    naive: unifiedQuestions,
+    neutral: unifiedQuestions,
+    featured: unifiedQuestions
+};
+
+
+// ==== NEW: Follow-ups registry and helpers ==================================
+// Follow-ups for each main question - now using unified questions
+// Structure: each follow-up includes { id, prompt }; optional keywords for precise coverage checks
+const FOLLOWUPS_BY_QUESTION = {
+    [unifiedQuestions[0]]: [
+        { id: "Q1_F1", prompt: "When did you start your degree and when did you finish?", keywords: ["when"] },
+        { id: "Q1_F2", prompt: "Where did you study and what was your major?", keywords: ["where"] },
+        { id: "Q1_F3", prompt: "What was your major?", keywords: ["who"] }
     ],
-    neutral: [
-        "Tell me about your educational background - what did you study in college or university?",
-        "I’d love to hear about your current work and how you got into it by job interviews?",
-        "Can you walk me through a specific time when you used AI before and during job interviews?",
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
-        "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    [unifiedQuestions[1]]: [
+        { id: "Q2_F1", prompt: "What is your current job title and employer?", keywords: ["when"] },
+        { id: "Q2_F2", prompt: "How did job interviews factor into getting this role?", keywords: ["title_of_position"] },
+        { id: "Q2_F3", prompt: "What was your previous job title and employer?", keywords: ["Employer"] }
     ],
-    featured: [
-        "Tell me about your educational background - what did you study in college or university?",
-        "I’d love to hear about your current work and how you got into it by job interviews?",
-        "Can you walk me through a specific time when you used AI before and during job interviews?",
-        "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-        "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
-        "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    [unifiedQuestions[2]]: [
+        { id: "Q3_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["interview_timeline_and_when_AI_used"] },
+        { id: "Q3_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_AI_used"] },
+        { id: "Q3_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["how_AI_used"] }
+    ],
+    [unifiedQuestions[3]]: [
+        { id: "Q4_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["incident_when"] },
+        { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_AI_used"] },
+        { id: "Q4_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["What_trouble_AI_got_you_in"] }
+    ],
+    [unifiedQuestions[4]]: [
+        { id: "Q5_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["what_triggered_you"] },
+        { id: "Q5_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_concerns_you_mind"] },
+        { id: "Q5_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["additional_ethics_reflection"] }
+    ],
+    [unifiedQuestions[5]]: [
+        { id: "Q6_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["when"] },
+        { id: "Q6_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["who_hiding_from"] },
+        { id: "Q6_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["what_AI_uses_you_try_hide_from_them"] }
     ]
 };
+
+
+
+function getFollowupsForQuestion(q) {
+    return FOLLOWUPS_BY_QUESTION[q] || [];
+}
+function getFollowupKey(q, fid) {
+    return `${getQuestionKey(q)}::${fid}`;
+}
+function markFollowupCovered(session, q, fid) {
+    session.followupStatus = session.followupStatus || {};
+    session.followupStatus[getFollowupKey(q, fid)] = 'covered';
+}
+function isFollowupCovered(session, q, fid) {
+    return (session.followupStatus && session.followupStatus[getFollowupKey(q, fid)] === 'covered');
+}
+function nextPendingFollowup(session, q) {
+    const list = getFollowupsForQuestion(q);
+    for (const f of list) {
+        if (!isFollowupCovered(session, q, f.id)) return f;
+    }
+    return null;
+}
+
 const GLOBAL_PREDEFINED = predefinedQuestions; 
 // Default main questions used for static mappings and prompts
 // Note: Dynamic per-request main questions are still computed later where needed
-const mainQuestions = GLOBAL_PREDEFINED.neutral;
-
-const requiredSlotsByQuestion = {
-    // Q1
-    [mainQuestions[0]]: ["when", "where", "who", "what", "action", "result", "reflection"],
-  
-    // Q2
-    [mainQuestions[1]]: ["context", "top_tasks", "example", "tool", "outcome", "reflection"],
-  
-    // Q3
-    [mainQuestions[2]]: ["whether_used", "when", "how", "risk_mitigation", "outcome", "ethics_reflection"],
-  
-    // Q4
-    [mainQuestions[3]]: ["incident_when", "trigger", "stakeholders", "response", "outcome", "lesson"],
-  
-
-    // Q5
-    [mainQuestions[4]]: ["policy_or_line", "scenario", "your_action", "why", "risk_assessment", "reflection"],
-  
-    // Q6
-    [mainQuestions[5]]: ["scenario", "why_private", "how_used", "safeguards", "reflection"]
-  };
-
-  const topicKeywords = {
-    [mainQuestions[0]]: ["educational background", "study", "college", "university", "degree", "major"],
-  
-    [mainQuestions[1]]: ["current work", "job", "career", "interview process", "path", "role"],
-  
-    [mainQuestions[2]]: ["specific time", "AI before interview", "AI during interview", "walk me through", "story", "example"],
-  
-    [mainQuestions[3]]: ["close call", "almost got in trouble", "caught", "suspicious", "nearly exposed"],
-  
-    [mainQuestions[4]]: ["crossed a line", "policy", "ethics", "boundary", "rule", "moment"],
-  
-    [mainQuestions[5]]: ["prefer not to share", "kept private", "wouldn't tell", "family", "colleagues", "private use"]
-  };
+const mainQuestions = unifiedQuestions;
 
 
+
+  function deriveQuestionKeywordsFromFollowups(q) {
+    try {
+        const list = getFollowupsForQuestion(q);
+        if (!Array.isArray(list) || list.length === 0) return [];
+        const set = new Set();
+        for (const f of list) {
+            const kws = Array.isArray(f.keywords) ? f.keywords : [];
+            for (const k of kws) {
+            if (typeof k === "string" && k.trim()) {
+                set.add(k.trim().toLowerCase());
+            }
+        }
+        }
+        return Array.from(set);
+    } catch {
+        return [];
+    }
+}
 
 // Helper function to check if a question is a background question
 // function isBackgroundQuestion(question) {
@@ -609,71 +647,82 @@ export function buildExecutorSystemPrompt(currentQuestion, allowedActions = [], 
   }
 
 // Completion Audit Prompt
-  function buildCompletionAuditPrompt(currentQuestion) {
-    const slots = requiredSlotsByQuestion[currentQuestion] || ["when","who","action","result","reflection"];
-  
-    return [
-      `You are the Auditor. Decide if the CURRENT QUESTION has obtained a sufficient personal story (PSS).`,
-      ``,
-      `CURRENT QUESTION: "${currentQuestion}"`,
-      `REQUIRED SLOTS (hint): [${slots.join(", ")}]`,
-      ``,
-      `Score 0-2 on three axes:`,
-      `- structure: slots hit among [when, where, who, what/task, action, result/outcome, reflection].`,
-      `  Pass if ≥5 AND must include action+result AND (when OR who).`,
-      `- specificity: count among [explicit time, person/role, number/quantity, place, proper nouns/tools, causal markers, first-person introspection].`,
-      `  Pass if ≥4.`,
-      `- depth: count among [tradeoff, difficulty, failed attempt, reflection/transfer].`,
-      `  Pass if ≥2.`,
-      ``,
-      `Special case: If the user clearly has no such experience, allow moving on (note it). Do NOT force follow-ups.`,
-      ``,
-      `Output JSON ONLY:`,
-      `{`,
-      `  "question_id": "<ID or text>",`,
-      `  "scores": {"structure":0|1|2,"specificity":0|1|2,"depth":0|1|2},`,
-      `  "missing": ["when","result","tradeoff",...],  // ONLY the single most impactful first`,
-      `  "notes": "brief",`,
-      `  "verdict": "ALLOW_NEXT_QUESTION" | "REQUIRE_MORE" | "ALLOW_END"`,
-      `}`,
-      ``,
-      `Decision:`,
-      `- ALLOW_NEXT_QUESTION if (structure≥1 && specificity≥1) AND total_score≥6.`,
-      `- OR user explicitly has no experience with this topic.`,
-      `- Otherwise REQUIRE_MORE and return ONLY ONE most impactful missing item in "missing".`
-    ].join("\n");
-  }
+async function auditQuestionCompletion(
+    userMessage,
+    aiResponse,
+    currentQuestion,
+    conversationHistory,
+    isFinalQuestionFlag = false,
+    followUpMode = false,
+    session
+    ) {
+    const fuList = getFollowupsForQuestion(currentQuestion);
+    const fuPayload = fuList.map(f => ({ id: f.id, prompt: f.prompt, keywords: f.keywords || [] }));
+    const sys = `You are the Follow-up Coverage Auditor. Output JSON ONLY.`;
+    const user = `
+    CURRENT QUESTION: "${currentQuestion}"
+    FOLLOWUPS: ${JSON.stringify(fuPayload)}
+    RECENT: ${conversationHistory.slice(-10).map(m=>`${m.role}: ${m.content}`).join("\n")}
+    USER_LATEST: ${userMessage}
+    ASSISTANT_LATEST: ${aiResponse}
+    Return: {"question_id": "...","coverage_map":[{"id":"...","covered":true|false,"evidence":""}],"next_followup_id":"..."|null,"next_followup_prompt":"..."|null,"verdict":"ALLOW_NEXT_QUESTION"|"REQUIRE_MORE","confidence":0.0-1.0,"notes":""}
+    `;
+    const r = await openaiClient.chat.completions.create({ model:"gpt-4o", temperature:0.2, max_tokens:420, messages:[{role:"system",content:sys},{role:"user",content:user}] });
+    let raw = r.choices?.[0]?.message?.content?.trim() || "";
+    if (raw.startsWith("```")) raw = raw.replace(/^```json\s*/i,"").replace(/```$/,"").trim();
+    let parsed = {}; try { parsed = JSON.parse(raw); } catch {}
+    // Synchronize coverage status to the current session
+    if (session && Array.isArray(parsed.coverage_map)) {
+        for (const it of parsed.coverage_map) {
+        if (it?.id && it.covered === true) {
+            markFollowupCovered(session, currentQuestion, it.id);
+        }
+        }
+    }
+    // Fallback to select the next follow-up
+    let nextFU = null;
+    if (parsed.verdict !== "ALLOW_NEXT_QUESTION") {
+        if (parsed.next_followup_id && parsed.next_followup_prompt) nextFU = { id: parsed.next_followup_id, prompt: parsed.next_followup_prompt };
+        else {
+            const cand = session ? nextPendingFollowup(session, currentQuestion) : null;
+            if (cand) nextFU = { id: cand.id, prompt: cand.prompt };
+        }
+    }
+    return {
+        question_id: parsed.question_id || currentQuestion,
+        verdict: parsed.verdict === "ALLOW_NEXT_QUESTION" ? "ALLOW_NEXT_QUESTION" : "REQUIRE_MORE",
+        scores: null,
+        missing: nextFU ? [nextFU.id] : [],
+        notes: parsed.notes || "",
+        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.8,
+        followUpQuestions: nextFU ? [nextFU.prompt] : null,
+        coverage_map: Array.isArray(parsed.coverage_map) ? parsed.coverage_map : [],
+        next_followup: nextFU || null,
+        shouldProceed: parsed.verdict === "ALLOW_NEXT_QUESTION",
+        reason: parsed.verdict === "ALLOW_NEXT_QUESTION" ? "all follow-ups covered" : "follow-ups remaining"
+    };
+}
 
-// Presence Audit Prompt
-  function buildPresenceAuditPrompt(currentQuestion) {
-    const currentKW = topicKeywords[currentQuestion] || [];
-    const otherKW = Object.entries(topicKeywords)
-      .filter(([q]) => q !== currentQuestion)
-      .flatMap(([, arr]) => arr);
-  
-    return [
-      `You are the Question-Form Auditor. Check the Executor's latest response.`,
-      ``,
-      `CURRENT QUESTION: "${currentQuestion}"`,
-      `CURRENT TOPIC KEYWORDS: [${currentKW.join(", ")}]`,
-      `OTHER TOPICS KEYWORDS (avoid): [${otherKW.join(", ")}]`,
-      ``,
-      `Output JSON ONLY:`,
-      `{`,
-      `  "hasQuestion": true|false,`,
-      `  "reason": "brief",`,
-      `  "confidence": 0.0-1.0,`,
-      `  "shouldRegenerate": true|false`,
-      `}`,
-      ``,
-      `Rules:`,
-      `- If followUpMode=true and action=ASK_FOLLOWUP: the message must contain EXACTLY ONE interrogative sentence ending with '?' (no stacked questions).`,
-      `- If action=SUMMARIZE_QUESTION: a question is NOT required.`,
-      `- Topic alignment: the question must stay within the CURRENT QUESTION; if it appears to introduce a different predefined question (matches OTHER TOPICS KEYWORDS), set shouldRegenerate=true.`,
-      `- For server-driven transitions (NEXT_QUESTION/END allowed by the server), do not add extra questions.`
-    ].join("\n");
-  }
-
+// (Removed) buildPresenceAuditPrompt — presence audit now constructs its prompt
+// with keywords derived from FOLLOWUPS_BY_QUESTION.
+function buildPresenceAuditPrompt(currentQuestion, candidateText) {
+    const currentKW = deriveQuestionKeywordsFromFollowups(currentQuestion);
+    const otherKW = deriveOtherQuestionKeywords(currentQuestion);
+    return `
+    You are a concise auditor.
+    Goal: ensure the next assistant message is exactly ONE question, on-topic for the CURRENT QUESTION.
+    Rules:
+      - Exactly one interrogative sentence, ending with '?'
+      - Must stay aligned to the CURRENT QUESTION and its topical hints (if any)
+      - No multi-part questions, no list, no prefaces
+    CURRENT QUESTION: "${currentQuestion}"
+    TOPICAL HINTS: ${(currentKW && currentKW.length) ? currentKW.join(", ") : "(none)"}
+OTHER TOPICS (avoid drifting): ${(otherKW && otherKW.length) ? otherKW.join(", ") : "(none)"}
+ CANDIDATE MESSAGE: "${candidateText}"
+ Output JSON only:
+ {"ok": true|false, "reason": "brief"}
+ `;
+ }
 
 // API Routes
 
@@ -805,17 +854,17 @@ app.post('/api/chat', async (req, res) => {
   
       log.info('session ready', { currentSessionId, prevLen, newLen: session.conversationHistory.length });
 
-      const isFirstAssistantReply = (prevLen === 1);
+      const isFirstAssistantReply = (prevLen === 0);
   
       // Context maintenance
       manageConversationContext(currentSessionId);
   
       // Questions (background + main questions) - use global arrays for consistency
-    //   const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : predefinedQuestions.neutral);
+    //   const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : unifiedQuestions);
     const clientMainQs = Array.isArray(clientPredefined) ? clientPredefined : [];
     const mainQuestions = clientMainQs.length
     ? clientMainQs
-    : GLOBAL_PREDEFINED.neutral;
+    : unifiedQuestions;
       // Orchestrator state
       const state = initState(session, { maxFollowups: { main: 3 } });
       const qNow = currentQuestion || getCurrentQuestion(state, mainQuestions);
@@ -853,10 +902,38 @@ app.post('/api/chat', async (req, res) => {
   
       if (openaiClient) {
         try {
+            if (isFirstAssistantReply) {
+                const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
+                if (firstQ) {
+                  const { prefix, suffix } = await polishFollowupConnectors({
+                    followupPrompt: firstQ,
+                           currentQuestion: firstQ,
+                    conversationHistory: session.conversationHistory,
+                    styleHints: state.styleHints || {}
+                  });
+                  const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
+                  const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
+                  const right = suffix ? (" " + suffix.trim()) : "";
+                  const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
+                  const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
+                  session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
+                  return res.json({
+                    success: true,
+                    bot_response: msg,
+                    conversation_history: session.conversationHistory,
+                    step,
+                    question_completed: false,
+                    pending_followup_exists: false,
+                    allowed_actions: Array.from(state.allowedActions),
+                    interview_finished: false,
+                    session_id: currentSessionId
+                         });
+                }
+              }
           // ====== Executor call ======
           const execT0 = Date.now();
           const completion = await openaiClient.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4.1",
             messages,
             max_tokens: 700,
             temperature: 0.3,
@@ -888,11 +965,11 @@ app.post('/api/chat', async (req, res) => {
             log.info('executor parsed', parsedExec);
           
             aiResponse = composeAssistantMessage(state, parsedExec, {
-              currentQuestion: getCurrentQuestion(state, mainQuestions),
-              nextQuestion: peekNextQuestion(state, mainQuestions),
-              styleHints: state.styleHints || {},
-              isFirstAssistantReply,
-              welcomeText: WELCOME_TEXT
+                currentQuestion: getCurrentQuestion(state, mainQuestions),
+                nextQuestion: peekNextQuestion(state, mainQuestions),
+                isFirstAssistantReply,
+                styleHints: state.styleHints || {},
+                welcomeText: WELCOME_TEXT
             });
           } else {
             log.warn('executor output not JSON; using raw text');
@@ -903,31 +980,7 @@ app.post('/api/chat', async (req, res) => {
           const isFinalQuestionValue = isFinalQuestion(state, mainQuestions);
           console.log('isFinalQuestionValue', isFinalQuestionValue);
           
-          // Skip audit for background questions - they automatically advance
-          // const isBackgroundQuestion = backgroundQuestions.includes(qNow);
-        //   if (isBackgroundQuestion) {
-        //     completionAudit = {
-        //       question_id: qNow,
-        //       verdict: 'ALLOW_NEXT_QUESTION',
-        //       scores: { structure: 1, specificity: 1, depth: 1 },
-        //       missing: [],
-        //       notes: 'Background question - auto-advance',
-        //       confidence: 1.0,
-        //       followUpQuestions: null,
-        //       shouldProceed: true,
-        //       reason: 'Background question - auto-advance'
-        //     };
-        //     log.info('background question - audit skipped, auto-advance verdict created');
-        //   } else {
-        //     completionAudit = await auditQuestionCompletion(
-        //       message,
-        //       aiResponse,
-        //       qNow,
-        //       session.conversationHistory,
-        //       isFinalQuestionValue,
-        //       followUpMode
-        //     );
-        //   }
+
 
           completionAudit = await auditQuestionCompletion(
             message,
@@ -935,7 +988,8 @@ app.post('/api/chat', async (req, res) => {
             qNow,
             session.conversationHistory,
             isFinalQuestionValue,
-            followUpMode
+            followUpMode,
+            session
           );
 
           const compDur = Date.now() - compT0;
@@ -950,6 +1004,25 @@ app.post('/api/chat', async (req, res) => {
           });
   
           recordScores(state, qNow, completionAudit?.scores);
+          if (completionAudit?.next_followup?.prompt) {
+            // >>> POLISH TRIGGER <<< Only add prefix/suffix connectors; do not modify the follow-up content itself.
+            const { prefix, suffix } = await polishFollowupConnectors({
+              followupPrompt: completionAudit.next_followup.prompt,
+              currentQuestion: qNow,
+              conversationHistory: session.conversationHistory,
+              styleHints: state.styleHints || {}
+            });
+            aiResponse = [prefix, completionAudit.next_followup.prompt, suffix]
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            session.lastPolish = {
+              followup_id: completionAudit.next_followup.id,
+              prefix, suffix
+            };
+            usedPolish = true;
+          }
         //   allowNextIfAuditPass(state, completionAudit?.verdict);
         //   finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
@@ -1028,27 +1101,28 @@ app.post('/api/chat', async (req, res) => {
             }
           }
   
-          // ====== Polish if need more (completion) ======
-          if (completionAudit?.verdict === 'REQUIRE_MORE') {
-            const polT0 = Date.now();
-            const polished = await polishResponseWithAuditFeedback(
-              message,
-              aiResponse,
-              completionAudit,
-              qNow,
-              session.conversationHistory,
-              isFinalQuestionValue,
-              followUpMode
-            );
-            const polDur = Date.now() - polT0;
-  
-            if (polished) {
-              usedPolish = true;
-              aiResponse = polished;
-              log.info('polished response used', { ms: polDur, aiResponsePreview: aiResponse.slice(0,160) });
-            } else {
-              log.info('polish returned null (either passed or kept original)');
-            }
+          // ====== Polish chosen follow-up (completion) ======
+          // When the completion audit provides a next_followup, only add prefix/suffix connectors; do not modify the follow-up content itself.
+          if (completionAudit?.next_followup?.prompt) {
+          // >>> POLISH TRIGGER <<< Only add prefix/suffix connectors; do not modify the follow-up content itself.
+            const { prefix, suffix } = await polishFollowupConnectors({
+              followupPrompt: completionAudit.next_followup.prompt,
+              currentQuestion: qNow,
+              conversationHistory: session.conversationHistory,
+              styleHints: state.styleHints || {}
+            });
+            const coreQ = completionAudit.next_followup.prompt.trim().endsWith("?")
+              ? completionAudit.next_followup.prompt.trim()
+              : (completionAudit.next_followup.prompt.trim() + "?");
+            const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
+            const right = suffix ? (" " + suffix.trim()) : "";
+            aiResponse = `${left}${coreQ}${right}`.replace(/\s+\?/, "?");
+            session.lastPolish = {
+              followup_id: completionAudit.next_followup.id,
+              prefix,
+              suffix
+            };
+            usedPolish = true;
           }
   
           // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
@@ -1071,8 +1145,18 @@ app.post('/api/chat', async (req, res) => {
           // Activate new question
           const nextQ = getCurrentQuestion(state, mainQuestions);
           if (nextQ) {
-            const nk = nextQ.trim().toLowerCase();
-            session.qStatus[nk] = "active";
+            const { prefix, suffix } = await polishFollowupConnectors({
+                followupPrompt: nextQ,
+                currentQuestion: nextQ,
+                conversationHistory: session.conversationHistory,
+                styleHints: state.styleHints || {}
+              });
+              const core = nextQ.trim().endsWith("?") ? nextQ.trim() : (nextQ.trim() + "?");
+              const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
+              const right = suffix ? (" " + suffix.trim()) : "";
+              aiResponse = (left + core + right).replace(/\s+\?/, "?");
+          } else {
+            aiResponse = composeAssistantMessage(state, { action: "END" }, { styleHints: state.styleHints || {} });
           }
 
           // Compose transition + next question message
@@ -1132,16 +1216,30 @@ app.post('/api/chat', async (req, res) => {
         usedPolish,
         responsePreview: aiResponse.slice(0,200)
       });
-  
-      const t1 = Date.now();
-      const curKey = getQuestionKey(qNow);
-      if ((/[\?\uff1f]\s*$/.test(aiResponse) || parsedExec?.action === "ASK_FOLLOWUP")
-          && session.qStatus[curKey] && session.qStatus[curKey] !== 'active') {
-        const nextQ = getCurrentQuestion(state, mainQuestions);
-        if (nextQ) {
-          aiResponse = `Thanks—that helps. Next question:\n${nextQ.endsWith("?")?nextQ:(nextQ+"?")}`;
+      if (!aiResponse || /(?:^|\n)\s*$/.test(aiResponse)) {
+        aiResponse = "Could you tell me a bit more?";
+      }
+      if (aiResponse.endsWith('?')) {
+        const curKey = getQuestionKey(qNow);
+        if (session.qStatus[curKey] !== 'active') {
+          const nextQ = getCurrentQuestion(state, mainQuestions);
+          if (nextQ) {
+            const { prefix, suffix } = await polishFollowupConnectors({
+              followupPrompt: nextQ,
+              currentQuestion: nextQ,
+              conversationHistory: session.conversationHistory,
+              styleHints: state.styleHints || {}
+            });
+            const core = nextQ.trim().endsWith("?") ? nextQ.trim() : (nextQ.trim() + "?");
+            const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
+            const right = suffix ? (" " + suffix.trim()) : "";
+            aiResponse = (left + core + right).replace(/\s+\?/, "?");
+          } else {
+            aiResponse = composeAssistantMessage(state, { action: "END" }, { styleHints: state.styleHints || {} });
+          }
         }
       }
+
       res.json({
         success: true,
         bot_response: aiResponse,
@@ -1150,8 +1248,13 @@ app.post('/api/chat', async (req, res) => {
         privacy_detection: null,
         question_completed: questionCompleted,
         audit_result: completionAudit || null,
+        followup_coverage: completionAudit?.coverage_map || [],
+        next_followup: completionAudit?.next_followup || null,
+        pending_followup_exists: !!completionAudit?.next_followup,
+        followup_polish_meta: session?.lastPolish || null, // helper; not a trigger
         follow_up_questions: completionAudit?.followUpQuestions || null,
         question_presence_audit: presenceAudit || null,
+        interview_finished: (state.phase === "done" || !getCurrentQuestion(state, mainQuestions)),
         allowed_actions: Array.from(state.allowedActions),
         session_id: currentSessionId,
         timings_ms: { total: t1 - t0 }
@@ -1214,7 +1317,7 @@ app.post('/api/privacy_detection', async (req, res) => {
 });
 
 // Audit LLM for Question Completion Evaluation (PSS-only: structure/specificity/depth)
-async function auditQuestionCompletion(
+async function auditQuestionPSS(
     userMessage,
     aiResponse,
     currentQuestion,
@@ -1223,158 +1326,120 @@ async function auditQuestionCompletion(
     followUpMode = false       // Keep parameter, no longer dependent on prompt
   ) {
     if (!openaiClient) {
-      console.log('⚠️  Audit LLM not available - skipping question completion audit');
-      return { verdict: 'REQUIRE_MORE', reason: 'Audit LLM not available', shouldProceed: false, confidence: 0.0 };
+        console.log('⚠️  Audit LLM not available - skipping follow-up coverage audit');
+        return { verdict: 'REQUIRE_MORE', reason: 'Audit LLM not available', shouldProceed: false, confidence: 0.0 };
     }
-  
+
     try {
-      const auditPrompt = `
-  You are the Auditor. Decide if the CURRENT QUESTION has obtained a sufficient personal story (PSS).
-  
-  CURRENT QUESTION: "${currentQuestion}"
-  
-  Consider the user's latest response and recent turns (if provided). Score 0–2 on three axes:
-  
-  - structure: slots hit among [when, where, who, what/task, action, result/outcome, reflection].
-    Pass if ≥5 AND must include action+result AND (when OR who).
-  - specificity: count among [explicit time, person/role, number/quantity, place, proper nouns/tools, causal markers, first-person introspection].
-    Pass if ≥4.
-  - depth: count among [tradeoff, difficulty, failed attempt, reflection/transfer].
-    Pass if ≥2.
-  
-  Special case: If the user clearly has no such experience, allow moving on (note it). Do NOT force follow-ups.
-  
-  OUTPUT STRICTLY AS JSON (no markdown/code fences):
-  
-  {
-    "question_id": "<ID or text>",
-    "scores": { "structure": 0|1|2, "specificity": 0|1|2, "depth": 0|1|2 },
-    "missing": ["when","result","tradeoff"],   // ONLY ONE most impactful first; include 0 or 1 item
-    "notes": "brief",
-    "verdict": "ALLOW_NEXT_QUESTION" | "REQUIRE_MORE" | "ALLOW_END",
-    "confidence": 0.0-1.0,
-    "followUpQuestion": "ONE targeted question if verdict=REQUIRE_MORE, else omit"
-  }
-  
-  Decision rule:
-  - ALLOW_NEXT_QUESTION if (structure≥1 && specificity≥1) AND total_score≥6,
-    OR the user explicitly has no experience with this topic.
-  - Otherwise REQUIRE_MORE and return ONLY ONE most impactful missing item in "missing".
-  
-  Quality bar for followUpQuestion (only if REQUIRE_MORE):
-  - Must be a single interrogative sentence ending with "?"
-  - Stay strictly on the CURRENT QUESTION; ask for the missing slot or depth
-  - Be natural and concrete (e.g., ask for time/people/result, numbers, obstacles, trade-offs)
-  `;
-  
-      const auditMessages = [{ role: 'system', content: auditPrompt }];
-  
-      // Recent conversation context (last 8 turns for better judgment)
-      const recent = conversationHistory.slice(-8);
-      if (recent.length > 0) {
-        const ctx = `Recent conversation context:\n${recent.map(msg => `${msg.role}: ${msg.content}`).join('\n')}\n\nUser latest: ${userMessage}\nAssistant latest: ${aiResponse}`;
-        auditMessages.push({ role: 'user', content: ctx });
-      } else {
-        const ctx = `User latest: ${userMessage}\nAssistant latest: ${aiResponse}`;
-        auditMessages.push({ role: 'user', content: ctx });
-      }
-  
-      const auditCompletion = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
-        messages: auditMessages,
-        max_tokens: 350,
-        temperature: 0.2
-      });
-  
-      let raw = auditCompletion.choices[0].message.content?.trim() || "";
-  
-      // Strip code fences if any
-      if (raw.startsWith("```")) {
-        raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
-      }
-  
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (e) {
-        console.error('Failed to parse audit JSON:', e);
-        console.log('Raw audit response:', raw);
-        return { verdict: 'REQUIRE_MORE', reason: 'Failed to parse audit response', shouldProceed: false, confidence: 0.0 };
-      }
-  
-      // ---- Compatibility & hygiene ----
-      // Normalize followUpQuestions to array if followUpQuestion is present
-      let followUpQuestions = null;
-      if (parsed.followUpQuestion && typeof parsed.followUpQuestion === 'string') {
-        followUpQuestions = [parsed.followUpQuestion];
-      } else if (Array.isArray(parsed.followUpQuestions)) {
-        followUpQuestions = parsed.followUpQuestions;
-      }
-  
-      // Optional: filter out reasoning-like follow-ups (keep your original filters)
-      if (Array.isArray(followUpQuestions)) {
-        followUpQuestions = followUpQuestions
-          .filter(q => {
-            if (!q || typeof q !== 'string') return false;
-            const reasoningPatterns = [
-              /^User (has|provided|not yet provided)/i,
-              /^The user (has|provided|not yet provided)/i,
-              /need more follow-up questions/i,
-              /should proceed/i,
-              /confidence:/i,
-              /reason:/i,
-              /brief explanation/i,
-              /minimal information/i,
-              /detailed response/i,
-              /topic sufficiently explored/i,
-              /follow-up conversation/i,
-              /conversation ready/i,
-              /adequately addressed/i,
-              /thoroughly addressed/i,
-              /audit decision/i,
-              /evaluation criteria/i,
-              /decision guidelines/i
-            ];
-            const hasReasoning = reasoningPatterns.some(p => p.test(q));
-            if (hasReasoning) return false;
-            const questionWords = /\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b/i;
-            const endsWithQM = /\?$/;
-            return questionWords.test(q) || endsWithQM.test(q);
-          })
-          .map(q => {
-            const m = q.match(/\b(What|How|Why|When|Where|Who|Did|Do|Can|Are|Is|Could|Would|Will|Have|Has|Was|Were)\b.*/i);
-            return m ? m[0].trim() : q.trim();
-          })
-          .slice(0, 1); // enforce single follow-up
-        if (followUpQuestions.length === 0) followUpQuestions = null;
-      }
-  
-      const verdict = parsed.verdict || 'REQUIRE_MORE';
-      const scores = parsed.scores || { structure: 0, specificity: 0, depth: 0 };
-      const missing = Array.isArray(parsed.missing) ? parsed.missing.slice(0, 1) : [];
-      const notes = parsed.notes || '';
-      const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.8;
-  
-      const result = {
-        question_id: parsed.question_id || currentQuestion || 'N/A',
-        verdict,
-        scores,
-        missing,
-        notes,
-        confidence,
-        followUpQuestions,             // array | null
-        // legacy fields for backward compatibility:
-        shouldProceed: verdict === 'ALLOW_NEXT_QUESTION',
-        reason: notes || (verdict === 'ALLOW_NEXT_QUESTION' ? 'PSS threshold met' : 'More details required')
-      };
-  
-      console.log(`Audit LLM Result (PSS): ${JSON.stringify(result)}`);
-      return result;
-  
-    } catch (error) {
-      console.error('Audit LLM error:', error);
-      return { verdict: 'REQUIRE_MORE', reason: 'Audit LLM error: ' + error.message, shouldProceed: false, confidence: 0.0 };
-    }
+        // 取出该主问题的 follow-ups
+        const fuList = getFollowupsForQuestion(currentQuestion); 
+        const fuPayload = fuList.map(f => ({ id: f.id, prompt: f.prompt, keywords: f.keywords || [] }));
+
+        const auditPrompt = `
+        You are the Follow-up Coverage Auditor.
+        Goal: For the CURRENT QUESTION, check whether the user's conversation so far ALREADY COVERS each required follow-up.
+
+        CURRENT QUESTION: "${currentQuestion}"
+        FOLLOWUPS:
+        ${JSON.stringify(fuPayload, null, 2)}
+
+        Rules:
+        - "Covered" means the user has clearly provided the key information implied by the follow-up prompt (look for direct answers or equivalent info).
+        - Be lenient to paraphrases; focus on substance (time/place/people/tool/result/motivation/etc.).
+        - Use ALL recent turns for evidence (not just the last message).
+        - If ALL follow-ups are covered => verdict = "ALLOW_NEXT_QUESTION".
+        - Otherwise => verdict = "REQUIRE_MORE" and choose exactly ONE next follow-up that remains uncovered (prefer earlier order)
+
+        OUTPUT JSON ONLY (no markdown):
+        {
+          "question_id": "<text>",
+          "coverage_map": [
+            { "id": "Qx_Fy", "covered": true|false, "evidence": "1-2 short phrases from the user that justify the decision or empty if false" }
+          ],
+          "next_followup_id": "Qx_Fy" | null,
+          "next_followup_prompt": "string | null",
+          "verdict": "ALLOW_NEXT_QUESTION" | "REQUIRE_MORE",
+          "confidence": 0.0-1.0,
+          "notes": "brief"
+        }
+        `;
+
+        const recent = conversationHistory.slice(-10);
+        const ctx = [
+            `Recent conversation:`,
+            ...recent.map(m => `${m.role}: ${m.content}`),
+            ``,
+            `User latest: ${userMessage}`,
+            `Assistant latest: ${aiResponse}`
+        ].join('\n');
+        
+        const auditMessages = [
+            { role: 'system', content: auditPrompt },
+            { role: 'user', content: ctx }
+        ];
+
+        const auditCompletion = await openaiClient.chat.completions.create({
+            model: "gpt-4.1",
+            messages: auditMessages,
+            max_tokens: 420,
+            temperature: 0.2
+        });
+        
+        let raw = auditCompletion.choices?.[0]?.message?.content?.trim() || "";
+        if (raw.startsWith("```")) {
+            raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            console.error('Failed to parse follow-up coverage audit JSON:', e);
+            console.log('Raw audit response:', raw);
+            return { verdict: 'REQUIRE_MORE', reason: 'Failed to parse audit response', shouldProceed: false, confidence: 0.0 };
+        }
+
+        // —— 同步会话中的覆盖状态 —— //
+        const session = getSession((conversationHistory[0] && conversationHistory[0].sessionId) || null) || getSession(null);
+        if (Array.isArray(parsed.coverage_map)) {
+            parsed.coverage_map.forEach(item => {
+                if (item && item.id && item.covered === true) {
+                    markFollowupCovered(session, currentQuestion, item.id);
+                }
+            });
+        }
+
+        // 如果 LLM 没给 next_followup_*，则由服务器自行挑一个未覆盖的
+        let nextFU = null;
+        if (parsed.verdict !== 'ALLOW_NEXT_QUESTION') {
+            if (parsed.next_followup_id && parsed.next_followup_prompt) {
+                nextFU = { id: parsed.next_followup_id, prompt: parsed.next_followup_prompt };
+            } else {
+                const candidate = nextPendingFollowup(session, currentQuestion);
+                if (candidate) nextFU = { id: candidate.id, prompt: candidate.prompt };
+            }
+        }
+
+        const result = {
+            question_id: parsed.question_id || currentQuestion || 'N/A',
+            verdict: parsed.verdict === 'ALLOW_NEXT_QUESTION' ? 'ALLOW_NEXT_QUESTION' : 'REQUIRE_MORE',
+            scores: null,          // 兼容字段，占位
+            missing: nextFU ? [nextFU.id] : [],
+            notes: parsed.notes || '',
+            confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.8,
+            followUpQuestions: nextFU ? [nextFU.prompt] : null,
+            coverage_map: Array.isArray(parsed.coverage_map) ? parsed.coverage_map : [],
+            next_followup: nextFU || null,
+            shouldProceed: parsed.verdict === 'ALLOW_NEXT_QUESTION',
+            reason: parsed.notes || (parsed.verdict === 'ALLOW_NEXT_QUESTION' ? 'all follow-ups covered' : 'follow-ups remaining')
+        };
+        
+        console.log(`Audit Result (Follow-up Coverage): ${JSON.stringify(result)}`);
+        return result;
+
+        } catch (error) {
+            console.error('Follow-up coverage audit error:', error);
+            return { verdict: 'REQUIRE_MORE', reason: 'Audit LLM error: ' + error.message, shouldProceed: false, confidence: 0.0 };
+        }
   }
   
 
@@ -1394,8 +1459,8 @@ async function auditQuestionPresence(
   
     try {
       // Use centralized keyword configuration
-      const currentK = getQuestionKeywords(currentQuestion);
-      const otherK = getOtherQuestionKeywords(currentQuestion);
+      const currentK = deriveQuestionKeywordsFromFollowups(currentQuestion);
+      const otherK = deriveOtherQuestionKeywords(currentQuestion);
   
       const auditPrompt = `
   You are the Question-Form Auditor. Check the latest assistant message for (1) presence/form of questions and (2) topic alignment to the CURRENT QUESTION.
@@ -1430,7 +1495,7 @@ async function auditQuestionPresence(
       ];
   
       const auditCompletion = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4.1",
         messages: auditMessages,
         max_tokens: 220,
         temperature: 0.2
@@ -1466,6 +1531,71 @@ async function auditQuestionPresence(
     }
   }
 
+
+// Use LLM to generate prefix/suffix connectors, but never alter the core follow-up question itself
+// Return { prefix, suffix } two short phrases, which the server will concatenate with the original follow-up
+async function polishFollowupConnectors({
+      followupPrompt,
+    currentQuestion,
+    conversationHistory,
+    styleHints = {}
+}) {
+    try {
+        if (!openaiClient) {
+            return { prefix: "", suffix: "" };
+        }
+        const recent = conversationHistory.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+        const sys = `
+        You write tiny connective phrases around a given follow-up QUESTION.
+        STRICT RULES:
+        - NEVER alter, paraphrase, or reformat the QUESTION. You only supply "prefix" and "suffix".
+        - Tone: warm, neutral, concise, interview-like; no emojis; avoid repetition; no markdown.
+        - Fit the immediate context smoothly (assume English UI unless input obviously in Chinese).
+        - Keep them short: prefix ≤ 120 chars, suffix ≤ 120 chars.
+        - If context is sensitive, acknowledge gently (e.g., "Thanks for sharing that.").
+        OUTPUT JSON ONLY:
+        { "prefix": "...", "suffix": "..." }
+        `;
+        const user = `
+        CURRENT QUESTION: "${currentQuestion || "N/A"}"
+        FOLLOW-UP (DO NOT CHANGE): "${followupPrompt}"
+        RECENT CONTEXT:
+        ${recent || "(empty)"}
+        OPTIONAL STYLE HINTS: ${JSON.stringify(styleHints || {})}
+        `;
+        const resp = await openaiClient.chat.completions.create({
+            model: "gpt-4.1-mini",
+            temperature: 0.3,
+            max_tokens: 180,
+            messages: [
+                { role: "system", content: sys.trim() },
+                { role: "user", content: user.trim() }
+            ]
+        });
+        let raw = resp.choices?.[0]?.message?.content?.trim() || "";
+        if (raw.startsWith("```")) {
+            raw = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+        }
+        let parsed = {};
+        try { parsed = JSON.parse(raw); } catch {}
+        let prefix = (parsed.prefix || "").trim();
+        let suffix = (parsed.suffix || "").trim();
+        // Safeguard: Prevent the model from inserting the follow-up question itself into the prefix/suffix, which would cause duplication
+        const q = (followupPrompt || "").trim();
+        if (prefix.includes(q)) prefix = prefix.replace(q, "").trim();
+        if (suffix.includes(q)) suffix = suffix.replace(q, "").trim();
+        // Length control
+        if (prefix.length > 200) prefix = prefix.slice(0, 200).trim();
+        if (suffix.length > 200) suffix = suffix.slice(0, 200).trim();
+        return { prefix, suffix };
+    } catch (e) {
+        console.log("polishFollowupConnectors error:", e.message);
+        return { prefix: "", suffix: "" };
+    }
+}
+    // ============================================================================
+    
+
 // Regenerate response with ONE on-topic question (used when presence audit says shouldRegenerate)
 async function regenerateResponseWithQuestions(
     userMessage,
@@ -1482,7 +1612,7 @@ async function regenerateResponseWithQuestions(
   
     try {
       // Use centralized keyword configuration
-      const currentK = getQuestionKeywords(currentQuestion);
+      const currentK = deriveQuestionKeywordsFromFollowups(currentQuestion);
   
       const regeneratePrompt = `
   You are a rewriting assistant. Produce EXACTLY ONE interrogative sentence that:
@@ -1506,7 +1636,7 @@ async function regenerateResponseWithQuestions(
       ];
   
       const regen = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4.1",
         messages: regenMessages,
         max_tokens: 120,
         temperature: 0.3,
@@ -1560,23 +1690,22 @@ async function regenerateResponseWithQuestions(
       // If already passed, no need to rewrite
       if (auditResult && auditResult.verdict === 'ALLOW_NEXT_QUESTION') return null;
   
+      // Prefer to use the next uncovered follow-up suggested by the coverage audit
+      const nextFU = auditResult?.next_followup?.prompt
+        || (Array.isArray(auditResult?.followUpQuestions) && auditResult.followUpQuestions[0])
+        || null;
       const missing = Array.isArray(auditResult?.missing) && auditResult.missing.length ? auditResult.missing[0] : null;
-      const suggested = Array.isArray(auditResult?.followUpQuestions) && auditResult.followUpQuestions.length
-        ? auditResult.followUpQuestions[0]
-        : null;
-  
+      const suggested = nextFU;
       // Use centralized keyword configuration
-      const currentK = getQuestionKeywords(currentQuestion);
+      const currentK = deriveQuestionKeywordsFromFollowups(currentQuestion);
   
       const polishPrompt = `
   You rewrite the assistant's next message into EXACTLY ONE targeted question to address the audit's gap.
   
   Constraints:
-  - Stay strictly on CURRENT QUESTION and its keywords.
-  - Ask for the single most impactful missing element: "${missing ?? 'infer from context'}".
-  - If the audit already suggested a question, improve/shorten it and keep its intent.
-  - Natural, concise (<=220 characters), one interrogative sentence ending with "?".
-  - No prefaces, no multiple questions, no extra commentary.
+  - Stay strictly on CURRENT QUESTION.
+  - When helpful, stay aligned with these topical hints (do not invent new topics):
+    ${currentK && currentK.length ? currentK.join(", ") : "(none)"}
   
   CURRENT QUESTION: "${currentQuestion}"
   CURRENT TOPIC KEYWORDS: [${currentK.join(", ")}]
@@ -1595,7 +1724,7 @@ async function regenerateResponseWithQuestions(
       ];
   
       const polish = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4.1",
         messages: polishMessages,
         max_tokens: 120,
         temperature: 0.3,
@@ -1743,7 +1872,7 @@ Current user message: "${userMessage}"${contextInfo}`;
 
         // Step 1: Detection LLM - Identify PII and create numbered placeholders
         const detectionCompletion = await openaiClient.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4.1",
             messages: [
                 { role: "system", content: "You are a privacy detection expert. Analyze messages for privacy and security issues considering conversation context and respond with ONLY valid JSON." },
                 { role: "user", content: detectionPrompt }
@@ -1864,7 +1993,7 @@ Use this exact format:
 {"results": [{"protected": "specific_text", "abstracted": "fake_realistic_data"}, {"protected": "another_text", "abstracted": "another_fake_data"}]}`;
 
         const abstractionCompletion = await openaiClient.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4.1",
             messages: [
                 { role: "system", content: "You are a privacy abstraction expert. Create abstracted versions of text with PII replaced by generic terms. Respond with ONLY valid JSON." },
                 { role: "user", content: abstractionPrompt }
@@ -2711,7 +2840,7 @@ Response:`;
         ];
 
         const completion = await openaiClient.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4.1",
             messages: messages,
             max_tokens: 300,
             temperature: 0.8
@@ -2733,42 +2862,18 @@ Response:`;
     }
 } 
 
-// Centralized keyword configuration for all audit functions
-const QUESTION_KEYWORDS = {
-  // main questions
-  "Can you walk me through a specific time when you used GenAI to help prepare for a job interview?":
-    ["specific time","walk me through","one time you used","story","episode"],
-  "What kinds of tasks did you find yourself relying on GenAI for most when preparing for interviews?":
-    ["kinds of tasks","resume","mock interview","brainstorm","edit","practice","prep tasks"],
-  "Have you ever considered or actually used GenAI during a live interview? What happened?":
-    ["live interview","during the interview","real-time","on the call","live usage"],
-  "Tell me about a time when you felt AI gave you a real competitive edge in an interview process.":
-    ["competitive edge","advantage","stand out","outperformed","edge"],
-  "Did you ever have a close call where your AI use almost got you in trouble? What was that like?":
-    ["close call","almost got in trouble","caught","suspicious","nearly exposed"],
-  "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job applications?":
-    ["crossed a line","policy","ethics","boundary","rule"],
-  "Have you ever used AI in your job applications in a way that you prefer not to share openly with others—such as your family, friends, or colleagues?":
-    ["prefer not to share","kept private","wouldn't tell","family","colleagues","private use"],
-  // background questions
-  "Tell me about your educational background - what did you study in college or university?":
-    ["educational background","major","field of study","college","university"],
-  "I'd love to hear about your current work and how you got into it by job interviews?":
-    ["current work","job interviews","role","position","how you got into it"],
-  "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?":
-    ["first got you interested","started using","why you used","motivation","genai tools","chatgpt","gemini"]
-};
-
-// Helper function to get keywords for a question
-function getQuestionKeywords(question) {
-  return QUESTION_KEYWORDS[question] || [];
-}
-
-// Helper function to get other question keywords (for topic alignment)
-function getOtherQuestionKeywords(currentQuestion) {
-  return Object.entries(QUESTION_KEYWORDS)
-    .filter(([q]) => q !== currentQuestion)
-    .flatMap(([, arr]) => arr);
+// (Removed) Static QUESTION_KEYWORDS helpers.
+// Use deriveQuestionKeywordsFromFollowups(...) instead.
+function deriveOtherQuestionKeywords(currentQuestion) {
+    try {
+        const map = typeof FOLLOWUPS_BY_QUESTION !== "undefined" ? FOLLOWUPS_BY_QUESTION : {};
+        const set = new Set();
+        for (const q of Object.keys(map)) {
+        if (q === currentQuestion) continue;
+        for (const k of deriveQuestionKeywordsFromFollowups(q)) set.add(k);
+        }
+        return Array.from(set);
+    } catch { return []; }
 }
 
 function getQuestionKey(q){ return (q||'').trim().toLowerCase(); }
