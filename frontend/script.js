@@ -98,8 +98,10 @@ class PrivacyDemoApp {
             inFollowUpMode: false,
             // Background mode property
             backgroundMode: false,
-            // Prolific ID from URL
+            // Prolific params from URL/localStorage
             prolificId: null,
+            prolificStudyId: null,
+            prolificSessionId: null,
             // User agent properties
             userAgentEnabled: false,
             userAgentResponding: false,
@@ -286,7 +288,7 @@ class PrivacyDemoApp {
 
     // Initialize the application
     async init() {
-        this.extractProlificId();
+        this.extractProlificParams();
         this.bindEvents();
         
         // Always start fresh - clear any previous state
@@ -306,6 +308,9 @@ class PrivacyDemoApp {
         
         // Initialize multi-step interface - always start at introduction
         this.initializeMultiStepInterface();
+
+        // If Prolific params exist, log "start" (non-blocking)
+        this.safeProlificStart();
         
         // Load questions for the default mode (naive) to ensure they're available
         console.log('🔄 Initializing with default mode questions...');
@@ -426,15 +431,43 @@ class PrivacyDemoApp {
         console.log('✅ Fresh start ensured - reset to introduction page');
     }
 
-    // Extract PROLIFIC_PID from URL parameters
-    extractProlificId() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const prolificId = urlParams.get('PROLIFIC_PID');
-        if (prolificId) {
-            this.state.prolificId = prolificId;
-            console.log('Extracted Prolific ID:', prolificId);
-        } else {
-            console.log('No PROLIFIC_PID found in URL parameters');
+     // NEW: Extract PID/STUDY_ID/SESSION_ID from URL or localStorage
+    extractProlificParams() {
+        const sp = new URLSearchParams(window.location.search);
+        const pid = sp.get('PROLIFIC_PID') || localStorage.getItem('prolific_pid');
+        const study = sp.get('STUDY_ID') || localStorage.getItem('prolific_study');
+        const session = sp.get('SESSION_ID') || localStorage.getItem('prolific_session');
+        this.state.prolificId = pid || null;
+        this.state.prolificStudyId = study || null;
+        this.state.prolificSessionId = session || null;
+        if (pid) localStorage.setItem('prolific_pid', pid);
+        if (study) localStorage.setItem('prolific_study', study);
+        if (session) localStorage.setItem('prolific_session', session);
+        if (pid && study && session) {
+        console.log('✅ Prolific params detected', { pid, study, session });
+        }
+    }
+    
+    // NEW: Log start event to backend (safe & non-blocking)
+    async safeProlificStart() {
+        const pid = this.state.prolificId;
+        const study = this.state.prolificStudyId;
+        const session = this.state.prolificSessionId;
+        if (!pid || !study || !session) return;
+        try {
+            await fetch('https://privacydemo.onrender.com/api/prolific/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pid, study, session,
+                    referrer: document.referrer || null,
+                    userAgent: navigator.userAgent,
+                    ts: Date.now()
+                })
+            });
+            console.log('✅ Prolific start logged');
+        } catch (e) {
+            console.warn('⚠️ Prolific start failed (non-blocking):', e);
         }
     }
 
@@ -5320,16 +5353,73 @@ class PrivacyDemoApp {
                         // Fallback to direct export
                         this.exportDirectAndRedirect();
                 }
-            }, 500);
+                }, 500);
+                
+                // NEW (safety net): after export kicks off, finalize payment via backend complete
+                // This ensures we always hit Prolific completion even if a client redirect happens.
+                setTimeout(() => {
+                this.finishAndPay({
+                    mode: this.state.mode,
+                    surveyCompletedAt: new Date().toISOString()
+                });
+                }, 1200);
         } else {
             console.error('No pending export action found, using fallback');
             // Fallback to direct export
             setTimeout(() => {
                 this.exportDirectAndRedirect();
-            }, 500);
+                }, 500);
+                
+                // And still finalize payment after fallback export
+                setTimeout(() => {
+                this.finishAndPay({
+                    mode: this.state.mode,
+                    surveyCompletedAt: new Date().toISOString()
+                });
+                }, 1200);
         }
     }
 
+
+    // NEW: finalize—log complete to backend, which 302-redirects to Prolific completion URL
+    async finishAndPay(surveySummary) {
+        // NEW: Test mode check — skip Prolific completion redirect
+        if (localStorage.getItem('prolific_test_mode') === 'true') {
+            console.warn('🚧 Running in TEST MODE — skipping Prolific completion.');
+            alert('✅ Test mode: task completed (no Prolific redirect).');
+            window.location.href = '/thanks.html?test=1';
+            return;
+        }
+
+        const pid = this.state.prolificId || localStorage.getItem('prolific_pid');
+        const study = this.state.prolificStudyId || localStorage.getItem('prolific_study');
+        const session = this.state.prolificSessionId || localStorage.getItem('prolific_session');
+        if (!pid || !study || !session) {
+            alert('Missing Prolific IDs. Please re-open via Prolific.');
+            return;
+        }
+        try {
+            const res = await fetch('https://privacydemo.onrender.com/api/prolific/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pid, study, session, survey: surveySummary || null })
+            });
+            if (res.redirected && res.url) {
+                window.location.href = res.url; // Follow server redirect to Prolific
+                return;
+            }
+            // Fallback: if server returns JSON with explicit URL
+            try {
+                const data = await res.json();
+                if (data && data.completionUrl) {
+                    window.location.href = data.completionUrl;
+                }
+            } catch (_) { /* ignore */ }
+        } catch (e) {
+            console.warn('⚠️ finalize/complete failed:', e);
+        }
+    }
+    
     initSurveyValidation() {
         const form = document.getElementById('survey-form');
         const submitBtn = document.getElementById('survey-submit-btn');

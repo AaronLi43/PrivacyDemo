@@ -65,6 +65,81 @@
     </div>
 
     <script>
+
+        // --- NEW: parse and validate Prolific params ---
+        function getProlificParams() {
+            const sp = new URLSearchParams(window.location.search);
+            const pid = sp.get('PROLIFIC_PID');
+            const study = sp.get('STUDY_ID');
+            const session = sp.get('SESSION_ID');
+            return { pid, study, session };
+        }
+    
+        // Allow test mode if not coming from Prolific
+        function ensureProlificOrTest() {
+            const sp = new URLSearchParams(window.location.search);
+            const forceTest = sp.get('test') === '1' || sp.get('preview') === 'true';
+            let { pid, study, session } = getProlificParams();
+
+            if (!pid || !study || !session) {
+                if (!forceTest) {
+                            // Enter test mode automatically when missing params
+                const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+                pid = `TEST_${rand}`;
+                study = 'TEST_STUDY';
+                session = `TEST_SESSION_${Date.now()}`;
+                }
+                // Add a visible test banner
+                addTestBanner();
+                localStorage.setItem('prolific_test_mode', 'true');
+            } else {
+                localStorage.removeItem('prolific_test_mode');
+            }
+
+            // Persist to localStorage for later pages
+            localStorage.setItem('prolific_pid', pid);
+            localStorage.setItem('prolific_study', study);
+            localStorage.setItem('prolific_session', session);
+            return { pid, study, session, test_mode: localStorage.getItem('prolific_test_mode') === 'true' };
+        }
+
+        function addTestBanner() {
+            const banner = document.createElement('div');
+            banner.textContent = 'TEST MODE — data will use TEST_* placeholders';
+            banner.style.position = 'fixed';
+            banner.style.top = '0';
+            banner.style.left = '0';
+            banner.style.right = '0';
+            banner.style.padding = '10px 16px';
+            banner.style.background = 'rgba(255, 193, 7, .95)';
+            banner.style.color = '#111';
+            banner.style.fontWeight = '600';
+            banner.style.textAlign = 'center';
+            banner.style.zIndex = '9999';
+            document.body.appendChild(banner);
+        }
+
+            // --- NEW: log start to backend (non-blocking) ---
+        async function logProlificStart(params) {
+            try {
+                await fetch('https://privacydemo.onrender.com/api/prolific/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pid: params.pid,
+                        study: params.study,
+                        session: params.session,
+                        test_mode: !!params.test_mode,
+                        referrer: document.referrer || null,
+                        userAgent: navigator.userAgent,
+                        ts: Date.now()
+                    })
+                });
+                console.log('✅ Prolific start logged');
+            } catch (e) {
+                console.warn('⚠️ Prolific start failed (non-blocking):', e);
+            }
+        }
         // Function to reset all stored data
         function resetAllData() {
             try {
@@ -159,7 +234,11 @@
             // Try to reset backend session (non-blocking)
             resetBackendSession();
             
-            // Select mode and redirect
+            // Ensure Prolific params or enter TEST mode; persist and log start
+            const prolific = ensureProlificOrTest();
+            logProlificStart(prolific);
+            
+            // Select mode and redirect (preserving original params as before)
             const selectedMode = getRandomMode();
             redirectToMode(selectedMode);
         });

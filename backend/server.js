@@ -2817,30 +2817,99 @@ app.post('/api/upload_questions', upload.single('file'), (req, res) => {
     }
 });
 
-// Upload Return Log API
-app.post('/api/upload_return', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        const fileContent = fs.readFileSync(req.file.path, 'utf8');
-        const uploadedReturnLog = JSON.parse(fileContent);
-
-        // Clean up uploaded file
-        fs.removeSync(req.file.path);
-
-        res.json({
-            success: true,
-            message: 'Return log uploaded successfully',
-            log_entries: uploadedReturnLog.length
-        });
-    } catch (error) {
-        console.error('Upload return log error:', error);
-        res.status(500).json({ error: 'Failed to process uploaded file' });
-    }
+// --- NEW: AWS S3 client (SDK v3) ---
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+ credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  }
 });
+const S3_BUCKET = process.env.S3_BUCKET;
 
+// Upload Return Log API -> store JSON to S3 with custom filename
+app.post('/api/upload_return', upload.single('file'), async (req, res) => {
+  // Make sure we always cleanup the temp file
+  let uploadedReturnLog;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // 1) Parse uploaded JSON file
+    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+    try {
+      uploadedReturnLog = JSON.parse(fileContent);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid JSON in uploaded file' });
+    }
+
+    // 2) Read Prolific/context fields from multipart form fields
+    //    (multer will put text fields from the multipart form into req.body)
+    const pid = req.body.pid || null;            // PROLIFIC_PID
+    const study = req.body.study || null;        // STUDY_ID
+    const session = req.body.session || null;    // SESSION_ID
+    const rawMode = (req.body.mode || '').toLowerCase(); // 'naive' | 'neutral' | 'featured'
+    const ModeMap = { neutral: 'Neutral', naive: 'Naive', featured: 'featured' };
+    const Mode = ModeMap[rawMode] || 'featured'; // default to 'featured' (lowercase, as requested)
+    
+    // sharedOriginal can be "true"/"false" or "Shared"/"Ignored"
+    const rawShared = (req.body.sharedOriginal ?? '').toString().toLowerCase();
+    const WhetherShareOriginal = (rawShared === 'true' || rawShared === 'shared') ? 'Shared' : 'Ignored';
+    
+    // 3) Merge metadata into final payload
+    const now = new Date();
+    const baseMetadata = {
+      export_timestamp: now.toISOString(),
+      mode: rawMode || 'featured', // keep original enum for programmatic access
+      prolific: { pid, study, session },
+      study_context: {
+        mode_readable: Mode,                    // {Neutral, Naive, featured}
+        whether_share_original: WhetherShareOriginal // {Shared, Ignored}
+      }
+    };
+    
+    // uploadedReturnLog can be an array or object: wrap it into an object
+    const exportPayload = Array.isArray(uploadedReturnLog)
+      ? { metadata: baseMetadata, logs: uploadedReturnLog }
+      : {
+          ...(uploadedReturnLog || {}),
+          metadata: { ...(uploadedReturnLog?.metadata || {}), ...baseMetadata }
+        };
+        
+    // 4) Build filename: {TimeStamp_ProlificID_Mode_WhetherShareOriginal}.json
+    const ts = now.toISOString().replace(/[:.]/g, '-'); // filename safe
+    const safePID = (pid || 'UnknownPID').replace(/[^A-Za-z0-9_-]/g, '');
+    const filename = `${ts}_${safePID}_${Mode}_${WhetherShareOriginal}.json`;
+    
+    // optional: add a prefix directory for better organization
+    const s3Key = `returns/${filename}`;
+    
+    // 5) Put to S3
+    await s3.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
+      ContentType: 'application/json'
+    }));
+    
+    // 6) Done
+    return res.json({
+      success: true,
+      message: 'Return log uploaded & stored to S3',
+      filename,
+      s3_key: s3Key,
+      log_entries: Array.isArray(uploadedReturnLog) ? uploadedReturnLog.length : undefined
+    });
+  } catch (error) {
+    console.error('Upload return log error:', error);
+    return res.status(500).json({ error: 'Failed to process or store uploaded file' });
+  } finally {
+    // Cleanup temp file
+    try { if (req.file?.path) fs.removeSync(req.file.path); } catch (_) {}
+  }
+});
 // Set Mode API
 app.post('/api/set_mode', (req, res) => {
     try {
