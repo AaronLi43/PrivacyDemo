@@ -2407,12 +2407,6 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
             explanation: 'Full address detected'
         },
         {
-            pattern: /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
-            type: 'Full Name',
-            replacement: '[Name]',
-            explanation: 'Full name detected'
-        },
-        {
             pattern: /\b\d{1,2}\/\d{1,2}\/\d{4}\b/,
             type: 'Date of Birth',
             replacement: '[Date]',
