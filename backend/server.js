@@ -32,7 +32,8 @@ import {
     parseExecutorOutput, enforceAllowedAction,
     composeAssistantMessage, buildOrchestratorDirectives,
     buildAllowedActionsForPrompt,
-    isFinalQuestion
+    isFinalQuestion,
+    recordScores
 } from './orchestrator.js';
 
 
