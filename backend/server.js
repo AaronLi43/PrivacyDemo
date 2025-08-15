@@ -687,7 +687,7 @@ function detectNoExperience(utterance, currentQuestion) {
     const qkey = normalizeQuestionKey(currentQuestion);
     const eventyQ = /(use ai|used ai|close call|hide)/.test(qkey);
 
-    const noExp = (NEGATE.test(t) || CHEAT.test(t) || NO_INTERVIEW.test(t)) && eventyQ;
+    const noExp = (NEGATE.test(t) || NO_INTERVIEW.test(t)) && eventyQ;
     return { no_experience: !!noExp, reason: noExp ? t : "" };
 }
 
