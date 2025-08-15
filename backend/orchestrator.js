@@ -58,8 +58,18 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     clearPendingFollowup(state);
     // Allow "next question/summary", consistent with ALLOW_NEXT_QUESTION behavior
     state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+    
+    // Add logging for debugging tag action mapping
+    if (state?.lastTags?.includes("No_able_answer")) {
+      console.log("🔍 [ORCHESTRATOR] Tag action mapping applied for No_able_answer:", {
+        tags: state.lastTags,
+        actions: Array.from(acts),
+        newAllowedActions: Array.from(state.allowedActions),
+        timestamp: new Date().toISOString()
+      });
     }
-    }
+  }
+}
   
 // Tag helper
 export function hasTag(state, tag) {
@@ -181,6 +191,20 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
   storeAudits(state, { completionAudit, presenceAudit });
   if (Array.isArray(orchestrator_tags)) {
     state.lastTags = orchestrator_tags;
+    
+    // Add logging for debugging "No_able_answer" tag
+    if (orchestrator_tags.includes("No_able_answer")) {
+      console.log("🔍 [ORCHESTRATOR] No_able_answer tag detected:", {
+        tags: orchestrator_tags,
+        timestamp: new Date().toISOString(),
+        sessionState: {
+          phase: state.phase,
+          mainIdx: state.mainIdx,
+          allowedActions: Array.from(state.allowedActions || [])
+        }
+      });
+    }
+    
     applyTagActionMapping(state);
   }
 }
