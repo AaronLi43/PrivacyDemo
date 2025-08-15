@@ -946,6 +946,10 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ error: 'Message is required and cannot be empty' });
       }
 
+      // Session - moved here to fix initialization order
+      const currentSessionId = sessionId || generateSessionId();
+      const session = getSession(currentSessionId);
+
       // Special handling for START_QUESTION_MODE action
       if (message === "__START__" && action === "START_QUESTION_MODE") {
         log.info('handling START_QUESTION_MODE action');
@@ -980,9 +984,7 @@ app.post('/api/chat', async (req, res) => {
         }
       }
   
-      // Session
-      const currentSessionId = sessionId || generateSessionId();
-      const session = getSession(currentSessionId);
+      // Session variables already declared above
       const prevLen = session.conversationHistory.length;
       session.conversationHistory.push({
         role: 'user',
