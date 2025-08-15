@@ -16,6 +16,7 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         lastAudit: null,
         lastPresence: null,
         styleHints: {},
+        lastTags: [],               // NEW: latest orchestrator_tags from server (e.g., ["No_able_answer"])
         // Current question's "pending" follow-up (determined by server's next_followup)
         pendingFollowup: null,
         // Recent follow-up coverage (for debugging/visualization only)
@@ -27,6 +28,11 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     return session.state;
   }
   
+// Tag helper
+export function hasTag(state, tag) {
+  return Array.isArray(state?.lastTags) && state.lastTags.includes(tag);
+}
+
   export function getCurrentQuestion(state, mainQuestions) {
     if (state.phase === "main") return mainQuestions[state.mainIdx] || null;
     return null;
@@ -67,6 +73,7 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       state.allowedActions = new Set(["ASK_FOLLOWUP"]);
     } else {
       state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]);
+
     }
   }
   
@@ -76,8 +83,8 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     
 // Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
  export function allowNextIfAuditPass(state, completionAuditVerdict) {
-    // If audit passes (all follow-ups covered), allow advancing to next question/summary; otherwise tighten based on pendingFollowup
-    if (completionAuditVerdict === "ALLOW_NEXT_QUESTION") {
+    // If audit passes (all follow-ups covered) OR tagged No_able_answer, allow advancing to next question/summary
+    if (completionAuditVerdict === "ALLOW_NEXT_QUESTION" || hasTag(state, "No_able_answer")) {
       clearPendingFollowup(state);
       state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
       return;
@@ -99,10 +106,11 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
   export function shouldAdvance(completionAuditVerdict, state, question) {
-    const pass = completionAuditVerdict === "ALLOW_NEXT_QUESTION";
+    // Also advance if tagged No_able_answer (server has already skipped event-dependent follow-ups)
+    const pass = completionAuditVerdict === "ALLOW_NEXT_QUESTION" || hasTag(state, "No_able_answer");
     const skipped = !!(state?.perQuestion?.[question]?.skip);
     return pass || skipped;
-    }
+  }
   
   // Move to the next question; main questions run into done
   export function gotoNextQuestion(state, mainQuestions) {
@@ -134,6 +142,19 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       clearPendingFollowup(state);
     }
   }
+
+// NEW: overload with tags (keep backward compatibility - if caller passes orchestrator_tags, write to lastTags and clear pending)
+export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orchestrator_tags } = {}) {
+  storeAudits(state, { completionAudit, presenceAudit });
+  if (Array.isArray(orchestrator_tags)) {
+    state.lastTags = orchestrator_tags;
+    if (hasTag(state, "No_able_answer")) {
+      clearPendingFollowup(state);
+      // Directly allow transition: next question or summary
+      state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+    }
+  }
+}
   
   // Parse Executor's JSON output (with error tolerance) and perform basic action validation
   export function parseExecutorOutput(text) {
@@ -164,6 +185,14 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         ? "SUMMARIZE_QUESTION"
         : (state.allowedActions.has("REQUEST_CLARIFY") ? "REQUEST_CLARIFY" : "NEXT_QUESTION");
     }
+
+    // NEW: if tagged No_able_answer, never allow further follow-ups on this question
+    if (!hasPendingFollowup(state) && parsed.action === "ASK_FOLLOWUP" && hasTag(state, "No_able_answer")) {
+      parsed.action = state.allowedActions.has("SUMMARIZE_QUESTION")
+      ? "SUMMARIZE_QUESTION"
+      : (state.allowedActions.has("NEXT_QUESTION") ? "NEXT_QUESTION" : "REQUEST_CLARIFY");
+    }
+
     
     if (hasPendingFollowup(state)) {
       parsed.action = "ASK_FOLLOWUP";
@@ -243,6 +272,12 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
     }
 
     if (action === "ASK_FOLLOWUP" || action === "REQUEST_CLARIFY") {
+
+      // If tagged No_able_answer but still falls into ask follow-up/clarify path, give a lightweight clarification question (without changing follow-up text)
+      if (!hasPendingFollowup(state) && hasTag(state, "No_able_answer") && nextQuestion) {
+        // Use a transition + directly enter the next question to avoid digging into non-existent experiences
+        return `${pref}Thanks—that’s clear.\n\nNext question:\n${nextQuestionLine(nextQuestion)}`;
+      }
       return `${pref}${ensureEndsWithQuestion(utter || "Could you share a specific example")}`;
     }
 
@@ -254,7 +289,8 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
   }
 
   export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
-    const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience);
+    const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || hasTag(state, "No_able_answer"));
+
     const backgroundOnly = !!(presenceAudit?.background_only);
     
     if (noExp) {
@@ -278,7 +314,9 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
       allowedActions: buildAllowedActionsForPrompt(state),
       styleHints: state.styleHints || {},
       // Pass pending follow-up explicitly to executor prompt constructor (if you use it in server)
-      pendingFollowup: hasPendingFollowup(state) ? { ...state.pendingFollowup } : null
+      pendingFollowup: hasPendingFollowup(state) ? { ...state.pendingFollowup } : null,
+      // NEW: pass tags to downstream prompt builders/executors if needed
+      tags: Array.isArray(state.lastTags) ? [...state.lastTags] : []
     };
   }
 

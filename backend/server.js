@@ -26,7 +26,7 @@ import {
     WELCOME_TEXT,
     initState, getCurrentQuestion, peekNextQuestion,
     hasPendingFollowup, atFollowupCap, clearPendingFollowup,
-    storeAudits, applyHeuristicsFromAudits,
+    storeAudits, storeAuditsWithTags, applyHeuristicsFromAudits,
     allowNextIfAuditPass, finalizeIfLastAndPassed,
     shouldAdvance, gotoNextQuestion,
     parseExecutorOutput, enforceAllowedAction,
@@ -812,7 +812,7 @@ async function auditQuestionCompletion(
     ASSISTANT_LATEST: ${aiResponse}
     Return: {"question_id": "...","coverage_map":[{"id":"...","covered":true|false,"evidence":""}],"next_followup_id":"..."|null,"next_followup_prompt":"..."|null,"verdict":"ALLOW_NEXT_QUESTION"|"REQUIRE_MORE","confidence":0.0-1.0,"notes":""}
     `;
-    const r = await openaiClient.chat.completions.create({ model:"gpt-4o", temperature:0.2, max_tokens:420, messages:[{role:"system",content:sys},{role:"user",content:user}] });
+    const r = await openaiClient.chat.completions.create({ model:"gpt-4.1", temperature:0.2, max_tokens:420, messages:[{role:"system",content:sys},{role:"user",content:user}] });
     let raw = r.choices?.[0]?.message?.content?.trim() || "";
     if (raw.startsWith("```")) raw = raw.replace(/^```json\s*/i,"").replace(/```$/,"").trim();
     let parsed = {}; try { parsed = JSON.parse(raw); } catch {}
@@ -1369,7 +1369,7 @@ const pending = allFUs.filter(
           }
   
           // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
-          storeAudits(state, { completionAudit, presenceAudit });
+          storeAuditsWithTags(state, { completionAudit, presenceAudit, orchestrator_tags: completionAudit?.orchestrator_tags });
           applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit });
           allowNextIfAuditPass(state, completionAudit?.verdict);
           finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
@@ -1793,9 +1793,10 @@ async function polishFollowupConnectors({
         STRICT RULES:
         - NEVER alter, paraphrase, or reformat the QUESTION. You only supply "prefix" and "suffix".
         - Tone: warm, neutral, concise, interview-like; no emojis; avoid repetition; no markdown.
-        - Fit the immediate context smoothly (assume English UI unless input obviously in Chinese).
+        - Fit the immediate context smoothly (assume English UI).
         - Keep them short: prefix ≤ 120 chars, suffix ≤ 120 chars.
         - If context is sensitive, acknowledge gently (e.g., "Thanks for sharing that.").
+        - The final output should be grammatically correct.
         OUTPUT JSON ONLY:
         { "prefix": "...", "suffix": "..." }
         `;
@@ -1807,7 +1808,7 @@ async function polishFollowupConnectors({
         OPTIONAL STYLE HINTS: ${JSON.stringify(styleHints || {})}
         `;
         const resp = await openaiClient.chat.completions.create({
-            model: "gpt-4.1-mini",
+            model: "gpt-4.1",
             temperature: 0.3,
             max_tokens: 180,
             messages: [
