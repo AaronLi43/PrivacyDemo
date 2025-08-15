@@ -431,34 +431,111 @@ const predefinedQuestions = {
 // Structure: each follow-up includes { id, prompt }; optional keywords for precise coverage checks
 const FOLLOWUPS_BY_QUESTION = {
     [unifiedQuestions[0]]: [
-        { id: "Q1_F1", prompt: "When did you start your degree and when did you finish?", keywords: ["when"] },
-        { id: "Q1_F2", prompt: "Where did you study and what was your major?", keywords: ["where"] },
-        { id: "Q1_F3", prompt: "What was your major?", keywords: ["who"] }
+            { id: "Q1_F1", prompt: "When did you start your degree and when did you finish?", keywords: [
+            "when","start","started","begin","began","enroll","enrolled",
+            "from","since","until","between",
+            "finish","finished","complete","completed","graduated","graduation",
+            "class of","year","semester","quarter","fall","spring","summer","winter",
+            "freshman","sophomore","junior","senior","201","202"
+        ] },
+        { id: "Q1_F2", prompt: "Where is your college or university located?", keywords: [
+            "where","location","located","city","town","state","province","country","region",
+            "university","college","school","campus","institution",
+            "university of","college of","state university","polytechnic","tech university"
+        ] },
+        { id: "Q1_F3", prompt: "Who was your supervisor back in college?", keywords: [
+            "supervisor","advisor","adviser","mentor","thesis advisor","capstone advisor","co-advisor",
+            "professor","lecturer","pi","principal investigator","dr","prof","supervised by"
+        ] }
     ],
     [unifiedQuestions[1]]: [
-        { id: "Q2_F1", prompt: "What is your current job title and employer?", keywords: ["when"] },
-        { id: "Q2_F2", prompt: "How did job interviews factor into getting this role?", keywords: ["title_of_position"] },
-        { id: "Q2_F3", prompt: "What was your previous job title and employer?", keywords: ["Employer"] }
+        { id: "Q2_F1", prompt: "When did you start your current job and when did you do the interview?", keywords: [
+            "when","start","started","join","joined","since","until","between",
+            "interview","phone screen","screen","assessment","take-home","onsite","on-site","loop",
+            "offer","offer date","start date","hire date","hired","accepted",
+            "month","year","week","201","202"
+        ] },
+        { id: "Q2_F2", prompt: "What is your current job title?", keywords: [
+            "title","job title","position","role","level",
+            "senior","junior","lead","manager","intern","contractor","staff","principal",
+            "swe","engineer","developer","scientist","analyst","designer","researcher",
+            "qa","qe","pm","product manager","data scientist","ml engineer"
+        ] },
+        { id: "Q2_F3", prompt: "What is your current employer or company?", keywords: [
+            "employer","company","organization","org","firm","startup",
+            "corp","corporation","inc","llc","ltd","co","company name","employed at","work at","at"
+        ] }
     ],
     [unifiedQuestions[2]]: [
-        { id: "Q3_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["interview_timeline_and_when_AI_used"] },
-        { id: "Q3_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_AI_used"] },
-        { id: "Q3_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["how_AI_used"] }
+        { id: "Q3_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: [
+            "when","exactly","interview","timeline","around","before","after","during",
+            "date","time","month","year","201","202","preparation","prep","application",
+            "offer","assessment","screen","onsite","on-site","loop","process"
+        ] },
+        { id: "Q3_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+            "which","ai","tools","did you use","use","used","what","tasks","purpose",
+            "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+            "bing ai","perplexity","notion ai","quillbot","grammarly","prompt","prompts",
+            "generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+            "mock interview","practice q&a","script","answer bank","cheatsheet"
+        ] },
+        { id: "Q3_F3", prompt: "How did you use AI and what difference did it make?", keywords: [
+            "how","did you use","use","used","ai","difference","impact","effect","result",
+            "help","assist","improve","change","outcome","benefit","advantage","disadvantage",
+            "influence","process","performance","success","failure","resulted in"
+        ] }
     ],
-    [unifiedQuestions[3]]: [
-        { id: "Q4_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["incident_when"] },
-        { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_AI_used"] },
-        { id: "Q4_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["What_trouble_AI_got_you_in"] }
+    [unifiedQuestions[3]]: [        { id: "Q4_F1", prompt: "when did the close call happen?", keywords: [
+        "when","incident","close call","almost caught","nearly","time","date","month","year","201","202"
+        ] },
+        { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+        "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+        "bing ai","perplexity","notion ai","quillbot","grammarly",
+        "prompt","prompts","generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+        "star","bullet points","mock interview","practice q&a","script","answer bank","cheatsheet",
+        "cover letter","resume","cv","email","thank-you note"
+        ] },
+        { id: "Q4_F3", prompt: "What trouble did AI get you in?", keywords: [
+        "trouble","caught","flagged","plagiarism","cheating","ban","banned","policy","violation",
+        "integrity","academic integrity","code of conduct","warning","revoke","rescinded","revoke offer",
+        "disqualify","disqualified","penalty","strike","concern","red flag","hr","recruiter",
+        "investigation","reported","suspension","blacklist"
+        ] }
     ],
     [unifiedQuestions[4]]: [
-        { id: "Q5_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["what_triggered_you"] },
-        { id: "Q5_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["what_concerns_you_mind"] },
-        { id: "Q5_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["additional_ethics_reflection"] }
+        { id: "Q5_F1", prompt: "What triggered you to have the idea to cross the line of properly using AI?", keywords: [
+            "trigger","reason","because","due to","pressure","deadline","time pressure",
+            "hard question","difficult","competition","anxiety","stress","desperate","temptation",
+            "incentive","recommendation","friend suggested","saw others","reddit","forum","example",
+                      "shortcut","cheat","hack"
+        ] },
+        { id: "Q5_F2", prompt: "What concerns were in your mind when you had the crossing-line idea?", keywords: [
+            "concern","worry","afraid","fear","risk","getting caught","detect","detection",
+            "policy","violation","ethics","integrity","honesty","privacy","security",
+            "consequence","ban","penalty","expelled","fired","background check","nda","legal","guidelines"
+        ] },
+        { id: "Q5_F3", prompt: "What additional ethics reflection did you have when you look back on it?", keywords: [
+            "ethics","ethical","reflection","in hindsight","looking back","regret","lesson","learned",
+            "shouldn't have","boundary","line","values","responsibility","fairness","transparency",
+            "accountability","harm","trust","reputation","principle","moral","self-reflection"
+        ] }
     ],
     [unifiedQuestions[5]]: [
-        { id: "Q6_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: ["when"] },
-        { id: "Q6_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: ["who_hiding_from"] },
-        { id: "Q6_F3", prompt: "What was the outcome—did AI make a difference?", keywords: ["what_AI_uses_you_try_hide_from_them"] }
+        { id: "Q6_F1", prompt: "When was the incident of you using AI to hide from someone?", keywords: [
+            "when","incident","time","date","month","year","201","202","hide","hidden","keeping secret"
+        ] },
+        { id: "Q6_F2", prompt: "Who were you hiding from?", keywords: [
+            "who","from","employer","manager","boss","hr","recruiter","interviewer",
+            "coworker","colleague","team","professor","ta","teacher","advisor","supervisor",
+            "client","customer","family","parents","partner","girlfriend","boyfriend","spouse",
+            "friend","roommate"
+        ] },
+        { id: "Q6_F3", prompt: "What AI uses did you try to hide from them?", keywords: [
+            "hide","conceal","secret","ai use","used chatgpt","copilot","generate","autocompletion","auto-complete",
+            "rewrite","translate","summarize","grammar","proofread","code","solution","answers","essay","report",
+            "homework","assignment","take-home","test","automation","voice to text","image generator",
+            "dall-e","midjourney","stable diffusion","quillbot","grammarly"
+        ] }
     ]
 };
 
