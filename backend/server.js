@@ -2818,14 +2818,6 @@ app.post('/api/upload_questions', upload.single('file'), (req, res) => {
 });
 
 // --- NEW: AWS S3 client (SDK v3) ---
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const s3 = new S3Client({
-  region: process.env.AWS_REGION,
- credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
-});
 const S3_BUCKET = process.env.S3_BUCKET;
 
 // Upload Return Log API -> store JSON to S3 with custom filename
@@ -2887,7 +2879,7 @@ app.post('/api/upload_return', upload.single('file'), async (req, res) => {
     const s3Key = `returns/${filename}`;
     
     // 5) Put to S3
-    await s3.send(new PutObjectCommand({
+    await s3Client.send(new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: s3Key,
       Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
