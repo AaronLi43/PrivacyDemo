@@ -2370,10 +2370,12 @@ Current user message: "${userMessage}"${contextInfo}`;
             .map(p => p && p.placeholder)
             .filter(Boolean);
         const abstractionPrompt = `Rewrite the text to abstract the protected information, without changing other parts.
+IMPORTANT: Only operate on the exact placeholders provided; DO NOT change any other text.
 
 For example:
-Input: <Text>I graduated from CMU, and I earn a six-figure salary. Today in the office...</Text><ProtectedInformation>CMU,Today</ProtectedInformation>
-Output JSON: {"results": [{"protected": "CMU", "abstracted": "MIT"}, {"protected": "Today", "abstracted": "Yesterday"}]}
+Input: <Text>I graduated from [Education_Record1], and I earn a six-figure salary. [Time1] in the office...</Text><ProtectedInformation>[Education_Record1],[Time1]</ProtectedInformation>
+Output JSON: {"results": [{"protected": "[Education_Record1]", "abstracted": "MIT"}, {"protected": "[Time1]", "abstracted": "Yesterday"}]}
+
 
 Current input:
 <Text>${detectionData.text_with_placeholders}</Text>
@@ -2392,7 +2394,8 @@ For example:
 - Companies: Replace with fake companies like "TechCorp", "InnovateInc"
 
 Use this exact format:
-{"results": [{"protected": "specific_text", "abstracted": "fake_realistic_data"}, {"protected": "another_text", "abstracted": "another_fake_data"}]}`;
+{"results": [{"protected": "[PlaceholderX]", "abstracted": "fake_realistic_data"}, {"protected": "[PlaceholderY]", "abstracted": "another_fake_data"}]}`;
+
 
         const abstractionCompletion = await openaiClient.chat.completions.create({
             model: "gpt-4.1",
@@ -2421,42 +2424,42 @@ Use this exact format:
             
 
 
-                // Handle new results array format
-                if (abstractionData.results && Array.isArray(abstractionData.results)) {
-                    // Prefer placeholders; if model returned originals, map them back to placeholders
-                    const originalToPlaceholder = new Map(
-                        (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
+            if (abstractionData.results && Array.isArray(abstractionData.results)) {
+                // Only allow replacements on placeholders; if model returns original text, map back to placeholders; otherwise discard
+                const placeholderList = (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
+                    .map(p => p && p.placeholder)
+                    .filter(Boolean);
+                const placeholderSet = new Set(placeholderList);
+                const originalToPlaceholder = new Map(
+                    (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
                             .map(p => [p.original_text, p.placeholder])
-                    );
-                    let results = abstractionData.results.map(r => {
-                        if (r && typeof r.protected === 'string'
-                            && !String(detectionData.text_with_placeholders).includes(r.protected)
-                            && originalToPlaceholder.has(r.protected)) {
-                            return { ...r, protected: originalToPlaceholder.get(r.protected) };
-                        }
-                        return r;
-                    });
-                if (results.length > 0) {
-                    // Convert results array to the expected format
-                    const protectedTexts = results.map(r => r.protected).join(',');
-                    const abstractedTexts = results.map(r => r.abstracted).join(',');
-                    
-                    // Create before/after suggestion
-                    let originalText = detectionData.text_with_placeholders;
-                    let abstractedText = originalText;
-                    
-                    // Replace each protected text with its abstracted version
-                    results.forEach(result => {
-                        const regex = new RegExp(result.protected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                        abstractedText = abstractedText.replace(regex, result.abstracted);
-                    });
+                );
+                const placeholderMap = new Map();
+                for (const r of abstractionData.results) {
+                    if (!r || typeof r.abstracted !== 'string') continue;
+                    let key = r.protected;
+                    if (!placeholderSet.has(key) && originalToPlaceholder.has(key)) {
+                        key = originalToPlaceholder.get(key);
+                    }
+                    if (placeholderSet.has(key)) {
+                        placeholderMap.set(key, r.abstracted);
+                    }
+                }
+                if (placeholderMap.size > 0) {
+                    const originalText = String(detectionData.text_with_placeholders);
+                    // Only replace placeholders, other text remains unchanged
+                    const PLACEHOLDER_RE = /\[[A-Za-z_]+?\d+\]/g;
+                    const abstractedText = originalText.replace(PLACEHOLDER_RE, m => (
+                        placeholderMap.has(m) ? placeholderMap.get(m) : m
+                    ));
+                    const protectedTexts = Array.from(placeholderMap.keys()).join(',');
                     
                     return {
                         privacy_issue: true,
                         type: detectionData.detected_pii[0]?.type || 'PII_DETECTED',
                         suggestion: `Before: "${originalText}"\nAfter: "${abstractedText}"`,
                         explanation: `Protected information abstracted: ${protectedTexts}`,
-                        affected_text: protectedTexts,
+                        affected_text: protectedTexts,      // Only return placeholders, avoid frontend re-using original text for replacement
                         sensitive_text: protectedTexts,
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,

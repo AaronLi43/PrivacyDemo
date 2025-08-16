@@ -2947,6 +2947,7 @@ class PrivacyDemoApp {
                         export_timestamp: new Date().toISOString(),
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
+                        consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
@@ -3009,6 +3010,7 @@ class PrivacyDemoApp {
                         export_timestamp: new Date().toISOString(),
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
+                        consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                         survey_completed: this.state.surveyCompleted
                     },
                     conversation: conversationToExport,
@@ -3565,9 +3567,13 @@ class PrivacyDemoApp {
                 edited_messages_count: editedMessages,
                 export_type: 'naive_with_edits',
                 consent_given: this.state.consentGiven,
+                // NEW: explicit text tag to avoid server defaulting to wrong value
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                 consent_details: {
                     original_data_included: this.state.consentGiven,
-                    survey_data_included: this.state.surveyCompleted
+                    survey_data_included: this.state.surveyCompleted,
+                    // NEW: keep a mirrored tag inside details
+                    original_data_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored')
                 },
                 survey_completed: this.state.surveyCompleted
             },
@@ -3597,9 +3603,13 @@ class PrivacyDemoApp {
                 export_timestamp: new Date().toISOString(),
                 total_messages: conversationToExport.length,
                 consent_given: this.state.consentGiven,
+                // NEW: explicit text tag to avoid server defaulting to wrong value
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                 consent_details: {
                     original_data_included: this.state.consentGiven,
-                    survey_data_included: this.state.surveyCompleted
+                    survey_data_included: this.state.surveyCompleted,
+                    // NEW: keep a mirrored tag inside details
+                    original_data_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored')
                 },
                 survey_completed: this.state.surveyCompleted
             },
@@ -3655,6 +3665,13 @@ class PrivacyDemoApp {
                 edited_bot_messages: exportLog.filter(turn => turn.bot_edited).length,
                 export_type: 'analysis_with_edits',
                 consent_given: this.state.consentGiven,
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
+                consent_details: {
+                    original_data_included: this.state.consentGiven,
+                    survey_data_included: this.state.surveyCompleted,
+                    // NEW: keep a mirrored tag inside details
+                    original_data_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored')
+                },
                 survey_completed: this.state.surveyCompleted
             },
             conversation: exportLog,
@@ -3686,6 +3703,7 @@ class PrivacyDemoApp {
                 privacy_analysis_performed: this.state.analyzedLog.length > 0,
                 privacy_issues_found: this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length,
                 consent_given: this.state.consentGiven,
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                 consent_details: {
                     original_data_included: this.state.consentGiven,
                     survey_data_included: this.state.surveyCompleted,
@@ -5310,6 +5328,26 @@ class PrivacyDemoApp {
         // Save survey data to state
         this.state.surveyData = surveyData;
         this.state.surveyCompleted = true;
+
+        // --- NEW: normalize final consent tag from survey (accept / ignore[d]) ---
+        // Robustly scan survey answers for the consent choice without dependency on fixed question numbers
+        const __vals = Object.values(surveyData).map(v => String(v || '').trim().toLowerCase());
+        let consentTagFromSurvey = null;
+        if (__vals.includes('accept') || __vals.includes('accepted')) {
+            consentTagFromSurvey = 'accept';
+        } else if (__vals.includes('ignore') || __vals.includes('ignored') || __vals.includes('igored')) {
+            // Compatibility with historical spelling errors “igored”, corrected to 'ignored'
+            consentTagFromSurvey = 'ignored';
+        }
+        // If the survey provides a clear choice, use the survey; otherwise, keep the existing boolean value and derive the tag
+        if (consentTagFromSurvey) {
+            this.state.consentGiven = (consentTagFromSurvey === 'accept');
+            this.state.consentTag = consentTagFromSurvey; // 'accept' | 'ignored'
+        } else {
+            this.state.consentTag = this.state.consentGiven ? 'accept' : 'ignored';
+        }
+        // Persist (so that export matches backend reading)
+        this.saveToLocalStorage();
         
         console.log('Survey state after saving:', {
             surveyData: this.state.surveyData,
