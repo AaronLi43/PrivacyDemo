@@ -558,8 +558,10 @@ function getFollowupsForQuestion(q) {
     let best = null, bestScore = -1;
     for (const [k, v] of NORMALIZED_FU_MAP.entries()) {
         // Shared token count / total token count, rough similarity score
-        const a = new Set(qKey.split(" "));
-        const b = new Set(k.split(" "));
+        const toksA = qKey.split(/\s+/).filter(Boolean);
+        const toksB = k.split(/\s+/).filter(Boolean);
+        const a = new Set(toksA);
+        const b = new Set(toksB);
         const inter = [...a].filter(t => b.has(t)).length;
         const union = new Set([...a, ...b]).size;
         const score = union ? inter / union : 0;
@@ -568,22 +570,38 @@ function getFollowupsForQuestion(q) {
     return best || [];
 }
 function getFollowupKey(q, fid) {
-    return `${getQuestionKey(q)}::${fid}`;
+    return `${normalizeQuestionKey(q)}::${fid}`;
 }
 function markFollowupCovered(session, q, fid) {
     session.followupStatus = session.followupStatus || {};
     session.followupStatus[getFollowupKey(q, fid)] = 'covered';
 }
 function isFollowupCovered(session, q, fid) {
-    return (session.followupStatus && session.followupStatus[getFollowupKey(q, fid)] === 'covered');
+    return session.followupStatus?.[getFollowupKey(q, fid)] === 'covered';
 }
 function nextPendingFollowup(session, q) {
     const list = getFollowupsForQuestion(q);
     for (const f of list) {
-        if (!isFollowupCovered(session, q, f.id)) return f;
+    if (!isCoveredOrSkipped(session, q, f.id)) return f;
     }
     return null;
-}
+    }
+
+
+// --- Anti-repeat helpers ---
+// Record which follow-up questions have actually been asked under a main question (regardless of audit coverage)
+function markFollowupAsked(session, q, fid) {
+    const k = normalizeQuestionKey(q);
+    session.followupAsked = session.followupAsked || {};
+    session.followupAsked[k] = Array.isArray(session.followupAsked[k]) ? session.followupAsked[k] : [];
+    if (!session.followupAsked[k].includes(fid)) session.followupAsked[k].push(fid);
+    }
+
+// Check if a follow-up has already been asked
+function hasBeenAsked(session, q, fid) {
+    const k = normalizeQuestionKey(q);
+    return !!(session.followupAsked && Array.isArray(session.followupAsked[k]) && session.followupAsked[k].includes(fid));
+    }
 
 const GLOBAL_PREDEFINED = predefinedQuestions; 
 // Default main questions used for static mappings and prompts
@@ -757,12 +775,11 @@ async function detectNoExperience(utterance, currentQuestion, conversationHistor
 
 function markFollowupSkipped(session, q, fid, reason = "inapplicable") {
     if (!session.followupStatus) session.followupStatus = {};
-    const key = normalizeQuestionKey(q) + "::" + fid;
-    session.followupStatus[key] = { status: "skipped_na", reason, ts: Date.now() };
+    session.followupStatus[getFollowupKey(q, fid)] =
+    { status: "skipped_na", reason, ts: Date.now() };
 }
 function isCoveredOrSkipped(session, q, fid) {
-    const key = normalizeQuestionKey(q) + "::" + fid;
-    const s = session.followupStatus?.[key];
+    const s = session.followupStatus?.[getFollowupKey(q, fid)];
     if (!s) return false;
     if (s === "covered") return true; // Compatible with old values
     return typeof s === "object" && (s.status === "covered" || s.status === "skipped_na");
@@ -1163,13 +1180,14 @@ app.post('/api/chat', async (req, res) => {
                 if (firstQ) {
                   const { prefix, suffix } = await polishFollowupConnectors({
                     followupPrompt: firstQ,
-                           currentQuestion: firstQ,
+                    currentQuestion: firstQ,
                     conversationHistory: session.conversationHistory,
                     styleHints: state.styleHints || {}
                   });
                   const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
-                  const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
-                  const right = suffix ? (" " + suffix.trim()) : "";
+                  const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+                  const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+                  const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
                   const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
                   const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
                   session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
@@ -1292,15 +1310,22 @@ const pending = allFUs.filter(
               if (!completionAudit.tags.includes("No_able_answer")) completionAudit.tags.push("No_able_answer");
             }
           }
-          // Strict gate: If there are uncovered follow-ups, only ask the next follow-up and do not proceed to the next main question.
           if (pending.length > 0) {
             let nextFU = null;
-            // Use the next_followup suggested by the audit LLM, but it must be in the pending list.
-            if (completionAudit?.next_followup) {
+            // Anti-repeat: Prioritize unasked follow-ups
+            const unasked = pending.filter(f => !hasBeenAsked(session, qNow, f.id));
+            // Prefer audit LLM's recommendation: note that some versions are objects {id, prompt}, some are just strings id
+            if (completionAudit?.next_followup?.id) {
+              nextFU = pending.find(f => f.id === completionAudit.next_followup.id) || null;
+            } else if (typeof completionAudit?.next_followup === 'string') {
               nextFU = pending.find(f => f.id === completionAudit.next_followup) || null;
             }
-            // Otherwise, fall back: take the first uncovered follow-up in order.
-            if (!nextFU) nextFU = pending[0];
+            // If the recommended follow-up has already been asked, switch to an unasked one
+            if (nextFU && hasBeenAsked(session, qNow, nextFU.id) && unasked.length) {
+              nextFU = unasked[0];
+            }
+            // Fallback: first unasked; if all asked, then pending[0]
+            if (!nextFU) nextFU = unasked[0] || pending[0];
           // Add a slight transition phrase, but do not modify the follow-up content itself.
           const { prefix, suffix } = await polishFollowupConnectors({
             followupPrompt: nextFU.prompt,
@@ -1309,10 +1334,13 @@ const pending = allFUs.filter(
             styleHints: state?.styleHints || {}
           });
           const core = nextFU.prompt.trim().endsWith("?") ? nextFU.prompt.trim() : (nextFU.prompt.trim() + "?");
-         const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
-          const right = suffix ? (" " + suffix.trim()) : "";
-          const aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?");
+          const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+          const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+          const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
+          const aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim();
           session.conversationHistory.push({ role: "assistant", content: aiResponse, followup_id: nextFU.id });
+          // Anti-repeat: Record this follow-up as asked
+          markFollowupAsked(session, qNow, nextFU.id);
           return res.json({
             success: true,
             bot_response: aiResponse,
@@ -1438,9 +1466,10 @@ const pending = allFUs.filter(
             const coreQ = completionAudit.next_followup.prompt.trim().endsWith("?")
               ? completionAudit.next_followup.prompt.trim()
               : (completionAudit.next_followup.prompt.trim() + "?");
-            const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
-            const right = suffix ? (" " + suffix.trim()) : "";
-            aiResponse = `${left}${coreQ}${right}`.replace(/\s+\?/, "?");
+            const cleaned2 = sanitizeAndDedupeConnectors(coreQ, prefix, suffix);
+            const left = cleaned2.prefix ? (cleaned2.prefix + " ") : "";
+            const right = cleaned2.suffix ? (" " + cleaned2.suffix) : "";
+            aiResponse = `${left}${coreQ}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim();
             session.lastPolish = {
               followup_id: completionAudit.next_followup.id,
               prefix,
@@ -1476,9 +1505,10 @@ const pending = allFUs.filter(
                 styleHints: state.styleHints || {}
               });
               const core = nextQ.trim().endsWith("?") ? nextQ.trim() : (nextQ.trim() + "?");
-              const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
-              const right = suffix ? (" " + suffix.trim()) : "";
-              aiResponse = (left + core + right).replace(/\s+\?/, "?");
+              const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+              const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+              const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
+              aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim();
           } else {
             aiResponse = composeAssistantMessage(state, { action: "END" }, { styleHints: state.styleHints || {} });
           }
@@ -1555,9 +1585,10 @@ const pending = allFUs.filter(
               styleHints: state.styleHints || {}
             });
             const core = nextQ.trim().endsWith("?") ? nextQ.trim() : (nextQ.trim() + "?");
-            const left = prefix ? (prefix.trim() + (/[.?!:]$/.test(prefix.trim()) ? " " : " ")) : "";
-            const right = suffix ? (" " + suffix.trim()) : "";
-            aiResponse = (left + core + right).replace(/\s+\?/, "?");
+            const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+            const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+            const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
+            aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim();
           } else {
             aiResponse = composeAssistantMessage(state, { action: "END" }, { styleHints: state.styleHints || {} });
           }
@@ -1875,6 +1906,8 @@ async function polishFollowupConnectors({
         You write tiny connective phrases around a given follow-up QUESTION.
         STRICT RULES:
         - NEVER alter, paraphrase, or reformat the QUESTION. You only supply "prefix" and "suffix".
+        - DO NOT ask any question in prefix/suffix; they MUST be declarative (no '?' anywhere).
+        - DO NOT restate or paraphrase the QUESTION in any way.
         - Tone: warm, neutral, concise, interview-like; no emojis; avoid repetition; no markdown.
         - Fit the immediate context smoothly (assume English UI).
         - Keep them short: prefix ≤ 120 chars, suffix ≤ 120 chars.
@@ -1911,7 +1944,10 @@ async function polishFollowupConnectors({
         const q = (followupPrompt || "").trim();
         if (prefix.includes(q)) prefix = prefix.replace(q, "").trim();
         if (suffix.includes(q)) suffix = suffix.replace(q, "").trim();
-        // Length control
+         // Normalize whitespace & strip any '?' to ensure connectors are not questions
+        prefix = prefix.replace(/\s+/g, " ").replace(/\?/g, "").trim();
+        suffix = suffix.replace(/\s+/g, " ").replace(/\?/g, "").trim();
+        // Length control (keep an upper bound anyway)
         if (prefix.length > 200) prefix = prefix.slice(0, 200).trim();
         if (suffix.length > 200) suffix = suffix.slice(0, 200).trim();
         return { prefix, suffix };
@@ -1922,7 +1958,41 @@ async function polishFollowupConnectors({
 }
     // ============================================================================
     
-
+// --- Connector sanitization & anti-dup helpers ---
+function _normTokens(s){
+    return String(s || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+    }
+    function _jaccard(a, b){
+    const A = new Set(_normTokens(a));
+    const B = new Set(_normTokens(b));
+    if (!A.size || !B.size) return 0;
+    const inter = [...A].filter(x => B.has(x)).length;
+    const union = new Set([...A, ...B]).size;
+    return inter / union;
+    }
+    function sanitizeAndDedupeConnectors(coreQ, prefix, suffix){
+    // drop if likely a (hidden) question or semantically duplicative of core
+    const dangerAux = /\b(?:can|could|would|will|may|might|do|did|does|are|is|was|were)\s+you\b/i;
+    const whStart  = /\b(?:what|when|where|who|which|how|why)\b/i;
+    const dropIf = (s) => !s || dangerAux.test(s) || whStart.test(s) || _jaccard(s, coreQ) >= 0.50;
+    let p = prefix, sfx = suffix;
+    if (dropIf(p))  p = "";
+    if (dropIf(sfx)) sfx = "";
+    // if both survive but similarity is high or total length is too long, only keep prefix
+    if (p && sfx){
+    if (_jaccard(p, sfx) >= 0.40 || (p.length + sfx.length) > 160){
+    sfx = "";
+    }
+    }
+    return { prefix: p, suffix: sfx };
+    }
+    
 // Regenerate response with ONE on-topic question (used when presence audit says shouldRegenerate)
 async function regenerateResponseWithQuestions(
     userMessage,
@@ -3042,63 +3112,103 @@ app.post('/api/export', (req, res) => {
     }
 });
 
-// S3 Upload API
+// S3 Upload API (unify naming to {TimeStamp_ProlificID_Mode_WhetherShareOriginal}.json)
 app.post('/api/upload-to-s3', async (req, res) => {
     try {
-        const { exportData, prolificId } = req.body;
+        const {
+          exportData,          // required: main payload
+          // NEW preferred prolific fields:
+          pid,                 // PROLIFIC_PID (preferred)
+          study,               // STUDY_ID
+          session,             // SESSION_ID
+          mode,                // 'naive' | 'neutral' | 'featured' (optional override)
+          sharedOriginal,      // boolean or 'Shared'/'Ignored'
+          test_mode            // optional flag from redirect.html
+          // Backward-compat:
+          // prolificId        // legacy single id
+        } = req.body || {};
         
         if (!exportData) {
-            return res.status(400).json({ error: 'Export data is required' });
+          return res.status(400).json({ error: 'Export data is required' });
         }
-
         if (!s3Client) {
-            return res.status(500).json({ error: 'S3 client not configured' });
+          return res.status(500).json({ error: 'S3 client not configured' });
         }
-
-        // Generate unique filename with prolific ID and timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = prolificId ? 
-            `${prolificId}_conversation_${timestamp}.json` : 
-            `conversation_${timestamp}.json`;
-
-        // Prepare the data for upload
-        const jsonData = JSON.stringify(exportData, null, 2);
         
-        // Extract mode from export data
-        const mode = exportData.metadata && exportData.metadata.mode ? exportData.metadata.mode : 'unknown';
+        // --- Normalize prolific + context ---
+        const effectivePID = (pid || req.body.prolificId || 'UnknownPID');
+        const rawMode = (mode || exportData?.metadata?.mode || '').toLowerCase();
+        const ModeMap = { neutral: 'Neutral', naive: 'Naive', featured: 'featured' };
+        const Mode = ModeMap[rawMode] || 'featured'; // per requirement: featured is lowercase
         
-        // Upload to S3
-        const uploadParams = {
-            Bucket: 'prolificjson',
-            Key: filename,
-            Body: jsonData,
-            ContentType: 'application/json',
-            Metadata: {
-                'prolific-id': prolificId || 'unknown',
-                'upload-timestamp': new Date().toISOString(),
-                'conversation-length': exportData.conversation ? exportData.conversation.length.toString() : '0',
-                'mode': mode
-            }
+        const rawShared = (sharedOriginal ?? exportData?.metadata?.study_context?.whether_share_original ?? '')
+        .toString()
+        .toLowerCase();
+        const WhetherShareOriginal = (rawShared === 'true' || rawShared === 'shared') ? 'Shared' : 'Ignored';
+        
+        // --- Merge metadata into payload (non-destructive) ---
+        const now = new Date();
+        const baseMetadata = {
+          export_timestamp: now.toISOString(),
+          mode: rawMode || 'featured',
+          prolific: {
+            pid: pid ?? req.body.prolificId ?? null,
+            study: study ?? null,
+            session: session ?? null,
+            test_mode: !!test_mode
+          },
+          study_context: {
+            mode_readable: Mode,                       // {Neutral, Naive, featured}
+            whether_share_original: WhetherShareOriginal
+          }
         };
-
+        const merged = {
+          ...(exportData || {}),
+          metadata: { ...(exportData?.metadata || {}), ...baseMetadata }
+        };
+        
+        // --- Filename: {TimeStamp_ProlificID_Mode_WhetherShareOriginal}.json ---
+        const ts = now.toISOString().replace(/[:.]/g, '-');       // safe for filenames
+        const safePID = String(effectivePID).replace(/[^A-Za-z0-9_-]/g, '') || 'UnknownPID';
+        const filename = `${ts}_${safePID}_${Mode}_${WhetherShareOriginal}.json`;
+        const bucket = process.env.S3_BUCKET || 'prolificjson';   // fallback to old bucket if env missing
+        const s3Key = `exports/${filename}`;                      // keep a distinct prefix
+        
+        // --- Upload ---
+        const jsonData = JSON.stringify(merged, null, 2);
+        const uploadParams = {
+          Bucket: bucket,
+          Key: s3Key,
+          Body: jsonData,
+          ContentType: 'application/json',
+          Metadata: {
+            'prolific-id': safePID,
+            'upload-timestamp': now.toISOString(),
+            'mode': baseMetadata.mode,
+            'mode-readable': Mode,
+            'whether-share-original': WhetherShareOriginal,
+            'conversation-length': merged.conversation ? String(merged.conversation.length) : '0',
+            ...(study ? { 'prolific-study': study } : {}),
+            ...(session ? { 'prolific-session': session } : {}),
+            ...(test_mode ? { 'test-mode': 'true' } : {})
+          }
+        };
         const command = new PutObjectCommand(uploadParams);
         await s3Client.send(command);
-
-        console.log(`✅ Successfully uploaded ${filename} to S3 (Mode: ${mode})`);
-
-        res.json({
-            success: true,
-            message: 'File uploaded to S3 successfully',
-            filename: filename,
-            s3_url: `s3://prolificjson/${filename}`,
-            mode: mode
+        
+        console.log(`✅ Uploaded ${s3Key} (Mode: ${Mode}, PID: ${safePID})`);
+        return res.json({
+          success: true,
+          message: 'File uploaded to S3 successfully',
+          filename,
+          s3_key: s3Key,
+          bucket
         });
-
     } catch (error) {
         console.error('S3 upload error:', error);
-        res.status(500).json({ 
-            error: 'Failed to upload to S3',
-            details: error.message 
+        return res.status(500).json({
+          error: 'Failed to upload to S3',
+          details: error.message
         });
     }
 });
