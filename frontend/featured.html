@@ -841,6 +841,14 @@
         window.app.state.mode = 'featured';
         window.app.updateUI();
         
+        // Enable and show config sidebar for debugging
+        window.app.config.enableSidebarToggle = true;
+        window.app.config.sidebarHiddenByDefault = false;
+        window.app.config.persistSidebarState = false;
+        window.app.state.sidebarHidden = false;
+        window.app.updateSidebarToggle();
+        window.app.updateConfigurationUI();
+        
         // Load questions and then initiate conversation
         setTimeout(async () => {
           if (window.app && window.app.state.conversationLog.length === 0) {
