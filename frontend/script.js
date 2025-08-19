@@ -1951,6 +1951,49 @@ class PrivacyDemoApp {
         }
     }
 
+    // Normalize privacy result to ensure consistent structure for highlighting
+    normalizePrivacyResult(privacyResult) {
+        if (!privacyResult) {
+            return null;
+        }
+
+        // Ensure privacy_issue is a boolean
+        const normalized = {
+            ...privacyResult,
+            privacy_issue: Boolean(privacyResult.privacy_issue)
+        };
+
+        // Ensure detected_pii is an array
+        if (!Array.isArray(normalized.detected_pii)) {
+            normalized.detected_pii = [];
+        }
+
+        // Ensure highlights is an array
+        if (!Array.isArray(normalized.highlights)) {
+            normalized.highlights = [];
+        }
+
+        // Ensure sensitive_text and affected_text are strings
+        if (typeof normalized.sensitive_text !== 'string') {
+            normalized.sensitive_text = '';
+        }
+        if (typeof normalized.affected_text !== 'string') {
+            normalized.affected_text = '';
+        }
+
+        // Ensure suggestion is a string
+        if (typeof normalized.suggestion !== 'string') {
+            normalized.suggestion = '';
+        }
+
+        // Ensure type is a string
+        if (typeof normalized.type !== 'string') {
+            normalized.type = '';
+        }
+
+        return normalized;
+    }
+
     // NEW: Get privacy analysis summary for display
     getPrivacyAnalysisSummary() {
         if (!this.state.analyzedLog || this.state.analyzedLog.length === 0) {
