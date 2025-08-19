@@ -362,6 +362,8 @@ function getSession(sessionId) {
             EDUCATIONAL_RECORD: 0
         },
         detectedEntities: {}, // Track detected entities to ensure consistent placeholders
+        // NEW: per-turn privacy storage
+        privacyTurns: [],      // [{ user, bot, userPrivacy, botPrivacy, ts }]
         uiFlags: { hasWelcomed: false, followupsPerQuestion: {} },
         qEpoch: 0,          // Increment each time we advance
         qStatus: {},        // { [questionTextLower]: 'active' | 'completed' | 'skipped' }
@@ -374,6 +376,29 @@ function getSession(sessionId) {
 // Helper function to generate session ID
 function generateSessionId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+async function analyzeAndStoreTurn(sessionId, userText, botText) {
+    try {
+    const session = getSession(sessionId);
+    // use existing detection with context, fallback to regex if fails
+    const [userPR, botPR] = await Promise.all([
+      detectPrivacyWithAI(userText, session.conversationHistory).catch(() => detectPrivacyWithPatterns(userText, session.conversationHistory)),
+      detectPrivacyWithAI(botText || '', session.conversationHistory).catch(() => detectPrivacyWithPatterns(botText || '', session.conversationHistory))
+    ]);
+    session.privacyTurns.push({
+      user: userText,
+      bot: botText || '',
+      userPrivacy: userPR && userPR.privacy_issue ? userPR : (userPR || null),
+      botPrivacy:  botPR  && botPR.privacy_issue  ? botPR  : (botPR  || null),
+      ts: Date.now()
+    });
+    } catch (e) {
+    console.error('analyzeAndStoreTurn error:', e);
+    }
+}
+function schedulePerTurnPrivacy(sessionId, userText, botText) {
+    // non-blocking:not influencing /api/chat response speed
+    setTimeout(() => { analyzeAndStoreTurn(sessionId, userText, botText); }, 0);
 }
 
 // Legacy global variables (deprecated - use session-based instead)
@@ -410,11 +435,11 @@ let globalPiiCounters = {
 
 // Main predefined questions stored on server - unified since all modes use the same questions
 const unifiedQuestions = [
-    "Tell me about your educational background - what did you study in college or university?",
+    "Could you tell me about your educational background - what did you study in college or university?",
     "I'd love to hear about your current work and how you got into it by job interviews?",
     "Can you walk me through a specific time when you used AI before and during job interviews?",
-    "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-    "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
+    "Looking back, was there ever a moment when using AI felt risky or like it might backfire? If so, what was that like?",
+    "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
     "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
 ];
 
@@ -443,7 +468,7 @@ const FOLLOWUPS_BY_QUESTION = {
             "university","college","school","campus","institution",
             "university of","college of","state university","polytechnic","tech university"
         ] },
-        { id: "Q1_F3", prompt: "Who was your supervisor back in college?", keywords: [
+        { id: "Q1_F3", prompt: "Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.", keywords: [
             "supervisor","advisor","adviser","mentor","thesis advisor","capstone advisor","co-advisor",
             "professor","lecturer","pi","principal investigator","dr","prof","supervised by"
         ] }
@@ -485,7 +510,7 @@ const FOLLOWUPS_BY_QUESTION = {
             "influence","process","performance","success","failure","resulted in"
         ] }
     ],
-    [unifiedQuestions[3]]: [        { id: "Q4_F1", prompt: "when did the close call happen?", keywords: [
+    [unifiedQuestions[3]]: [        { id: "Q4_F1", prompt: "Do you remember at what time that happened?", keywords: [
         "when","incident","close call","almost caught","nearly","time","date","month","year","201","202"
         ] },
         { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
@@ -495,7 +520,7 @@ const FOLLOWUPS_BY_QUESTION = {
         "star","bullet points","mock interview","practice q&a","script","answer bank","cheatsheet",
         "cover letter","resume","cv","email","thank-you note"
         ] },
-        { id: "Q4_F3", prompt: "What trouble did AI get you in?", keywords: [
+        { id: "Q4_F3", prompt: "Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?", keywords: [
         "trouble","caught","flagged","plagiarism","cheating","ban","banned","policy","violation",
         "integrity","academic integrity","code of conduct","warning","revoke","rescinded","revoke offer",
         "disqualify","disqualified","penalty","strike","concern","red flag","hr","recruiter",
@@ -503,13 +528,13 @@ const FOLLOWUPS_BY_QUESTION = {
         ] }
     ],
     [unifiedQuestions[4]]: [
-        { id: "Q5_F1", prompt: "What triggered you to have the idea to cross the line of properly using AI?", keywords: [
+        { id: "Q5_F1", prompt: "Can you walk me through what made you reach for AI in that situation?", keywords: [
             "trigger","reason","because","due to","pressure","deadline","time pressure",
             "hard question","difficult","competition","anxiety","stress","desperate","temptation",
             "incentive","recommendation","friend suggested","saw others","reddit","forum","example",
                       "shortcut","cheat","hack"
         ] },
-        { id: "Q5_F2", prompt: "What concerns were in your mind when you had the crossing-line idea?", keywords: [
+        { id: "Q5_F2", prompt: "When you thought about the possibility of going too far with AI, what concerns were on your mind?", keywords: [
             "concern","worry","afraid","fear","risk","getting caught","detect","detection",
             "policy","violation","ethics","integrity","honesty","privacy","security",
             "consequence","ban","penalty","expelled","fired","background check","nda","legal","guidelines"
@@ -535,6 +560,13 @@ const FOLLOWUPS_BY_QUESTION = {
             "rewrite","translate","summarize","grammar","proofread","code","solution","answers","essay","report",
             "homework","assignment","take-home","test","automation","voice to text","image generator",
             "dall-e","midjourney","stable diffusion","quillbot","grammarly"
+        ] },
+        { id: "Q5_F4", prompt: "Why do you feel that's something you wouldn't want to share openly?", keywords: [
+            "hide", "conceal", "secret", "private", "ashamed", "embarrassed", "judgment", "reputation",
+            "fear", "afraid", "consequence", "trust", "stigma", "taboo", "awkward", "uncomfortable",
+            "personal", "privacy", "disapproval", "misunderstood", "misconception", "negative", "reaction",
+            "vulnerable", "protect", "protect myself", "protect my image", "protect my reputation",
+            "not accepted", "not appropriate", "not allowed", "against rules", "policy", "violation"
         ] }
     ]
 };
@@ -1082,7 +1114,7 @@ app.post('/api/chat', async (req, res) => {
         const firstQuestion = getCurrentQuestion(state, unifiedQuestions);
         
         if (firstQuestion) {
-          const welcomeMessage = "Welcome! I'm ready to ask you some questions. Let's begin with the first one.";
+          const welcomeMessage = "Welcome, and thank you for being here today! We’ll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we’d really appreciate it if you could elaborate on your responses to give us richer details.\n\nLet’s dive into the first question.";
           const fullMessage = `${welcomeMessage}\n\n${firstQuestion}`;
           
           // Add to conversation history
@@ -1191,6 +1223,7 @@ app.post('/api/chat', async (req, res) => {
                   const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
                   const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
                   session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
+                  schedulePerTurnPrivacy(currentSessionId, message, session.conversationHistory[session.conversationHistory.length - 1]?.content || '');
                   return res.json({
                     success: true,
                     bot_response: msg,
@@ -1341,6 +1374,7 @@ const pending = allFUs.filter(
           session.conversationHistory.push({ role: "assistant", content: aiResponse, followup_id: nextFU.id });
           // Anti-repeat: Record this follow-up as asked
           markFollowupAsked(session, qNow, nextFU.id);
+          schedulePerTurnPrivacy(currentSessionId, message, session.conversationHistory[session.conversationHistory.length - 1]?.content || '');
           return res.json({
             success: true,
             bot_response: aiResponse,
@@ -1596,6 +1630,7 @@ const pending = allFUs.filter(
       }
 
       const t1 = Date.now();
+      schedulePerTurnPrivacy(currentSessionId, message, session.conversationHistory[session.conversationHistory.length - 1]?.content || '');
       res.json({
         success: true,
         bot_response: aiResponse,
@@ -1629,6 +1664,29 @@ const pending = allFUs.filter(
       });
     }
   });
+
+
+// NEW: read accumulated per-turn privacy results (for post-interview instant display)
+app.get('/api/privacy_accumulated', (req, res) => {
+    try {
+    const { sessionId } = req.query || {};
+    if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+    const session = getSession(sessionId);
+    const analyzedLog = (session.privacyTurns || []).map(turn => ({
+    user: turn.user,
+    bot: turn.bot,
+    userPrivacy: turn.userPrivacy || null,
+    botPrivacy: turn.botPrivacy || null,
+    // for frontend compatibility, provide a unified field (user first)
+    privacy: turn.userPrivacy || turn.botPrivacy || null
+    }));
+    return res.json({ success: true, analyzed_log: analyzedLog, status: 'accumulated' });
+    } catch (e) {
+    console.error('privacy_accumulated error:', e);
+    return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+    
   
 // Privacy Detection API
 app.post('/api/privacy_detection', async (req, res) => {
@@ -1662,7 +1720,8 @@ app.post('/api/privacy_detection', async (req, res) => {
             privacyResult = detectPrivacyWithPatterns(user_message, null);
         }
         
-
+        if (!Array.isArray(privacyResult.highlights)) { privacyResult.highlights = computeHighlightSpans(user_message, privacyResult.text_with_placeholders || user_message, privacyResult.detected_pii || []); }
+        
 
         res.json(privacyResult);
     } catch (error) {
@@ -2373,8 +2432,8 @@ Current user message: "${userMessage}"${contextInfo}`;
 IMPORTANT: Only operate on the exact placeholders provided; DO NOT change any other text.
 
 For example:
-Input: <Text>I graduated from [Education_Record1], and I earn a six-figure salary. [Time1] in the office...</Text><ProtectedInformation>[Education_Record1],[Time1]</ProtectedInformation>
-Output JSON: {"results": [{"protected": "[Education_Record1]", "abstracted": "MIT"}, {"protected": "[Time1]", "abstracted": "Yesterday"}]}
+Input: <Text>I graduated from CMU, and I earn a six-figure salary. Today in the office...</Text><ProtectedInformation>CMU,Today</ProtectedInformation>
+Output JSON: {"results": [{"protected": "CMU", "abstracted": "a prestigious university"}, {"protected": "Today", "abstracted": "Recently"}]}
 
 
 Current input:
@@ -2383,18 +2442,7 @@ Placeholders to replace (comma-separated, use EXACT matches):
 <ProtectedInformation>${placeholderList.join(',')}</ProtectedInformation>
 <AffectedText>${detectionData.affected_text || ''}</AffectedText>
 
-Create abstracted text by replacing the protected information with realistic but fake data (not generic terms). Use "results" as the main key in the JSON object with an array of objects containing "protected" and "abstracted" fields.
-
-For example:
-- Names: Replace with fake names like "Brian Johnson", "Sarah Williams"
-- Emails: Replace with fake emails like "brian.johnson@example.com"
-- Phone numbers: Replace with fake numbers like "(555) 123-4567"
-- Addresses: Replace with fake addresses like "123 Oak Street, Springfield, IL 62701"
-- Universities: Replace with fake universities like "MIT", "Stanford"
-- Companies: Replace with fake companies like "TechCorp", "InnovateInc"
-
-Use this exact format:
-{"results": [{"protected": "[PlaceholderX]", "abstracted": "fake_realistic_data"}, {"protected": "[PlaceholderY]", "abstracted": "another_fake_data"}]}`;
+`;
 
 
         const abstractionCompletion = await openaiClient.chat.completions.create({
@@ -2452,6 +2500,10 @@ Use this exact format:
                     const abstractedText = originalText.replace(PLACEHOLDER_RE, m => (
                         placeholderMap.has(m) ? placeholderMap.get(m) : m
                     ));
+                    // add structured highlights
+                    const _highlights = computeHighlightSpans(
+                      userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
+                    );
                     const protectedTexts = Array.from(placeholderMap.keys()).join(',');
                     
                     return {
@@ -2461,6 +2513,8 @@ Use this exact format:
                         explanation: `Protected information abstracted: ${protectedTexts}`,
                         affected_text: protectedTexts,      // Only return placeholders, avoid frontend re-using original text for replacement
                         sensitive_text: protectedTexts,
+                        detected_pii: detectionData.detected_pii,
+                        highlights: _highlights,
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: abstractedText
@@ -2475,6 +2529,8 @@ Use this exact format:
                         explanation: 'No sensitive information found',
                         affected_text: '',
                         sensitive_text: '',
+                        detected_pii: [],
+                        highlights: [],
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: detectionData.text_with_placeholders
@@ -2492,6 +2548,10 @@ Use this exact format:
                         explanation: abstractionData.explanation || detectionData.detected_pii[0].explanation,
                         affected_text: abstractionData.affected_text || detectionData.affected_text,
                         sensitive_text: abstractionData.sensitive_text || detectionData.affected_text,
+                        detected_pii: detectionData.detected_pii,
+                        highlights: computeHighlightSpans(
+                          userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
+                        ),
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: abstractionData.suggestion ? 
@@ -2508,6 +2568,10 @@ Use this exact format:
                         explanation: abstractionData.explanation || 'No sensitive information found',
                         affected_text: abstractionData.affected_text || '',
                         sensitive_text: abstractionData.sensitive_text || '',
+                        detected_pii: detectionData.detected_pii,
+                        highlights: computeHighlightSpans(
+                          userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
+                        ),
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: detectionData.text_with_placeholders
@@ -2659,6 +2723,12 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
         explanation: explanation,
         affected_text: affectedText,
         sensitive_text: sensitiveText,
+        detected_pii: hasIssues ? [{ type: detectedType, original_text: affectedText, placeholder: null }] : [],
+        text_with_placeholders: hasIssues ? replacingMessage : userMessage,
+        highlights: (hasIssues && affectedText) ? (function(){
+            const h = flexibleFind(userMessage, affectedText, 0);
+            return h ? [{...h, type: detectedType, placeholder: null}] : [];
+        })() : [],
         safer_versions: {
             replacing: hasIssues ? replacingMessage : userMessage,
             abstraction: hasIssues ? abstractionMessage : userMessage
@@ -2791,10 +2861,28 @@ function generatePrivacyRecommendations(privacyAnalysis) {
 // Analyze Log API with enhanced conversation-wide privacy analysis
 app.post('/api/analyze_log', async (req, res) => {
     try {
-        const { conversation_log } = req.body;
-        
+        const { conversation_log, sessionId } = req.body || {};
+        // if sessionId is provided but conversation_log is not, return accumulated per-turn results
+        if ((!conversation_log || !Array.isArray(conversation_log)) && sessionId) {
+        const session = getSession(sessionId);
+        const analyzedLog = (session.privacyTurns || []).map(turn => ({
+        user: turn.user,
+        bot: turn.bot,
+        privacy: turn.userPrivacy || turn.botPrivacy || null,
+        userPrivacy: turn.userPrivacy || null,
+        botPrivacy:  turn.botPrivacy  || null
+        }));
+        return res.json({
+        success: true,
+        analyzed_log: analyzedLog,
+        analysis: { mode: 'accumulated', total: analyzedLog.length },
+        conversation_analysis: [],
+        status: 'completed'
+        });
+        }
+        // still support offline analysis
         if (!conversation_log || !Array.isArray(conversation_log)) {
-            return res.status(400).json({ error: 'Valid conversation log is required' });
+        return res.status(400).json({ error: 'Valid conversation log is required' });
         }
 
         // Convert conversation log to conversation history format for analysis
@@ -2815,10 +2903,13 @@ app.post('/api/analyze_log', async (req, res) => {
         // Convert back to the expected format for frontend compatibility
         const analyzedLog = conversation_log.map((msg, index) => {
             const privacyResult = privacyAnalysis.conversation_analysis[index];
+            const pr = privacyResult && privacyResult.privacy_result && privacyResult.privacy_result.privacy_issue ? privacyResult.privacy_result : null;
             return {
                 user: msg.user,
                 bot: msg.bot,
-                privacy: privacyResult && privacyResult.privacy_result.privacy_issue ? privacyResult.privacy_result : null
+                privacy: pr,
+                userPrivacy: pr,
+                botPrivacy: null
             };
         });
 
@@ -3407,14 +3498,45 @@ function canAskFollowup(session, qNow, epochAtDecision){
 
 
 
-
-      function isEventBasedMainQuestion(q) {
+function isEventBasedMainQuestion(q) {
         const qkey = normalizeQuestionKey(q);
         // Event-based main question: use AI's specific experience / dangerous moment / hidden use
         return /(use ai|used ai|close call|hide)/.test(qkey);
-      }      
+}      
 
-
+function escapeRegex(str) { return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function normSpaces(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+/**
+ * Flexible find: ignore case and treat consecutive spaces in needle as \s+
+ */
+function flexibleFind(haystack, needle, from = 0) {
+  const pat = escapeRegex(normSpaces(needle)).replace(/\\\s\+/g, '\\s+');
+  const re = new RegExp(pat, 'i');
+  const m = re.exec(haystack.slice(from));
+  return m ? { start: from + m.index, end: from + m.index + m[0].length, text: haystack.slice(from + m.index, from + m.index + m[0].length) } : null;
+}
+/**
+ * Compute highlight spans from placeholders mapped to originals
+ */
+function computeHighlightSpans(originalText, textWithPlaceholders, detectedPii) {
+  const spans = [];
+  if (!originalText || !textWithPlaceholders || !Array.isArray(detectedPii)) return spans;
+  const phToOrig = new Map(detectedPii.map(p => [p.placeholder, p.original_text]));
+  const phToType = new Map(detectedPii.map(p => [p.placeholder, p.type]));
+  const PH_RE = /\[[A-Za-z_]+?\d+\]/g;
+  let cursor = 0, m;
+  while ((m = PH_RE.exec(textWithPlaceholders)) !== null) {
+    const ph = m[0];
+    const orig = phToOrig.get(ph);
+    if (!orig) continue;
+    const hit = flexibleFind(originalText, orig, cursor) || flexibleFind(originalText, orig, 0);
+    if (hit) {
+      spans.push({ ...hit, type: phToType.get(ph) || 'PII', placeholder: ph });
+      cursor = hit.end;
+    }
+  }
+  return spans;
+}
 
 
 
