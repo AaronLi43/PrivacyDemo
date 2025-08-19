@@ -1782,27 +1782,47 @@ app.post('/api/privacy_detection', async (req, res) => {
             /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, // Email
             /\b\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}\b/, // Phone Number
             /\b\d{3}-\d{2}-\d{4}\b/, // SSN
-            /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/ // Credit Card
+            /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, // Credit Card
+            /\b(?:mr|mrs|ms|miss|dr|prof|professor)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b/i
         ];
         
         const hasSimplePattern = simplePatterns.some(p => p.test(user_message));
         if (hasSimplePattern) {
-          const patternRes = detectPrivacyWithPatterns(user_message, null);
-        // Merge instead of overwrite: use AI results as primary, supplement with items from pattern detection that AI missed
-          const aiList = new Set((privacyResult?.detected_pii || []).map(x => `${x.type}:${x.original_text}`));
-          const extra = (patternRes?.detected_pii || []).filter(x => !aiList.has(`${x.type}:${x.original_text}`));
-          const merged = {
-            ...(privacyResult || {}),
-            privacy_issue: (privacyResult?.privacy_issue || patternRes?.privacy_issue) ? true : false,
-            detected_pii: (privacyResult?.detected_pii || []).concat(extra),
-            text_with_placeholders: (privacyResult?.text_with_placeholders || patternRes?.text_with_placeholders || user_message)
-          };
-          merged.highlights = computeHighlightSpans(
-            user_message,
-            merged.text_with_placeholders,
-            merged.detected_pii
-          );
-          privacyResult = merged;
+            const patternRes = detectPrivacyWithPatterns(user_message, null);
+                 // Merge: use AI's result as the main one, fill in the missed items, and write the placeholder into the text
+                  const aiList = new Set((privacyResult?.detected_pii || []).map(x => `${normalizeTypeName(x.type)}:${x.original_text}`));
+                  const extras = (patternRes?.detected_pii || []).filter(x => !aiList.has(`${normalizeTypeName(x.type)}:${x.original_text}`));
+                  let mergedText = privacyResult?.text_with_placeholders || user_message;
+                  const session = getSession(sessionId); // use sessionId as the placeholder
+                  for (const x of extras) {
+                    const t = normalizeTypeName(x.type);
+                    const n = getNextPlaceholderNumber(t, sessionId);
+                    const f = convertToNewPlaceholderFormat(t);
+                    const ph = `[${f}${n}]`;
+                    const rep = flexibleReplaceAll(mergedText, x.original_text, ph);
+                    if (rep.changed) {
+                      mergedText = rep.text;
+                      x.placeholder = ph;
+                      // record deduplication key
+                      const key = `${String(x.original_text).toLowerCase().trim()}_${t}`;
+                      session.detectedEntities = session.detectedEntities || {};
+                      session.detectedEntities[key] = ph;
+                    }
+                  }
+                  const merged = {
+                    ...(privacyResult || {}),
+                    privacy_issue: (privacyResult?.privacy_issue || patternRes?.privacy_issue) ? true : false,
+                    detected_pii: (privacyResult?.detected_pii || []).concat(extras),
+                    text_with_placeholders: mergedText
+                  };
+                  merged.highlights = computeHighlightSpans(user_message, merged.text_with_placeholders, merged.detected_pii);
+                  privacyResult = merged;
+        }
+        if (privacyResult && privacyResult.privacy_issue) {
+            privacyResult.original_text = user_message;
+            if (!Array.isArray(privacyResult.highlights)) {
+                privacyResult.highlights = computeHighlightSpans(user_message, privacyResult.text_with_placeholders || user_message, privacyResult.detected_pii || []);
+            }
         }
         
         if (!Array.isArray(privacyResult.highlights)) { privacyResult.highlights = computeHighlightSpans(user_message, privacyResult.text_with_placeholders || user_message, privacyResult.detected_pii || []); }
@@ -2750,7 +2770,21 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
             type: 'Date of Birth',
             replacement: '[Date]',
             explanation: 'Date of birth detected'
-        }
+        },
+        // Case 1: title + name (Dr./Prof./Mr./Ms./Mrs.)
+    { 
+      pattern: /\b(?:mr|mrs|ms|miss|dr|prof|professor)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b/i,
+      type: 'Full Name',
+      replacement: '[Name]',
+      explanation: 'Full name (with title) detected'
+    },
+    // Case 2: introductions like "my name is John Smith" / "I am John Smith" —— 只替换姓名本体
+    { 
+      pattern: /(?<=\b(?:my name is|i am|i'm|this is|call me)\s+)[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/i,
+      type: 'Full Name',
+      replacement: '[Name]',
+    explanation: 'Introduced full name detected'
+    }
     ];
 
     let hasIssues = false;
@@ -2831,6 +2865,12 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
                 sensitiveText = match[0];
             }
             break; // Only handle the first match to avoid multiple replacements
+        }
+    }
+    if (hasIssues) {
+        replacingMessage.original_text = userMessage;
+        if (!Array.isArray(replacingMessage.highlights)) {
+            replacingMessage.highlights = computeHighlightSpans(userMessage, replacingMessage.text_with_placeholders || userMessage, replacingMessage.detected_pii || []);
         }
     }
 
@@ -3644,7 +3684,13 @@ const TYPE_ALIASES = new Map([
     ['UNIVERSITY','AFFILIATION'],
     ['EDUCATION','EDUCATIONAL_RECORD'],
     ['EDUCATION_RECORD','EDUCATIONAL_RECORD'],
-    ['EDUCATIONALRECORD','EDUCATIONAL_RECORD']
+    ['EDUCATIONALRECORD','EDUCATIONAL_RECORD'],
+    ['FULL NAME','NAME'],
+    ['FULLNAME','NAME'],
+    ['PERSON','NAME'],
+    ['PERSON_NAME','NAME'],
+    ['HUMAN_NAME','NAME'],
+    ['PERSONAL_NAME','NAME']
 ]);
 function normalizeTypeName(t) {
     if (!t) return null;
@@ -3695,6 +3741,16 @@ function computeHighlightSpans(originalText, textWithPlaceholders, detectedPii) 
     if (!originalText || !textWithPlaceholders || !Array.isArray(detectedPii)) return spans;
     const phToOrig = new Map(detectedPii.map(p => [p.placeholder, p.original_text]));
     const phToType = new Map(detectedPii.map(p => [p.placeholder, p.type]));
+    // first try to match original_text in detected_pii
+    for (const pii of detectedPii) {
+        if (!pii.original_text) continue;
+        let startIndex = 0;
+        let index;
+        while ((index = originalText.indexOf(pii.original_text, startIndex)) !== -1) {
+            spans.push({ start: index, end: index + pii.original_text.length, text: pii.original_text, type: pii.type || 'PII', placeholder: pii.placeholder });
+            startIndex = index + 1;
+        }
+    }
     const PH_RE = /\[[A-Za-z_]+?\d+\]/g;
     let cursor = 0, m;
     while ((m = PH_RE.exec(textWithPlaceholders)) !== null) {
@@ -3704,7 +3760,7 @@ function computeHighlightSpans(originalText, textWithPlaceholders, detectedPii) 
     const hit = flexibleFind(originalText, orig, cursor) || flexibleFind(originalText, orig, 0);
     if (hit) { spans.push({ ...hit, type: phToType.get(ph) || 'PII', placeholder: ph }); cursor = hit.end; }
     }
-    return spans;
+    return spans.sort((a, b) => a.start - b.start);
 }
 
 

@@ -1849,6 +1849,10 @@ class PrivacyDemoApp {
                 const cacheKey = `user_${roundIndex}_${userMessage.hashCode ? userMessage.hashCode() : userMessage.length}`;
                 if (!this.state.privacyAnalysisCache[cacheKey]) {
                     userPrivacyResult = await API.detectPrivacy(userMessage);
+                    if (userPrivacyResult) {
+                        userPrivacyResult.original_text = userMessage;
+                        userPrivacyResult = this.normalizePrivacyResult(userPrivacyResult);
+                    }
                     this.state.privacyAnalysisCache[cacheKey] = userPrivacyResult;
                 } else {
                     userPrivacyResult = this.state.privacyAnalysisCache[cacheKey];
@@ -1861,6 +1865,10 @@ class PrivacyDemoApp {
                 const cacheKey = `bot_${roundIndex}_${botResponse.hashCode ? botResponse.hashCode() : botResponse.length}`;
                 if (!this.state.privacyAnalysisCache[cacheKey]) {
                     botPrivacyResult = await API.detectPrivacy(botResponse);
+                    if (botPrivacyResult) {
+                        botPrivacyResult.original_text = botResponse;
+                        botPrivacyResult = this.normalizePrivacyResult(botPrivacyResult);
+                    }
                     this.state.privacyAnalysisCache[cacheKey] = botPrivacyResult;
                 } else {
                     botPrivacyResult = this.state.privacyAnalysisCache[cacheKey];
@@ -6035,43 +6043,101 @@ class PrivacyDemoApp {
             return text;
         }
 
-        let highlightedText = text;
+        // normalize privacy result
+        const normalizedResult = this.normalizePrivacyResult(privacyResult);
+        if (!normalizedResult) {
+            return text;
+        }
+
+        let highlightedText = this.escapeHtml(text);
 
         // Debug logging to help identify highlighting issues
         console.log('Highlighting text:', text);
-        console.log('Privacy result:', privacyResult);
+        console.log('Normalized privacy result:', normalizedResult);
 
-        // 1) Prefer string-based highlighting using sensitive_text / affected_text / suggestion
-        let sensitiveText = privacyResult.sensitive_text;
-        if (!sensitiveText && privacyResult.suggestion) {
+        // use detected_pii array for precise highlighting
+        let highlightApplied = false;
+        if (Array.isArray(normalizedResult.detected_pii) && normalizedResult.detected_pii.length > 0) {
+            console.log('Using detected_pii for highlighting:', normalizedResult.detected_pii);
+            
+            // sort by text length to avoid short text replacing long text
+            const sortedPii = normalizedResult.detected_pii
+                .filter(pii => pii.original_text && pii.original_text.trim())
+                .sort((a, b) => (b.original_text?.length || 0) - (a.original_text?.length || 0));
+            
+            for (const pii of sortedPii) {
+                const originalText = pii.original_text.trim();
+                const escapedOriginal = this.escapeHtml(originalText);
+                const escapedForRegex = this.escapeRegex(originalText);
+                
+                // use global case-insensitive regex
+                const regex = new RegExp(`\\b${escapedForRegex}\\b`, 'gi');
+                const beforeReplace = highlightedText;
+                
+                highlightedText = highlightedText.replace(regex, (match) => {
+                    return `<span class="sensitive-text-highlight" data-pii-type="${pii.type || 'PII'}" title="Privacy Issue: ${pii.type || 'PII'}">${match}</span>`;
+                });
+                
+                if (beforeReplace !== highlightedText) {
+                    highlightApplied = true;
+                    console.log(`Applied highlighting for: "${originalText}"`);
+                }
+            }
+        }
+
+        // if detected_pii did not succeed, try using highlights array
+        if (!highlightApplied && Array.isArray(normalizedResult.highlights) && normalizedResult.highlights.length > 0) {
+            console.log('Using highlights array for highlighting:', normalizedResult.highlights);
+            highlightedText = this.escapeHtml(text); // start over
+            
+            const sortedHighlights = normalizedResult.highlights
+                .filter(h => typeof h.start === 'number' && typeof h.end === 'number' && h.end > h.start)
+                .sort((a, b) => b.start - a.start); // process from back to front to avoid index changes
+            
+            for (const highlight of sortedHighlights) {
+                const beforeText = text.substring(0, highlight.start);
+                const highlightText = text.substring(highlight.start, highlight.end);
+                const afterText = text.substring(highlight.end);
+                
+                highlightedText = this.escapeHtml(beforeText) + 
+                    `<span class="sensitive-text-highlight" data-pii-type="${highlight.type || 'PII'}" title="Privacy Issue: ${highlight.type || 'PII'}">${this.escapeHtml(highlightText)}</span>` + 
+                    this.escapeHtml(afterText);
+                highlightApplied = true;
+            }
+        }
+
+        // fallback: use sensitive_text or affected_text
+        if (!highlightApplied) {
+            let sensitiveText = normalizedResult.sensitive_text || normalizedResult.affected_text;
+            
+            // try to extract sensitive text from suggestion
+            if (!sensitiveText && normalizedResult.suggestion) {
             const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
             const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
             const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
-            if (beforeAfterPattern.test(privacyResult.suggestion)) {
-                const match = privacyResult.suggestion.match(beforeAfterPattern);
+            if (beforeAfterPattern.test(normalizedResult.suggestion)) {
+                const match = normalizedResult.suggestion.match(beforeAfterPattern);
                 if (match) sensitiveText = match[1];
-            } else if (beforeAfterPatternAlt.test(privacyResult.suggestion)) {
-                const match = privacyResult.suggestion.match(beforeAfterPatternAlt);
+            } else if (beforeAfterPatternAlt.test(normalizedResult.suggestion)) {
+                const match = normalizedResult.suggestion.match(beforeAfterPatternAlt);
                 if (match) sensitiveText = match[1];
-            } else if (beforeAfterPatternFlexible.test(privacyResult.suggestion)) {
-                const match = privacyResult.suggestion.match(beforeAfterPatternFlexible);
+            } else if (beforeAfterPatternFlexible.test(normalizedResult.suggestion)) {
+                const match = normalizedResult.suggestion.match(beforeAfterPatternFlexible);
                 if (match) sensitiveText = match[1];
             }
-        }
-        if (!sensitiveText && privacyResult.affected_text) {
-            sensitiveText = privacyResult.affected_text;
-        }
+                }
 
-        let stringMatchesApplied = false;
-        if (sensitiveText) {
-            const sensitiveItems = sensitiveText.split(',').map(s => s.trim()).filter(Boolean);
-            for (const item of sensitiveItems) {
-                if (!item) continue;
-                const escaped = this.escapeRegex(item);
-                const regex = new RegExp(`(${escaped})`, 'gi');
-                const before = highlightedText;
-                highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
-                if (before !== highlightedText) stringMatchesApplied = true;
+                if (sensitiveText) {
+                    console.log('Using sensitive_text fallback:', sensitiveText);
+                    const sensitiveItems = sensitiveText.split(',').map(s => s.trim()).filter(Boolean);
+                    for (const item of sensitiveItems) {
+                    if (!item) continue;
+                    const escaped = this.escapeRegex(item);
+                    const regex = new RegExp(`\\b(${escaped})\\b`, 'gi');
+                    const before = highlightedText;
+                    highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight" title="Privacy Issue">$1</span>');
+                    if (before !== highlightedText) highlightApplied = true;
+                }
             }
         }
 
@@ -6095,28 +6161,7 @@ class PrivacyDemoApp {
             highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
         }
 
-        // 3) If no string matches happened and backend provided ranges, fallback to ranges
-        if (!stringMatchesApplied && Array.isArray(privacyResult.highlights) && privacyResult.highlights.length) {
-            const ranges = privacyResult.highlights
-                .map(h => ({ start: Number(h.start)||0, end: Number(h.end)||0 }))
-                .filter(r => r.end > r.start && r.start >= 0 && r.end <= text.length)
-                .sort((a,b) => a.start - b.start);
-            if (ranges.length) {
-                const merged = [];
-                for (const r of ranges) {
-                    if (!merged.length || r.start > merged[merged.length-1].end) merged.push({ start: r.start, end: r.end });
-                    else merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
-                }
-                let html = '', pos = 0;
-                for (const r of merged) {
-                    if (r.start > pos) html += this.escapeHtml(text.slice(pos, r.start));
-                    html += '<span class="sensitive-text-highlight">' + this.escapeHtml(text.slice(r.start, r.end)) + '</span>';
-                    pos = r.end;
-                }
-                if (pos < text.length) html += this.escapeHtml(text.slice(pos));
-                return html;
-            }
-        }
+        console.log('Final highlighted text:', highlightedText);
 
         return highlightedText;
     }
@@ -6134,6 +6179,12 @@ class PrivacyDemoApp {
         for (let i = 0; i < maxIndex; i++) {
             const analyzed = this.state.analyzedLog[i];
             const conversationEntry = this.state.conversationLog[i];
+            
+            // ensure analyzed data contains original text information
+            if (analyzed && conversationEntry) {
+                if (analyzed.userPrivacy) analyzed.userPrivacy.original_text = conversationEntry.user;
+                if (analyzed.botPrivacy) analyzed.botPrivacy.original_text = conversationEntry.bot;
+            }
             
             if (!analyzed || !conversationEntry) {
                 console.warn(`Missing data at index ${i}: analyzed=${!!analyzed}, conversation=${!!conversationEntry}`);
