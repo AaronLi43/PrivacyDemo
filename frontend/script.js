@@ -852,6 +852,7 @@ class PrivacyDemoApp {
         
         // Reset conversation state to ensure fresh start
         this.state.conversationLog = [];
+        this.state.analyzedLog = []; // Reset analyzed log as well
         this.state.currentStep = 0;
         this.state.questionMode = false;
         this.state.currentQuestionIndex = 0;
@@ -1886,6 +1887,11 @@ class PrivacyDemoApp {
                 };
 
                 // Update the analyzedLog for immediate display
+                // Ensure analyzedLog has the same length as conversationLog to prevent indexing issues
+                while (this.state.analyzedLog.length <= roundIndex) {
+                    this.state.analyzedLog.push(null);
+                }
+                
                 this.state.analyzedLog[roundIndex] = {
                     user: userMessage,
                     bot: botResponse,
@@ -1896,9 +1902,13 @@ class PrivacyDemoApp {
                 };
 
                 console.log(`✅ Privacy analysis completed for round ${roundIndex}`);
+                console.log(`📊 AnalyzedLog length: ${this.state.analyzedLog.length}, ConversationLog length: ${this.state.conversationLog.length}`);
                 
                 // Show progress notification to user
                 this.showRealTimePrivacyProgress();
+                
+                // NEW: Force refresh of privacy analysis display if it's currently shown
+                this.refreshPrivacyAnalysisDisplay();
             }
 
         } catch (error) {
@@ -2831,6 +2841,9 @@ class PrivacyDemoApp {
                     bot: '',
                     timestamp: new Date().toISOString()
                 });
+                
+                // NEW: Ensure analyzedLog is synchronized
+                this.ensureAnalyzedLogSync();
             } else {
                 console.log('Prevented duplicate user message entry');
             }
@@ -2870,11 +2883,17 @@ class PrivacyDemoApp {
                         const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
                         if (lastMessage) {
                             lastMessage.bot = botResponse;
+                            
+                            // NEW: Ensure analyzedLog is synchronized after bot response
+                            this.ensureAnalyzedLogSync();
                         }
                         
                         // NEW: Perform real-time privacy analysis for this round
                         const roundIndex = this.state.conversationLog.length - 1;
-                        await this.performRealTimePrivacyAnalysis(lastMessage.user, botResponse, roundIndex);
+                        const privacyIndex = this.getPrivacyAnalysisIndex(roundIndex);
+                        if (privacyIndex >= 0) {
+                            await this.performRealTimePrivacyAnalysis(lastMessage.user, botResponse, privacyIndex);
+                        }
                         
                         // NEW: Prefetch accumulated privacy to keep UI "instant"
                         if (USE_SERVER_PRIVACY) {
@@ -3029,6 +3048,9 @@ class PrivacyDemoApp {
                             lastMessage.bot = botResponse;
                         }
                         
+                        // NEW: Ensure analyzedLog is synchronized after bot response
+                        this.ensureAnalyzedLogSync();
+                        
                         console.log('Final bot response:', lastMessage.bot);
                     } else {
                         lastMessage.bot = '⚠️ No response from server.';
@@ -3041,7 +3063,10 @@ class PrivacyDemoApp {
                     
                     // NEW: Perform real-time privacy analysis for this round
                     const roundIndex = this.state.conversationLog.length - 1;
-                    await this.performRealTimePrivacyAnalysis(lastMessage.user, lastMessage.bot, roundIndex);
+                    const privacyIndex = this.getPrivacyAnalysisIndex(roundIndex);
+                    if (privacyIndex >= 0) {
+                        await this.performRealTimePrivacyAnalysis(lastMessage.user, lastMessage.bot, privacyIndex);
+                    }
                     
                     // NEW: Prefetch accumulated privacy to keep UI "instant"
                     if (USE_SERVER_PRIVACY) {
@@ -4319,6 +4344,11 @@ class PrivacyDemoApp {
         // Remove any existing sensitive text highlighting first
         this.removeSensitiveTextHighlighting();
         
+        // NEW: Synchronize analyzedLog to ensure all rounds are properly analyzed
+        if (analysisMode && this.state.realTimePrivacyAnalysis) {
+            this.synchronizeAnalyzedLog();
+        }
+        
         // Debug logging to track duplication issues
         console.log(`updateConversationDisplay called with analysisMode=${analysisMode}, conversationLog.length=${this.state.conversationLog.length}`);
         
@@ -4421,14 +4451,18 @@ class PrivacyDemoApp {
         let html = '';
         
         for (let i = 0; i < this.state.conversationLog.length; i++) {
+            // Get the correct privacy analysis index (accounting for welcome message)
+            const privacyIndex = this.getPrivacyAnalysisIndex(i);
+            
             // Get analyzed data for this message index
-            const analyzed = this.state.analyzedLog && Array.isArray(this.state.analyzedLog) ? this.state.analyzedLog[i] : null;
+            const analyzed = privacyIndex >= 0 && this.state.analyzedLog && Array.isArray(this.state.analyzedLog) && this.state.analyzedLog[privacyIndex] ? this.state.analyzedLog[privacyIndex] : null;
             
             // Debug logging to help identify the issue
             if (analysisMode && i === 0) {
                 console.log('Debug: analyzedLog length:', this.state.analyzedLog.length);
                 console.log('Debug: analyzedLog[0]:', this.state.analyzedLog[0]);
-                console.log('Debug: analyzed for index 0:', analyzed);
+                console.log('Debug: privacyIndex for conversation index 0:', privacyIndex);
+                console.log('Debug: analyzed for privacy index 0:', analyzed);
             }
             
             // In analysis mode with filter, skip messages without privacy issues
@@ -6561,6 +6595,131 @@ class PrivacyDemoApp {
             console.log('🎉 All sensitive text highlighting tests PASSED');
         } else {
             console.log('❌ Some sensitive text highlighting tests FAILED');
+        }
+    }
+
+    // Normalize privacy result to ensure consistent structure for highlighting
+    normalizePrivacyResult(privacyResult) {
+        if (!privacyResult) {
+            return null;
+        }
+
+        // Ensure privacy_issue is a boolean
+        const normalized = {
+            ...privacyResult,
+            privacy_issue: Boolean(privacyResult.privacy_issue)
+        };
+
+        // Ensure detected_pii is an array
+        if (!Array.isArray(normalized.detected_pii)) {
+            normalized.detected_pii = [];
+        }
+
+        // Ensure highlights is an array
+        if (!Array.isArray(normalized.highlights)) {
+            normalized.highlights = [];
+        }
+
+        // Ensure sensitive_text and affected_text are strings
+        if (typeof normalized.sensitive_text !== 'string') {
+            normalized.sensitive_text = '';
+        }
+        if (typeof normalized.affected_text !== 'string') {
+            normalized.affected_text = '';
+        }
+
+        // Ensure suggestion is a string
+        if (typeof normalized.suggestion !== 'string') {
+            normalized.suggestion = '';
+        }
+
+        // Ensure type is a string
+        if (typeof normalized.type !== 'string') {
+            normalized.type = '';
+        }
+
+        return normalized;
+    }
+
+    // Synchronize analyzedLog with conversationLog to ensure all rounds are properly analyzed
+    synchronizeAnalyzedLog() {
+        if (!this.state.realTimePrivacyAnalysis || this.state.mode !== 'featured') {
+            return;
+        }
+
+        const conversationLength = this.state.conversationLog.length;
+        const analyzedLength = this.state.analyzedLog.length;
+
+        console.log(`🔄 Synchronizing analyzedLog: conversationLog.length=${conversationLength}, analyzedLog.length=${analyzedLength}`);
+
+        // Ensure analyzedLog has the same length as conversationLog
+        while (this.state.analyzedLog.length < conversationLength) {
+            this.state.analyzedLog.push(null);
+        }
+
+        // Check for any rounds that haven't been analyzed yet
+        for (let i = 0; i < conversationLength; i++) {
+            const conversationEntry = this.state.conversationLog[i];
+            const privacyIndex = this.getPrivacyAnalysisIndex(i);
+            
+            // Skip welcome message and get the correct analyzed entry
+            const analyzedEntry = privacyIndex >= 0 ? this.state.analyzedLog[privacyIndex] : null;
+
+            // If this round hasn't been analyzed and has both user and bot messages, analyze it
+            if (!analyzedEntry && conversationEntry && 
+                conversationEntry.user && conversationEntry.bot && 
+                conversationEntry.user.trim() && conversationEntry.bot.trim() && 
+                privacyIndex >= 0) {
+                
+                console.log(`🔄 Round ${i} (privacy index ${privacyIndex}) not analyzed yet, triggering analysis for: "${conversationEntry.user.substring(0, 50)}..."`);
+                
+                // Trigger analysis for this round using the privacy index
+                this.performRealTimePrivacyAnalysis(
+                    conversationEntry.user, 
+                    conversationEntry.bot, 
+                    privacyIndex
+                ).catch(error => {
+                    console.error(`❌ Error analyzing round ${i} (privacy index ${privacyIndex}):`, error);
+                });
+            }
+        }
+    }
+
+    // Get the correct message index for privacy analysis (accounting for welcome message)
+    getPrivacyAnalysisIndex(conversationIndex) {
+        // If this is the first round and it's a bot message (welcome), skip it
+        if (conversationIndex === 0 && 
+            this.state.conversationLog[0] && 
+            !this.state.conversationLog[0].user && 
+            this.state.conversationLog[0].bot) {
+            return -1; // Skip welcome message for privacy analysis
+        }
+        
+        // For user-bot pairs, return the conversation index
+        return conversationIndex;
+    }
+
+    // Ensure analyzedLog is properly synchronized when conversation log changes
+    ensureAnalyzedLogSync() {
+        if (!this.state.realTimePrivacyAnalysis || this.state.mode !== 'featured') {
+            return;
+        }
+
+        const conversationLength = this.state.conversationLog.length;
+        
+        // Ensure analyzedLog has the same length as conversationLog
+        while (this.state.analyzedLog.length < conversationLength) {
+            this.state.analyzedLog.push(null);
+        }
+
+        console.log(`🔒 AnalyzedLog sync ensured: conversationLog.length=${conversationLength}, analyzedLog.length=${this.state.analyzedLog.length}`);
+    }
+
+    // Force refresh of privacy analysis display
+    refreshPrivacyAnalysisDisplay() {
+        if (this.state.showPrivacyAnalysis && this.state.realTimePrivacyAnalysis) {
+            console.log('🔄 Forcing refresh of privacy analysis display');
+            this.updateConversationDisplay(true);
         }
     }
 }
