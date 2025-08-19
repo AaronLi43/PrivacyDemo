@@ -6021,148 +6021,93 @@ class PrivacyDemoApp {
         }
     }
 
-    // Highlight sensitive text with red underlines using backend sensitive_text field and placeholder patterns
+    // Highlight sensitive text with red underlines using robust string matching first, with ranges as a fallback
     highlightSensitiveText(text, privacyResult) {
         if (!privacyResult || !privacyResult.privacy_issue) {
             return text;
         }
 
         let highlightedText = text;
-        // Prefer structured highlight ranges from backend
-        if (Array.isArray(privacyResult.highlights) && privacyResult.highlights.length) {
-            const ranges = privacyResult.highlights
-                .map(h => ({ start: Number(h.start)||0, end: Number(h.end)||0 }))
-                .filter(r => r.end > r.start)
-                .sort((a,b) => a.start - b.start);
-            // merge overlaps
-            const merged = [];
-            for (const r of ranges) {
-                if (!merged.length || r.start > merged[merged.length-1].end) merged.push({ start: r.start, end: r.end });
-                else merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
-            }
-            let html = '', pos = 0;
-            for (const r of merged) {
-                if (r.start > pos) html += this.escapeHtml(text.slice(pos, r.start));
-                html += '<span class="sensitive-text-highlight">' + this.escapeHtml(text.slice(r.start, r.end)) + '</span>';
-                pos = r.end;
-            }
-            if (pos < text.length) html += this.escapeHtml(text.slice(pos));
-            return html;
-        }
-        
-        
+
         // Debug logging to help identify highlighting issues
         console.log('Highlighting text:', text);
         console.log('Privacy result:', privacyResult);
 
-        // 1. Highlight original sensitive text if available
+        // 1) Prefer string-based highlighting using sensitive_text / affected_text / suggestion
         let sensitiveText = privacyResult.sensitive_text;
-        
-        // Fallback to extracting from suggestion if sensitive_text is not available
         if (!sensitiveText && privacyResult.suggestion) {
             const beforeAfterPattern = /^Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']$/s;
             const beforeAfterPatternAlt = /^Before:\s*"([^"]*)"\s*After:\s*"([^"]*)"$/s;
             const beforeAfterPatternFlexible = /Before:\s*["']([^"']*)["']\s*After:\s*["']([^"']*)["']/s;
-            
             if (beforeAfterPattern.test(privacyResult.suggestion)) {
                 const match = privacyResult.suggestion.match(beforeAfterPattern);
-                if (match) {
-                    sensitiveText = match[1];
-                }
+                if (match) sensitiveText = match[1];
             } else if (beforeAfterPatternAlt.test(privacyResult.suggestion)) {
                 const match = privacyResult.suggestion.match(beforeAfterPatternAlt);
-                if (match) {
-                    sensitiveText = match[1];
-                }
+                if (match) sensitiveText = match[1];
             } else if (beforeAfterPatternFlexible.test(privacyResult.suggestion)) {
                 const match = privacyResult.suggestion.match(beforeAfterPatternFlexible);
-                if (match) {
-                    sensitiveText = match[1];
-                }
+                if (match) sensitiveText = match[1];
             }
         }
-
-        // Also check affected_text as another fallback
         if (!sensitiveText && privacyResult.affected_text) {
             sensitiveText = privacyResult.affected_text;
         }
 
+        let stringMatchesApplied = false;
         if (sensitiveText) {
-            console.log('Processing sensitive text:', sensitiveText);
-            // Handle comma-separated sensitive text (multiple PII items)
             const sensitiveItems = sensitiveText.split(',').map(s => s.trim()).filter(Boolean);
-            console.log('Sensitive items to highlight:', sensitiveItems);
-            
-            sensitiveItems.forEach(item => {
-                // Escape special regex characters in the sensitive text
-                const escapedSensitiveText = this.escapeRegex(item);
-                
-                // Create a regex that matches the sensitive text (case-insensitive)
-                const regex = new RegExp(`(${escapedSensitiveText})`, 'gi');
-                
-                // Replace the sensitive text with highlighted version
-                const beforeHighlight = highlightedText;
+            for (const item of sensitiveItems) {
+                if (!item) continue;
+                const escaped = this.escapeRegex(item);
+                const regex = new RegExp(`(${escaped})`, 'gi');
+                const before = highlightedText;
                 highlightedText = highlightedText.replace(regex, '<span class="sensitive-text-highlight">$1</span>');
-                
-                if (beforeHighlight !== highlightedText) {
-                    console.log(`Successfully highlighted: "${item}"`);
-                } else {
-                    console.log(`Failed to highlight: "${item}" - not found in text`);
-                }
-            });
+                if (before !== highlightedText) stringMatchesApplied = true;
+            }
         }
 
-        // 2. Highlight placeholder patterns (new placeholders like [AFFILIATION1], [EDUCATIONAL_RECORD1], etc.)
+        // 2) Always highlight placeholder tokens
         const placeholderPatterns = [
-            /\[AFFILIATION\d+\]/g,
-            /\[EDUCATIONAL_RECORD\d+\]/g,
-            /\[NAME\d+\]/g,
-            /\[EMAIL\d+\]/g,
-            /\[PHONE_NUMBER\d+\]/g,
-            /\[ADDRESS\d+\]/g,
-            /\[SSN\d+\]/g,
-            /\[FINANCIAL_INFORMATION\d+\]/g,
-            /\[TIME\d+\]/g,
-            /\[GEOLOCATION\d+\]/g,
-            /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g,
-            /\[HEALTH_INFORMATION\d+\]/g,
-            /\[IP_ADDRESS\d+\]/g,
-            /\[URL\d+\]/g,
-            /\[DRIVERS_LICENSE\d+\]/g,
-            /\[PASSPORT_NUMBER\d+\]/g,
-            /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
-            /\[ID_NUMBER\d+\]/g,
-            /\[USERNAME\d+\]/g,
-            /\[KEYS\d+\]/g,
-            // New format patterns as requested
-            /\[Key\d+\]/g,
-            /\[Geolocation\d+\]/g,
-            /\[Affiliation\d+\]/g,
-            /\[Demographic_Attribute\d+\]/g,
-            /\[Time\d+\]/g,
-            /\[Health_Information\d+\]/g,
-            /\[Financial_Information\d+\]/g,
-            /\[Education_Record\d+\]/g,
-            // Legacy patterns for backward compatibility
-            /\[Address\d+\]/g,
-            /\[Name\d+\]/g,
-            /\[Phone\d+\]/g,
-            /\[Email\d+\]/g,
-            /\[CreditCard\d+\]/g,
+            /\[AFFILIATION\d+\]/g, /\[EDUCATIONAL_RECORD\d+\]/g, /\[NAME\d+\]/g,
+            /\[EMAIL\d+\]/g, /\[PHONE_NUMBER\d+\]/g, /\[ADDRESS\d+\]/g, /\[SSN\d+\]/g,
+            /\[FINANCIAL_INFORMATION\d+\]/g, /\[TIME\d+\]/g, /\[GEOLOCATION\d+\]/g,
+            /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g, /\[HEALTH_INFORMATION\d+\]/g, /\[IP_ADDRESS\d+\]/g,
+            /\[URL\d+\]/g, /\[DRIVERS_LICENSE\d+\]/g, /\[PASSPORT_NUMBER\d+\]/g,
+            /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g, /\[ID_NUMBER\d+\]/g, /\[USERNAME\d+\]/g,
+            /\[KEYS\d+\]/g, /\[Key\d+\]/g, /\[Geolocation\d+\]/g, /\[Affiliation\d+\]/g,
+            /\[Demographic_Attribute\d+\]/g, /\[Time\d+\]/g, /\[Health_Information\d+\]/g,
+            /\[Financial_Information\d+\]/g, /\[Education_Record\d+\]/g,
+            /\[Address\d+\]/g, /\[Name\d+\]/g, /\[Phone\d+\]/g, /\[Email\d+\]/g, /\[CreditCard\d+\]/g,
             /\[Date\d+\]/g
         ];
-
-        // Apply highlighting to all placeholder patterns
-        placeholderPatterns.forEach(pattern => {
-            const beforeHighlight = highlightedText;
+        for (const pattern of placeholderPatterns) {
             highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
-            
-            if (beforeHighlight !== highlightedText) {
-                console.log(`Successfully highlighted placeholder pattern: ${pattern.source}`);
-            }
-        });
+        }
 
-        console.log('Final highlighted text:', highlightedText);
+        // 3) If no string matches happened and backend provided ranges, fallback to ranges
+        if (!stringMatchesApplied && Array.isArray(privacyResult.highlights) && privacyResult.highlights.length) {
+            const ranges = privacyResult.highlights
+                .map(h => ({ start: Number(h.start)||0, end: Number(h.end)||0 }))
+                .filter(r => r.end > r.start && r.start >= 0 && r.end <= text.length)
+                .sort((a,b) => a.start - b.start);
+            if (ranges.length) {
+                const merged = [];
+                for (const r of ranges) {
+                    if (!merged.length || r.start > merged[merged.length-1].end) merged.push({ start: r.start, end: r.end });
+                    else merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
+                }
+                let html = '', pos = 0;
+                for (const r of merged) {
+                    if (r.start > pos) html += this.escapeHtml(text.slice(pos, r.start));
+                    html += '<span class="sensitive-text-highlight">' + this.escapeHtml(text.slice(r.start, r.end)) + '</span>';
+                    pos = r.end;
+                }
+                if (pos < text.length) html += this.escapeHtml(text.slice(pos));
+                return html;
+            }
+        }
+
         return highlightedText;
     }
 

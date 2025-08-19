@@ -373,6 +373,101 @@ function getSession(sessionId) {
     return sessions.get(sessionId);
 }
 
+// count how many times a follow-up has been asked (for determining rewrite strength)
+function countFollowupAskedTimes(session, q, fid) {
+    const hist = Array.isArray(session?.conversationHistory) ? session.conversationHistory : [];
+    let n = 0;
+    for (const m of hist) {
+    if (m?.role === 'assistant' && m?.followup_id === fid) n++;
+  }
+  return n;
+}
+
+// ---------- Re-ask variation helpers ----------
+const REASK_TEMPLATES = [
+    "Thanks for sharing. To make sure I'm on the same page, could you {Q}",
+    "Appreciate the context. For clarity, would you mind {Q}",
+    "Quick check: {Q}",
+    "Before we move on, could you {Q}",
+    "Just to confirm, {Q}",
+    "To be specific, {Q}",
+    "If possible, {Q}",
+    "One more detail—{Q}",
+];
+
+function normalizeForSim(s = "") {
+    return String(s).toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .trim();
+}
+
+function jaccardSimilarity(a = "", b = "") {
+    const A = new Set(normalizeForSim(a).split(" ").filter(Boolean));
+    const B = new Set(normalizeForSim(b).split(" ").filter(Boolean));
+    if (A.size === 0 && B.size === 0) return 1;
+    let inter = 0;
+    for (const x of A) if (B.has(x)) inter++;
+    return inter / (A.size + B.size - inter || 1);
+}
+
+function fixPunctuation(s = "") {
+    return s
+    .replace(/\s*\.\?/g, "?")
+    .replace(/\?\./g, "?")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+    
+async function rewriteWithLLM(baseQuestion, context = "", attempt = 1) {
+    if (!openaiClient) return null;
+    const style =
+    attempt === 1 ? "polite and concise, 1 sentence"
+    : attempt === 2 ? "more specific, 1–2 sentences, state exactly what is missing"
+    : "encouraging, offer a tiny example in parentheses";
+    const prompt = `
+    You are rewriting an interview question for variety while preserving intent.
+    Rules:
+    - Ask for the same information as the BASE QUESTION.
+    - Do NOT use the same wording.
+    - 1–2 sentences max, friendly tone.
+    - Avoid duplicate punctuation.
+    - End with exactly one question mark.
+    Style: ${style}
+    Context: ${context}
+    BASE QUESTION: "${baseQuestion}"
+    Return only the rewritten question.`;
+    const comp = await openaiClient.chat.completions.create({
+    model: process.env.AUDIT_MODEL || "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+    });
+    const out = (comp.choices?.[0]?.message?.content || "").trim();
+    return fixPunctuation(out);
+    }
+
+    async function composeReask(baseQuestion, { attempt = 1, lastUserText = "", previousBotTexts = [] } = {}) {
+    // 1) use template to rewrite
+    let candidate = REASK_TEMPLATES[(attempt - 1) % REASK_TEMPLATES.length]
+    .replace("{Q}", baseQuestion.endsWith("?") ? baseQuestion : baseQuestion + "?");
+    candidate = fixPunctuation(candidate);
+    // 2) semantic deduplication
+    const tooSimilar = previousBotTexts.some(prev => jaccardSimilarity(prev, candidate) >= 0.8);
+    if (tooSimilar) {
+    const rewritten = await rewriteWithLLM(baseQuestion, lastUserText, attempt);
+    if (rewritten) candidate = rewritten;
+    }
+    // 3) if still similar, try different templates until threshold is met or all templates are used
+    let i = 0;
+    while (previousBotTexts.some(prev => jaccardSimilarity(prev, candidate) >= 0.8) && i < REASK_TEMPLATES.length) {
+    const alt = REASK_TEMPLATES[(attempt + i) % REASK_TEMPLATES.length]
+    .replace("{Q}", baseQuestion.endsWith("?") ? baseQuestion : baseQuestion + "?");
+    candidate = fixPunctuation(alt);
+    i++;
+    }
+    return candidate;
+    }
+
 // Helper function to generate session ID
 function generateSessionId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -1335,7 +1430,7 @@ const pending = allFUs.filter(
 
 
           if (pending.length === 0 && deny?.no_experience) {
-            // 把 verdict 改成放行，并添加 tag，供 orchestrator/UI 使用
+            // change verdict to allow, and add tag, for orchestrator/UI use
             if (completionAudit && typeof completionAudit === "object") {
               completionAudit.verdict = "ALLOW_NEXT_QUESTION"; 
               completionAudit.notes = (completionAudit.notes ? completionAudit.notes + " | " : "") + `tag: No_able_answer (${deny.cause || 'unknown'})`;
@@ -1366,11 +1461,27 @@ const pending = allFUs.filter(
             conversationHistory: session.conversationHistory,
             styleHints: state?.styleHints || {}
           });
-          const core = nextFU.prompt.trim().endsWith("?") ? nextFU.prompt.trim() : (nextFU.prompt.trim() + "?");
+// if the follow-up has been asked before, rewrite it
+          let core = nextFU.prompt.trim();
+          core = core.endsWith("?") ? core : (core + "?");
+          const askedTimes = countFollowupAskedTimes(session, qNow, nextFU.id);
+          if (askedTimes >= 1) {
+            const previousBotTexts = session.conversationHistory
+              .filter(m => m.role === 'assistant')
+              .slice(-4)
+              .map(m => m.content || "");
+            const varied = await composeReask(core, {
+              attempt: askedTimes + 1,
+              lastUserText: message || "",
+              previousBotTexts
+            });
+            if (varied) core = varied;
+          }
           const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
           const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
           const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
-          const aiResponse = `${left}${core}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim();
+          const aiResponse = fixPunctuation(`${left}${core}${right}`.replace(/\s+\?/, "?").replace(/\s+/g, " ").trim());
+
           session.conversationHistory.push({ role: "assistant", content: aiResponse, followup_id: nextFU.id });
           // Anti-repeat: Record this follow-up as asked
           markFollowupAsked(session, qNow, nextFU.id);
@@ -1387,64 +1498,13 @@ const pending = allFUs.filter(
             session_id: currentSessionId
           });
         }
-        
-        
 
-        //   if (completionAudit?.next_followup?.prompt) {
-        //     // >>> POLISH TRIGGER <<< Only add prefix/suffix connectors; do not modify the follow-up content itself.
-        //     const { prefix, suffix } = await polishFollowupConnectors({
-        //       followupPrompt: completionAudit.next_followup.prompt,
-        //       currentQuestion: qNow,
-        //       conversationHistory: session.conversationHistory,
-        //       styleHints: state.styleHints || {}
-        //     });
-        //     aiResponse = [prefix, completionAudit.next_followup.prompt, suffix]
-        //       .filter(Boolean)
-        //       .join(' ')
-        //       .replace(/\s+/g, ' ')
-        //       .trim();
-        //     session.lastPolish = {
-        //       followup_id: completionAudit.next_followup.id,
-        //       prefix, suffix
-        //     };
-        //     usedPolish = true;
-        //   }
-        //   allowNextIfAuditPass(state, completionAudit?.verdict);
-        //   finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
           // ====== Presence Audit ======
           const presT0 = Date.now();
           
-          // Skip presence audit for background questions - they don't need follow-up questions
-        //   if (isBackgroundQuestion) {
-        //     presenceAudit = {
-        //       hasQuestion: false,
-        //       reason: 'Background question - no follow-up needed',
-        //       confidence: 1.0,
-        //       shouldRegenerate: false
-        //     };
-        //     log.info('background question - presence audit skipped');
-        //   } else {
-        //     presenceAudit = await auditQuestionPresence(
-        //       message,
-        //       aiResponse,
-        //       qNow,
-        //       session.conversationHistory,
-        //       isFinalQuestionValue,
-        //       followUpMode
-        //     );
-        //   }
 
-        //   presenceAudit = await auditQuestionPresence(
-        //     message,
-        //     aiResponse,
-        //     qNow,
-        //     session.conversationHistory,
-        //     isFinalQuestionValue,
-        //     followUpMode
-        //   );
 
-        // const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
         const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
         presenceAudit = await auditQuestionPresence(
                      message,
