@@ -864,6 +864,21 @@ textarea.copy-paste-disabled:focus {
     color: white;
 }
 
+/* Privacy Status Indicator */
+.privacy-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.privacy-status-indicator:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
 /* Privacy Analysis */
 .privacy-analysis {
     background-color: var(--container-bg);

@@ -382,8 +382,8 @@ async function analyzeAndStoreTurn(sessionId, userText, botText) {
     const session = getSession(sessionId);
     // use existing detection with context, fallback to regex if fails
     const [userPR, botPR] = await Promise.all([
-      detectPrivacyWithAI(userText, session.conversationHistory).catch(() => detectPrivacyWithPatterns(userText, session.conversationHistory)),
-      detectPrivacyWithAI(botText || '', session.conversationHistory).catch(() => detectPrivacyWithPatterns(botText || '', session.conversationHistory))
+      detectPrivacyWithAI(userText, session.conversationHistory, sessionId).catch(() => detectPrivacyWithPatterns(userText, session.conversationHistory)),
+      detectPrivacyWithAI(botText || '', session.conversationHistory, sessionId).catch(() => detectPrivacyWithPatterns(botText || '', session.conversationHistory))
     ]);
     session.privacyTurns.push({
       user: userText,
@@ -1691,14 +1691,14 @@ app.get('/api/privacy_accumulated', (req, res) => {
 // Privacy Detection API
 app.post('/api/privacy_detection', async (req, res) => {
     try {
-        const { user_message } = req.body;
+        const { user_message, sessionId } = req.body;
         
         if (!user_message) {
             return res.status(400).json({ error: 'User message is required' });
         }
 
         // Enhanced AI-based privacy detection with conversation context and fallback to pattern matching
-        let privacyResult = await detectPrivacyWithAI(user_message, null);
+        let privacyResult = await detectPrivacyWithAI(user_message, null, sessionId);
         
         // If AI detection fails, fall back to pattern matching
         if (!privacyResult || privacyResult.error) {
@@ -1723,7 +1723,15 @@ app.post('/api/privacy_detection', async (req, res) => {
         if (!Array.isArray(privacyResult.highlights)) { privacyResult.highlights = computeHighlightSpans(user_message, privacyResult.text_with_placeholders || user_message, privacyResult.detected_pii || []); }
         
 
-        res.json(privacyResult);
+        // If highlights are missing, recompute them to ensure stable frontend highlighting
+        if (!Array.isArray(privacyResult.highlights)) {
+          privacyResult.highlights = computeHighlightSpans(
+            user_message,
+            privacyResult.text_with_placeholders || user_message,
+            privacyResult.detected_pii || []
+          );
+        }
+        // res.json(privacyResult);
     } catch (error) {
         console.error('Privacy detection error:', error);
         // Final fallback to pattern matching
@@ -2211,7 +2219,8 @@ async function regenerateResponseWithQuestions(
     }
   }
 // AI-based privacy detection function with conversation context
-async function detectPrivacyWithAI(userMessage, conversationContext = null) {
+// Add sessionID to bond with the conversation
+async function detectPrivacyWithAI(userMessage, conversationContext = null, sessionID = null) {
     if (!openaiClient) {
         return { error: 'AI model not available' };
     }
@@ -2250,6 +2259,12 @@ async function detectPrivacyWithAI(userMessage, conversationContext = null) {
                     }
                 }
             }
+        }
+
+        // Add sessionID to the prompt for bonding with the conversation
+        let sessionInfo = '';
+        if (sessionID) {
+            sessionInfo = `\nSESSION ID: ${sessionID}`;
         }
 
         // Step 1: Detection LLM - Identify PII and create numbered placeholders
@@ -2292,6 +2307,10 @@ Note that the information should be related to a real person not in a public con
 Result should be in its minimum possible unit.
 
 IMPORTANT: For each detected PII, assign a numbered placeholder (e.g., NAME1, NAME2, EMAIL1, etc.) that counts across the entire conversation history. The numbering should be sequential across all conversations, not just within a single message. For example, if NAME1 was used in a previous message, the next name should be NAME2.
+IMPORTANT NEGATIVE GUIDELINES:
+- Do NOT tag generic questions like "when did you..." as TIME unless the text contains a concrete time expression
+  (e.g., "June 2023", "2019", "yesterday", "last week", "12/31/2024").
+- Return only spans that literally exist in the text.
 
 DUPLICATE ENTITY DETECTION: If you detect the same entity ("Carnegie Mellon") that was mentioned before, use the same placeholder number. For example, if "Carnegie Mellon" was previously assigned AFFILIATION1, use AFFILIATION1 again for the same entity.
 
@@ -2324,7 +2343,7 @@ If no privacy issues found, respond with:
   "affected_text": null
 }
 
-Current user message: "${userMessage}"${contextInfo}`;
+Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
 
         // Step 1: Detection LLM - Identify PII and create numbered placeholders
         const detectionCompletion = await openaiClient.chat.completions.create({
@@ -2359,9 +2378,16 @@ Current user message: "${userMessage}"${contextInfo}`;
             throw new Error('Invalid JSON response from detection AI');
         }
         
-        // If no privacy issues detected, return early
+        // 先做类型规范化与 TIME 合法性过滤，再决定是否早退
+        if (Array.isArray(detectionData.detected_pii)) {
+            detectionData.detected_pii = detectionData.detected_pii
+              .map(p => ({ ...p, type: normalizeTypeName(p.type) }))
+              .filter(p => isValidDetection(p.type, p.original_text));
+            detectionData.privacy_issue = detectionData.detected_pii.length > 0;
+        }
+            // If no privacy issues detected, return early
         if (!detectionData.privacy_issue || !detectionData.detected_pii || detectionData.detected_pii.length === 0) {
-            return {
+                return {
                 privacy_issue: false,
                 type: null,
                 suggestion: null,
@@ -2372,11 +2398,19 @@ Current user message: "${userMessage}"${contextInfo}`;
         }
         
         // Update placeholders with conversation-wide numbering and duplicate detection
-        let updatedTextWithPlaceholders = detectionData.text_with_placeholders;
+       
+        let updatedTextWithPlaceholders = String(userMessage);
         const updatedDetectedPii = [];
-        const session = getSession(null); // Use default session for now
+        // Use sessionID to bond with the conversation
+        const session = getSession(sessionID); // Use sessionID instead of null
         
         for (const pii of detectionData.detected_pii) {
+            // 最长优先，避免子串覆盖
+        const piiList = Array.isArray(detectionData.detected_pii)
+          ? detectionData.detected_pii.slice().sort((a,b)=> (b.original_text?.length||0) - (a.original_text?.length||0))
+          : [];
+
+        for (const pii of piiList) {
             // Check if this entity was previously detected in the conversation
             const entityKey = `${pii.original_text.toLowerCase().trim()}_${pii.type}`;
             let existingPlaceholder = null;
@@ -2393,7 +2427,7 @@ Current user message: "${userMessage}"${contextInfo}`;
                 newPlaceholder = existingPlaceholder;
             } else {
                 // Generate new placeholder for new entity
-                const nextNumber = getNextPlaceholderNumber(pii.type);
+                const nextNumber = getNextPlaceholderNumber(pii.type, sessionID);
                 const newFormat = convertToNewPlaceholderFormat(pii.type);
                 newPlaceholder = `[${newFormat}${nextNumber}]`;
                 
@@ -2405,19 +2439,17 @@ Current user message: "${userMessage}"${contextInfo}`;
                 console.log(`Tracking new entity: "${pii.original_text}" -> ${newPlaceholder}`);
             }
             
-            // Update the placeholder in the detected PII
-            const updatedPii = {
-                ...pii,
-                placeholder: newPlaceholder
-            };
+            // 替换原文中的首次出现（宽松匹配），仅当命中时才记录该实体
+            const hit = flexibleFind(updatedTextWithPlaceholders, pii.original_text, 0);
+            if (hit) {
+                        updatedTextWithPlaceholders =
+                updatedTextWithPlaceholders.slice(0, hit.start) +
+                newPlaceholder +
+                updatedTextWithPlaceholders.slice(hit.end);
+            const updatedPii = { ...pii, placeholder: newPlaceholder };
             updatedDetectedPii.push(updatedPii);
-            
-            // Replace the placeholder in the text
-            const oldPlaceholder = pii.placeholder;
-            if (oldPlaceholder && oldPlaceholder !== newPlaceholder) {
-                const regex = new RegExp(`\\b${oldPlaceholder}\\b`, 'g');
-                updatedTextWithPlaceholders = updatedTextWithPlaceholders.replace(regex, newPlaceholder);
             }
+        }
         }
         
         // Update the detection data with conversation-wide numbering
@@ -2441,6 +2473,7 @@ Current input:
 Placeholders to replace (comma-separated, use EXACT matches):
 <ProtectedInformation>${placeholderList.join(',')}</ProtectedInformation>
 <AffectedText>${detectionData.affected_text || ''}</AffectedText>
+<SessionID>${sessionID || ''}</SessionID>
 
 `;
 
@@ -2501,11 +2534,11 @@ Placeholders to replace (comma-separated, use EXACT matches):
                         placeholderMap.has(m) ? placeholderMap.get(m) : m
                     ));
                     // add structured highlights
-                    const _highlights = computeHighlightSpans(
-                      userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
-                    );
+
                     const protectedTexts = Array.from(placeholderMap.keys()).join(',');
-                    
+                    const _highlights = computeHighlightSpans(
+                        userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
+                      );
                     return {
                         privacy_issue: true,
                         type: detectionData.detected_pii[0]?.type || 'PII_DETECTED',
@@ -2568,10 +2601,8 @@ Placeholders to replace (comma-separated, use EXACT matches):
                         explanation: abstractionData.explanation || 'No sensitive information found',
                         affected_text: abstractionData.affected_text || '',
                         sensitive_text: abstractionData.sensitive_text || '',
-                        detected_pii: detectionData.detected_pii,
-                        highlights: computeHighlightSpans(
-                          userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
-                        ),
+                        detected_pii: [],
+                        highlights: [],
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: detectionData.text_with_placeholders
@@ -2739,7 +2770,7 @@ function detectPrivacyWithPatterns(userMessage, conversationContext = null) {
 
 
 // Enhanced conversation-wide privacy analysis
-async function analyzeConversationPrivacy(conversationHistory) {
+async function analyzeConversationPrivacy(conversationHistory, sessionId) {
     if (!conversationHistory || conversationHistory.length === 0) {
         return { error: 'No conversation history provided' };
     }
@@ -2763,7 +2794,7 @@ async function analyzeConversationPrivacy(conversationHistory) {
             const context = conversationHistory.slice(0, i + 1); // All messages up to current
 
             try {
-                let privacyResult = await detectPrivacyWithAI(message, context);
+                let privacyResult = await detectPrivacyWithAI(message, context, sessionId);
                 if (!privacyResult || privacyResult.error) {
                     privacyResult = detectPrivacyWithPatterns(message, context);
                 }
@@ -3506,6 +3537,37 @@ function isEventBasedMainQuestion(q) {
 
 function escapeRegex(str) { return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function normSpaces(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+const TYPE_ALIASES = new Map([
+    ['AFILIATION','AFFILIATION'],
+    ['AFFILIATIONS','AFFILIATION'],
+    ['SCHOOL','AFFILIATION'],
+    ['UNIVERSITY','AFFILIATION'],
+    ['EDUCATION','EDUCATIONAL_RECORD'],
+    ['EDUCATION_RECORD','EDUCATIONAL_RECORD'],
+    ['EDUCATIONALRECORD','EDUCATIONAL_RECORD']
+]);
+function normalizeTypeName(t) {
+    if (!t) return null;
+    const up = String(t).trim().toUpperCase();
+    return TYPE_ALIASES.get(up) || up;
+}
+
+const TIME_VALUE_RE = new RegExp([
+    '\\b(19\\d{2}|20\\d{2}|21\\d{2})\\b',
+    '\\b\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{2,4}\\b',
+    '\\b\\d{4}-\\d{1,2}-\\d{1,2}\\b',
+    '\\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\b',
+    '\\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\\b',
+    '\\b(Spring|Summer|Fall|Autumn|Winter)\\b',
+     '\\b(today|yesterday|tomorrow|last\\s+(week|month|year)|next\\s+(week|month|year))\\b'
+].join('|'),'i');
+function isValidDetection(type, text){
+    if(!text || !/\w/.test(text)) return false;
+    const T = normalizeTypeName(type);
+    if(!T) return false;
+    if(T==='TIME') return TIME_VALUE_RE.test(text);
+    return true;
+}
 /**
  * Flexible find: ignore case and treat consecutive spaces in needle as \s+
  */
@@ -3519,25 +3581,21 @@ function flexibleFind(haystack, needle, from = 0) {
  * Compute highlight spans from placeholders mapped to originals
  */
 function computeHighlightSpans(originalText, textWithPlaceholders, detectedPii) {
-  const spans = [];
-  if (!originalText || !textWithPlaceholders || !Array.isArray(detectedPii)) return spans;
-  const phToOrig = new Map(detectedPii.map(p => [p.placeholder, p.original_text]));
-  const phToType = new Map(detectedPii.map(p => [p.placeholder, p.type]));
-  const PH_RE = /\[[A-Za-z_]+?\d+\]/g;
-  let cursor = 0, m;
-  while ((m = PH_RE.exec(textWithPlaceholders)) !== null) {
+    const spans = [];
+    if (!originalText || !textWithPlaceholders || !Array.isArray(detectedPii)) return spans;
+    const phToOrig = new Map(detectedPii.map(p => [p.placeholder, p.original_text]));
+    const phToType = new Map(detectedPii.map(p => [p.placeholder, p.type]));
+    const PH_RE = /\[[A-Za-z_]+?\d+\]/g;
+    let cursor = 0, m;
+    while ((m = PH_RE.exec(textWithPlaceholders)) !== null) {
     const ph = m[0];
     const orig = phToOrig.get(ph);
     if (!orig) continue;
     const hit = flexibleFind(originalText, orig, cursor) || flexibleFind(originalText, orig, 0);
-    if (hit) {
-      spans.push({ ...hit, type: phToType.get(ph) || 'PII', placeholder: ph });
-      cursor = hit.end;
+    if (hit) { spans.push({ ...hit, type: phToType.get(ph) || 'PII', placeholder: ph }); cursor = hit.end; }
     }
-  }
-  return spans;
+    return spans;
 }
-
 
 
       

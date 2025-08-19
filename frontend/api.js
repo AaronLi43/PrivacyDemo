@@ -193,13 +193,6 @@ class API {
         }
     }
 
-    // Get accumulated privacy analysis results
-    static async getAccumulatedPrivacy(sessionId) {
-        return this.request(`${API_ENDPOINTS.PRIVACY_ACCUMULATED}?sessionId=${sessionId}`, {
-            method: 'GET'
-        });
-    }
-
     // Set Mode
     static async setMode(mode) {
         return this.request(API_ENDPOINTS.SET_MODE, {
