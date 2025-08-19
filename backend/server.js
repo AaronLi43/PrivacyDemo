@@ -410,11 +410,11 @@ let globalPiiCounters = {
 
 // Main predefined questions stored on server - unified since all modes use the same questions
 const unifiedQuestions = [
-    "Tell me about your educational background - what did you study in college or university?",
+    "Could you tell me about your educational background - what did you study in college or university?",
     "I'd love to hear about your current work and how you got into it by job interviews?",
     "Can you walk me through a specific time when you used AI before and during job interviews?",
-    "Did you ever have a close call where your AI use almost got you in trouble? What was that like?",
-    "Looking back, was there ever a moment when you thought you might have crossed a line using AI for job interviews?",
+    "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
+    "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
     "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
 ];
 
@@ -443,7 +443,7 @@ const FOLLOWUPS_BY_QUESTION = {
             "university","college","school","campus","institution",
             "university of","college of","state university","polytechnic","tech university"
         ] },
-        { id: "Q1_F3", prompt: "Who was your supervisor back in college?", keywords: [
+        { id: "Q1_F3", prompt: "Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.", keywords: [
             "supervisor","advisor","adviser","mentor","thesis advisor","capstone advisor","co-advisor",
             "professor","lecturer","pi","principal investigator","dr","prof","supervised by"
         ] }
@@ -485,7 +485,7 @@ const FOLLOWUPS_BY_QUESTION = {
             "influence","process","performance","success","failure","resulted in"
         ] }
     ],
-    [unifiedQuestions[3]]: [        { id: "Q4_F1", prompt: "when did the close call happen?", keywords: [
+    [unifiedQuestions[3]]: [        { id: "Q4_F1", prompt: "Do you remember at what time that happened?", keywords: [
         "when","incident","close call","almost caught","nearly","time","date","month","year","201","202"
         ] },
         { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
@@ -495,7 +495,7 @@ const FOLLOWUPS_BY_QUESTION = {
         "star","bullet points","mock interview","practice q&a","script","answer bank","cheatsheet",
         "cover letter","resume","cv","email","thank-you note"
         ] },
-        { id: "Q4_F3", prompt: "What trouble did AI get you in?", keywords: [
+        { id: "Q4_F3", prompt: "Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?", keywords: [
         "trouble","caught","flagged","plagiarism","cheating","ban","banned","policy","violation",
         "integrity","academic integrity","code of conduct","warning","revoke","rescinded","revoke offer",
         "disqualify","disqualified","penalty","strike","concern","red flag","hr","recruiter",
@@ -503,18 +503,18 @@ const FOLLOWUPS_BY_QUESTION = {
         ] }
     ],
     [unifiedQuestions[4]]: [
-        { id: "Q5_F1", prompt: "What triggered you to have the idea to cross the line of properly using AI?", keywords: [
+        { id: "Q5_F1", prompt: "could you walk me through what made you reach for AI in that situation?", keywords: [
             "trigger","reason","because","due to","pressure","deadline","time pressure",
             "hard question","difficult","competition","anxiety","stress","desperate","temptation",
             "incentive","recommendation","friend suggested","saw others","reddit","forum","example",
                       "shortcut","cheat","hack"
         ] },
-        { id: "Q5_F2", prompt: "What concerns were in your mind when you had the crossing-line idea?", keywords: [
+        { id: "Q5_F2", prompt: "when you thought about the possibility of going too far with AI, what concerns were on your mind?", keywords: [
             "concern","worry","afraid","fear","risk","getting caught","detect","detection",
             "policy","violation","ethics","integrity","honesty","privacy","security",
             "consequence","ban","penalty","expelled","fired","background check","nda","legal","guidelines"
         ] },
-        { id: "Q5_F3", prompt: "What additional ethics reflection did you have when you look back on it?", keywords: [
+        { id: "Q5_F3", prompt: "what additional ethics reflection did you have during using AI for job interviews?", keywords: [
             "ethics","ethical","reflection","in hindsight","looking back","regret","lesson","learned",
             "shouldn't have","boundary","line","values","responsibility","fairness","transparency",
             "accountability","harm","trust","reputation","principle","moral","self-reflection"
@@ -535,6 +535,11 @@ const FOLLOWUPS_BY_QUESTION = {
             "rewrite","translate","summarize","grammar","proofread","code","solution","answers","essay","report",
             "homework","assignment","take-home","test","automation","voice to text","image generator",
             "dall-e","midjourney","stable diffusion","quillbot","grammarly"
+        ] },
+        { id: "Q6_F4", prompt: "Why do you feel that’s something you wouldn’t want to share openly?", keywords: [
+            "why","feel","share","openly","private","confidential","sensitive","sensitive information",
+            "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
+            "reputation","principle","moral","self-reflection"
         ] }
     ]
 };
@@ -1082,7 +1087,7 @@ app.post('/api/chat', async (req, res) => {
         const firstQuestion = getCurrentQuestion(state, unifiedQuestions);
         
         if (firstQuestion) {
-          const welcomeMessage = "Welcome! I'm ready to ask you some questions. Let's begin with the first one.";
+          const welcomeMessage = "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.";
           const fullMessage = `${welcomeMessage}\n\n${firstQuestion}`;
           
           // Add to conversation history
@@ -2373,8 +2378,8 @@ Current user message: "${userMessage}"${contextInfo}`;
 IMPORTANT: Only operate on the exact placeholders provided; DO NOT change any other text.
 
 For example:
-Input: <Text>I graduated from [Education_Record1], and I earn a six-figure salary. [Time1] in the office...</Text><ProtectedInformation>[Education_Record1],[Time1]</ProtectedInformation>
-Output JSON: {"results": [{"protected": "[Education_Record1]", "abstracted": "MIT"}, {"protected": "[Time1]", "abstracted": "Yesterday"}]}
+Input: <Text>I graduated from CMU, and I earn a six-figure salary. Today in the office...</Text> <ProtectedInformation>CMU,Today</ProtectedInformation> 
+Output JSON: {"results": [{"protected": "CMU", "abstracted": "a prestigious university"}, {"protected": "Today", "abstracted": "Recently"}]}
 
 
 Current input:
@@ -2383,18 +2388,9 @@ Placeholders to replace (comma-separated, use EXACT matches):
 <ProtectedInformation>${placeholderList.join(',')}</ProtectedInformation>
 <AffectedText>${detectionData.affected_text || ''}</AffectedText>
 
-Create abstracted text by replacing the protected information with realistic but fake data (not generic terms). Use "results" as the main key in the JSON object with an array of objects containing "protected" and "abstracted" fields.
-
-For example:
-- Names: Replace with fake names like "Brian Johnson", "Sarah Williams"
-- Emails: Replace with fake emails like "brian.johnson@example.com"
-- Phone numbers: Replace with fake numbers like "(555) 123-4567"
-- Addresses: Replace with fake addresses like "123 Oak Street, Springfield, IL 62701"
-- Universities: Replace with fake universities like "MIT", "Stanford"
-- Companies: Replace with fake companies like "TechCorp", "InnovateInc"
 
 Use this exact format:
-{"results": [{"protected": "[PlaceholderX]", "abstracted": "fake_realistic_data"}, {"protected": "[PlaceholderY]", "abstracted": "another_fake_data"}]}`;
+{"results": [{"protected": "CMU", "abstracted": "a prestigious university"}, {"protected": "Today", "abstracted": "Recently"}]}`;
 
 
         const abstractionCompletion = await openaiClient.chat.completions.create({
