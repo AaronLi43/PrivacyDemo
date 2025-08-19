@@ -4132,8 +4132,8 @@ class PrivacyDemoApp {
 
     // Update UI
     updateUI() {
-        // Only update chat interface if we're on the chat page
-        if (this.state.currentStepPage === 'chat') {
+        // Update chat interface if we're on the chat page OR if we're in privacy analysis mode
+        if (this.state.currentStepPage === 'chat' || this.state.showPrivacyAnalysis) {
             // Update chat header with background mode indicator
             this.updateChatHeader();
             
