@@ -2026,7 +2026,7 @@ class PrivacyDemoApp {
         const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
         if (!sid) return;
         try {
-            const res = await fetch(`${API.baseUrl}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
+            const res = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
             const json = await res.json();
             if (json && json.success && Array.isArray(json.analyzed_log)) {
                 this.state.analyzedLog = json.analyzed_log;
@@ -3483,7 +3483,7 @@ class PrivacyDemoApp {
                     if (USE_SERVER_PRIVACY) {
                         const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
                         if (!sid) throw new Error('Missing session id for accumulated privacy');
-                        const resp = await fetch(`${API.baseUrl}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
+                        const resp = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
                         const data = await resp.json();
                         if (!data.success) throw new Error(data.error || 'Failed to load accumulated privacy');
                         const analyzed = data.analyzed_log || [];
@@ -3556,7 +3556,7 @@ class PrivacyDemoApp {
             if (USE_SERVER_PRIVACY) {
                 const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
                 if (!sid) throw new Error('Missing session id for accumulated privacy');
-                const resp = await fetch(`${API.baseUrl}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
+                const resp = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load accumulated privacy');
                 const analyzed = data.analyzed_log || [];
