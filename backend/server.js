@@ -1669,21 +1669,32 @@ const pending = allFUs.filter(
 // NEW: read accumulated per-turn privacy results (for post-interview instant display)
 app.get('/api/privacy_accumulated', (req, res) => {
     try {
-    const { sessionId } = req.query || {};
-    if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
-    const session = getSession(sessionId);
-    const analyzedLog = (session.privacyTurns || []).map(turn => ({
-    user: turn.user,
-    bot: turn.bot,
-    userPrivacy: turn.userPrivacy || null,
-    botPrivacy: turn.botPrivacy || null,
-    // for frontend compatibility, provide a unified field (user first)
-    privacy: turn.userPrivacy || turn.botPrivacy || null
-    }));
-    return res.json({ success: true, analyzed_log: analyzedLog, status: 'accumulated' });
+        const { sessionId } = req.query || {};
+        if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+        const session = getSession(sessionId);
+        
+        const analyzedLog = (session.privacyTurns || []).map(turn => {
+            // Compute hasPrivacyIssues flag for frontend compatibility
+            const hasPrivacyIssues = (turn.userPrivacy && turn.userPrivacy.privacy_issue) || 
+                                   (turn.botPrivacy && turn.botPrivacy.privacy_issue);
+            
+            return {
+                user: turn.user,
+                bot: turn.bot,
+                userPrivacy: turn.userPrivacy || null,
+                botPrivacy: turn.botPrivacy || null,
+                hasPrivacyIssues: hasPrivacyIssues,
+                // for frontend compatibility, provide a unified field (user first)
+                privacy: turn.userPrivacy || turn.botPrivacy || null
+            };
+        });
+        
+        console.log(`Privacy accumulated API: returning ${analyzedLog.length} turns, ${analyzedLog.filter(t => t.hasPrivacyIssues).length} with privacy issues`);
+        
+        return res.json({ success: true, analyzed_log: analyzedLog, status: 'accumulated' });
     } catch (e) {
-    console.error('privacy_accumulated error:', e);
-    return res.status(500).json({ error: 'Internal server error' });
+        console.error('privacy_accumulated error:', e);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 });
     
@@ -2393,7 +2404,9 @@ Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
                 suggestion: null,
                 explanation: null,
                 affected_text: null,
-                sensitive_text: null
+                sensitive_text: null,
+                detected_pii: [],
+                text_with_placeholders: userMessage
             };
         }
         
@@ -2536,6 +2549,8 @@ Placeholders to replace (comma-separated, use EXACT matches):
                     // add structured highlights
 
                     const protectedTexts = Array.from(placeholderMap.keys()).join(',');
+                    // Get the actual detected text for highlighting (not placeholders)
+                    const detectedTexts = detectionData.detected_pii.map(pii => pii.original_text).join(',');
                     const _highlights = computeHighlightSpans(
                         userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
                       );
@@ -2545,7 +2560,7 @@ Placeholders to replace (comma-separated, use EXACT matches):
                         suggestion: `Before: "${originalText}"\nAfter: "${abstractedText}"`,
                         explanation: `Protected information abstracted: ${protectedTexts}`,
                         affected_text: protectedTexts,      // Only return placeholders, avoid frontend re-using original text for replacement
-                        sensitive_text: protectedTexts,
+                        sensitive_text: detectedTexts,      // Return actual detected text for highlighting
                         detected_pii: detectionData.detected_pii,
                         highlights: _highlights,
                         safer_versions: {
@@ -2580,7 +2595,7 @@ Placeholders to replace (comma-separated, use EXACT matches):
                         suggestion: abstractionData.suggestion || null,
                         explanation: abstractionData.explanation || detectionData.detected_pii[0].explanation,
                         affected_text: abstractionData.affected_text || detectionData.affected_text,
-                        sensitive_text: abstractionData.sensitive_text || detectionData.affected_text,
+                        sensitive_text: abstractionData.sensitive_text || detectionData.detected_pii.map(pii => pii.original_text).join(','),
                         detected_pii: detectionData.detected_pii,
                         highlights: computeHighlightSpans(
                           userMessage, detectionData.text_with_placeholders, detectionData.detected_pii
@@ -2895,21 +2910,29 @@ app.post('/api/analyze_log', async (req, res) => {
         const { conversation_log, sessionId } = req.body || {};
         // if sessionId is provided but conversation_log is not, return accumulated per-turn results
         if ((!conversation_log || !Array.isArray(conversation_log)) && sessionId) {
-        const session = getSession(sessionId);
-        const analyzedLog = (session.privacyTurns || []).map(turn => ({
-        user: turn.user,
-        bot: turn.bot,
-        privacy: turn.userPrivacy || turn.botPrivacy || null,
-        userPrivacy: turn.userPrivacy || null,
-        botPrivacy:  turn.botPrivacy  || null
-        }));
-        return res.json({
-        success: true,
-        analyzed_log: analyzedLog,
-        analysis: { mode: 'accumulated', total: analyzedLog.length },
-        conversation_analysis: [],
-        status: 'completed'
-        });
+            const session = getSession(sessionId);
+            const analyzedLog = (session.privacyTurns || []).map(turn => {
+                // Compute hasPrivacyIssues flag for frontend compatibility
+                const hasPrivacyIssues = (turn.userPrivacy && turn.userPrivacy.privacy_issue) || 
+                                       (turn.botPrivacy && turn.botPrivacy.privacy_issue);
+                
+                return {
+                    user: turn.user,
+                    bot: turn.bot,
+                    privacy: turn.userPrivacy || turn.botPrivacy || null,
+                    userPrivacy: turn.userPrivacy || null,
+                    botPrivacy: turn.botPrivacy || null,
+                    hasPrivacyIssues: hasPrivacyIssues
+                };
+            });
+            
+            return res.json({
+                success: true,
+                analyzed_log: analyzedLog,
+                analysis: { mode: 'accumulated', total: analyzedLog.length },
+                conversation_analysis: [],
+                status: 'completed'
+            });
         }
         // still support offline analysis
         if (!conversation_log || !Array.isArray(conversation_log)) {
@@ -2935,12 +2958,17 @@ app.post('/api/analyze_log', async (req, res) => {
         const analyzedLog = conversation_log.map((msg, index) => {
             const privacyResult = privacyAnalysis.conversation_analysis[index];
             const pr = privacyResult && privacyResult.privacy_result && privacyResult.privacy_result.privacy_issue ? privacyResult.privacy_result : null;
+            
+            // Compute hasPrivacyIssues flag for frontend compatibility
+            const hasPrivacyIssues = pr && pr.privacy_issue;
+            
             return {
                 user: msg.user,
                 bot: msg.bot,
                 privacy: pr,
                 userPrivacy: pr,
-                botPrivacy: null
+                botPrivacy: null,
+                hasPrivacyIssues: hasPrivacyIssues
             };
         });
 
