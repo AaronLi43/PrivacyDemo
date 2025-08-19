@@ -1725,10 +1725,24 @@ app.post('/api/privacy_detection', async (req, res) => {
             /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/ // Credit Card
         ];
         
-        const hasSimplePattern = simplePatterns.some(pattern => pattern.test(user_message));
+        const hasSimplePattern = simplePatterns.some(p => p.test(user_message));
         if (hasSimplePattern) {
-            console.log('Simple pattern detected, using pattern-based detection for consistency');
-            privacyResult = detectPrivacyWithPatterns(user_message, null);
+          const patternRes = detectPrivacyWithPatterns(user_message, null);
+        // Merge instead of overwrite: use AI results as primary, supplement with items from pattern detection that AI missed
+          const aiList = new Set((privacyResult?.detected_pii || []).map(x => `${x.type}:${x.original_text}`));
+          const extra = (patternRes?.detected_pii || []).filter(x => !aiList.has(`${x.type}:${x.original_text}`));
+          const merged = {
+            ...(privacyResult || {}),
+            privacy_issue: (privacyResult?.privacy_issue || patternRes?.privacy_issue) ? true : false,
+            detected_pii: (privacyResult?.detected_pii || []).concat(extra),
+            text_with_placeholders: (privacyResult?.text_with_placeholders || patternRes?.text_with_placeholders || user_message)
+          };
+          merged.highlights = computeHighlightSpans(
+            user_message,
+            merged.text_with_placeholders,
+            merged.detected_pii
+          );
+          privacyResult = merged;
         }
         
         if (!Array.isArray(privacyResult.highlights)) { privacyResult.highlights = computeHighlightSpans(user_message, privacyResult.text_with_placeholders || user_message, privacyResult.detected_pii || []); }
@@ -2389,9 +2403,9 @@ Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
             throw new Error('Invalid JSON response from detection AI');
         }
         
-        // 先做类型规范化与 TIME 合法性过滤，再决定是否早退
+        // First, normalize type names and filter out invalid TIME entities before deciding on early return
         if (Array.isArray(detectionData.detected_pii)) {
-            detectionData.detected_pii = detectionData.detected_pii
+            detectionData.detected_pii = (detectionData.detected_pii || [])
               .map(p => ({ ...p, type: normalizeTypeName(p.type) }))
               .filter(p => isValidDetection(p.type, p.original_text));
             detectionData.privacy_issue = detectionData.detected_pii.length > 0;
@@ -2418,7 +2432,7 @@ Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
         const session = getSession(sessionID); // Use sessionID instead of null
         
         for (const pii of detectionData.detected_pii) {
-            // 最长优先，避免子串覆盖
+            // Sort detected PII entities by length (longest first) to avoid substring overlap
         const piiList = Array.isArray(detectionData.detected_pii)
           ? detectionData.detected_pii.slice().sort((a,b)=> (b.original_text?.length||0) - (a.original_text?.length||0))
           : [];
@@ -2452,15 +2466,12 @@ Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
                 console.log(`Tracking new entity: "${pii.original_text}" -> ${newPlaceholder}`);
             }
             
-            // 替换原文中的首次出现（宽松匹配），仅当命中时才记录该实体
-            const hit = flexibleFind(updatedTextWithPlaceholders, pii.original_text, 0);
-            if (hit) {
-                        updatedTextWithPlaceholders =
-                updatedTextWithPlaceholders.slice(0, hit.start) +
-                newPlaceholder +
-                updatedTextWithPlaceholders.slice(hit.end);
-            const updatedPii = { ...pii, placeholder: newPlaceholder };
-            updatedDetectedPii.push(updatedPii);
+            // Replace the first occurrence in the original text (loose matching), only record the entity when it hits
+            const { text: replacedText, changed } =
+            flexibleReplaceAll(updatedTextWithPlaceholders, pii.original_text, newPlaceholder);
+            if (changed) {
+            updatedTextWithPlaceholders = replacedText;
+            updatedDetectedPii.push({ ...pii, placeholder: newPlaceholder });
             }
         }
         }
@@ -2468,6 +2479,7 @@ Current user message: "${userMessage}"${contextInfo}${sessionInfo}`;
         // Update the detection data with conversation-wide numbering
         detectionData.detected_pii = updatedDetectedPii;
         detectionData.text_with_placeholders = updatedTextWithPlaceholders;
+        detectionData.affected_text = Array.from(new Set(updatedDetectedPii.map(p => p.original_text))).join(', ') || null;
         
         // Step 2: Abstraction LLM - Create abstracted text with placeholders
         const placeholderList = (Array.isArray(detectionData.detected_pii) ? detectionData.detected_pii : [])
@@ -3605,6 +3617,16 @@ function flexibleFind(haystack, needle, from = 0) {
   const m = re.exec(haystack.slice(from));
   return m ? { start: from + m.index, end: from + m.index + m[0].length, text: haystack.slice(from + m.index, from + m.index + m[0].length) } : null;
 }
+
+// Replace the same entity with "full, loose, case-insensitive"
+function flexibleReplaceAll(haystack, needle, replacement) {
+    const pat = escapeRegex(normSpaces(needle)).replace(/\\\s\+/g, '\\s+');
+    const re = new RegExp(pat, 'gi'); // global + case-insensitive
+    let count = 0;
+    const text = String(haystack || '').replace(re, () => { count++; return replacement; });
+    return { text, count, changed: count > 0 };
+}
+
 /**
  * Compute highlight spans from placeholders mapped to originals
  */
