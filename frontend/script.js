@@ -2024,14 +2024,28 @@ class PrivacyDemoApp {
     // prefetch accumulated privacy results (for instant display during conversation)
     async prefetchAccumulatedPrivacy() {
         const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
-        if (!sid) return;
+        if (!sid) {
+            console.log('No session ID available for prefetch');
+            return;
+        }
+        
         try {
-            const res = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
+            console.log('🔍 Prefetching privacy results for session:', sid);
+            
+            const res = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { 
+                credentials: 'include',
+                cache: 'no-cache' // Ensure fresh data
+            });
+            
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            
             const json = await res.json();
             if (json && json.success && Array.isArray(json.analyzed_log)) {
                 this.state.analyzedLog = json.analyzed_log;
                 
-                // NEW: Show notification if privacy issues are found during prefetch
+                // Show notification if privacy issues are found during prefetch
                 const privacyIssues = json.analyzed_log.filter(entry => entry.hasPrivacyIssues).length;
                 if (privacyIssues > 0) {
                     this.showNotification(`🔍 Privacy analysis updated: ${privacyIssues} issues found`, 'info');
@@ -2039,9 +2053,12 @@ class PrivacyDemoApp {
                 
                 this.updateUI();
                 console.log('✅ Prefetched accumulated privacy results:', json.analyzed_log.length, 'entries');
+            } else {
+                console.warn('Invalid response format from prefetch:', json);
             }
         } catch (e) {
-            console.warn('prefetchAccumulatedPrivacy failed', e);
+            console.warn('prefetchAccumulatedPrivacy failed:', e);
+            // Don't throw - this is just a prefetch, not critical
         }
     }
     // Perform real-time privacy detection
@@ -3408,127 +3425,84 @@ class PrivacyDemoApp {
         if (this.state.mode !== 'featured') return;
 
         try {
-            this.showLoading(true, '🔍 Preparing Privacy Analysis Results...');
+            this.showLoading(true, '🔍 Loading Privacy Analysis Results...');
             this.showFreeEditPopup();
             
-            // Check if we already have real-time analysis results
-            if (this.state.realTimePrivacyAnalysis && this.state.analyzedLog.length > 0) {
-                // Use pre-analyzed results - no need to re-analyze!
-                this.addLoadingNotification('✅ Using pre-analyzed privacy results - no waiting required!', 'success');
-                
-                this.state.showPrivacyAnalysis = true;
-                this.state.editMode = true; // Enable edit mode for all messages
-                // Store original conversation for consent-based export
-                this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
-                
-                // Ensure question mode is false to show export buttons
-                this.state.questionMode = false;
-                
-                this.updateUI();
-                
-                // Count privacy issues found from pre-analyzed data
-                const totalIssues = this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
-                this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! You can now review and edit them.`, 'success');
-                
-                // Show results immediately
-                setTimeout(() => {
-                    this.showLoading(false);
-                    this.showNotification(`🔍 Privacy analysis ready - Found ${totalIssues} messages with privacy issues!`, 'success');
-                }, 1000);
-                
-            } else if (USE_SERVER_PRIVACY) {
-                // NEW: Try to fetch accumulated privacy results from server
-                this.addLoadingNotification('🔍 Fetching accumulated privacy results from server...', 'info');
+            // OPTIMIZED: Check if we already have results first (fastest path)
+            if (this.state.analyzedLog && this.state.analyzedLog.length > 0) {
+                this.addLoadingNotification('✅ Using cached privacy results - instant display!', 'success');
+                this.showPrivacyAnalysisResults();
+                return;
+            }
+            
+            // OPTIMIZED: Try to fetch accumulated privacy results from server (should be very fast)
+            if (USE_SERVER_PRIVACY) {
+                this.addLoadingNotification('🔍 Fetching pre-generated privacy results...', 'info');
                 
                 try {
-                    await this.prefetchAccumulatedPrivacy();
+                    const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
+                    if (!sid) {
+                        throw new Error('Missing session ID for privacy analysis');
+                    }
                     
-                    if (this.state.analyzedLog.length > 0) {
-                        // Use server-side accumulated results
-                        this.addLoadingNotification('✅ Using server-side accumulated privacy results - no waiting required!', 'success');
-                        
-                        this.state.showPrivacyAnalysis = true;
-                        this.state.editMode = true;
-                        this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
-                        this.state.questionMode = false;
-                        
-                        this.updateUI();
-                        
-                        const totalIssues = this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
-                        this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! You can now review and edit them.`, 'success');
-                        
-                        setTimeout(() => {
-                            this.showLoading(false);
-                            this.showNotification(`🔍 Privacy analysis ready - Found ${totalIssues} messages with privacy issues!`, 'success');
-                        }, 1000);
-                        
-                        return; // Exit early since we have results
+                    // Direct fetch for maximum speed
+                    const res = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { 
+                        credentials: 'include',
+                        cache: 'no-cache' // Ensure fresh data
+                    });
+                    
+                    if (!res.ok) {
+                        throw new Error(`Server responded with ${res.status}: ${res.statusText}`);
                     }
-                } catch (error) {
-                    console.warn('Failed to fetch accumulated privacy results:', error);
-                    this.addLoadingNotification('⚠️ Could not fetch server results, falling back to local analysis...', 'warning');
-                }
-                
-                // Fall through to local analysis if server fetch failed
-            } else {
-                // Fallback to traditional analysis if real-time analysis wasn't enabled
-                this.addLoadingNotification('Making free edits on the left to check for privacy leakage while keeping an eye on AI recommendations on the right', 'info');
-                
-                // Use real backend API for privacy analysis
-                const analyzedLog = [];
-                const totalMessages = this.state.conversationLog.length;
-                
-                
-                    // New: prioritize using server-side accumulated results for instant display
-                    if (USE_SERVER_PRIVACY) {
-                        const sid = this.state.backendSessionId || localStorage.getItem('backendSessionId');
-                        if (!sid) throw new Error('Missing session id for accumulated privacy');
-                        const resp = await fetch(`${API_BASE_URL}/api/privacy_accumulated?sessionId=${encodeURIComponent(sid)}`, { credentials: 'include' });
-                        const data = await resp.json();
-                        if (!data.success) throw new Error(data.error || 'Failed to load accumulated privacy');
-                        const analyzed = data.analyzed_log || [];
-                        this.state.analyzedLog = analyzed;
+                    
+                    const data = await res.json();
+                    if (data && data.success && Array.isArray(data.analyzed_log)) {
+                        this.state.analyzedLog = data.analyzed_log;
+                        console.log('✅ Fetched privacy results:', data.analyzed_log.length, 'entries');
+                        
+                        this.addLoadingNotification('✅ Privacy analysis loaded successfully!', 'success');
+                        this.showPrivacyAnalysisResults();
+                        return;
                     } else {
-                        // Fallback: keep old front-end whole-segment analysis (if server is unavailable)
-                        const analyzed = [];
-                        for (let i = 0; i < this.state.conversationLog.length; i++) {
-                            const turn = this.state.conversationLog[i];
-                            const userPrivacy = turn.user ? await API.detectPrivacy(turn.user) : null;
-                            const botPrivacy  = turn.bot  ? await API.detectPrivacy(turn.bot)  : null;
-                            analyzed.push({
-                                user: turn.user, bot: turn.bot, userPrivacy, botPrivacy,
-                                hasPrivacyIssues: (userPrivacy && userPrivacy.privacy_issue) || (botPrivacy && botPrivacy.privacy_issue)
-                            });
-                        }
-                        this.state.analyzedLog = analyzed;
+                        throw new Error('Invalid response format from server');
                     }
-                
-                
-                this.addLoadingNotification('✅ Privacy analysis completed! Preparing results...', 'success');
-                
-                // Keep the server/fallback results already set above
-                // this.state.analyzedLog is authoritative here
-
-                this.state.showPrivacyAnalysis = true;
-                this.state.editMode = true; // Enable edit mode for all messages
-                // Store original conversation for consent-based export
-                this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
-                
-                // Ensure question mode is false to show export buttons
-                this.state.questionMode = false;
-                
-                this.updateUI();
-                
-                // Count privacy issues found
-                const totalIssues = this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
-                this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! You can now review and edit them.`, 'success');
-                
-                // Wait a moment to show the final notification
-                setTimeout(() => {
-                    this.showLoading(false);
-                    this.showNotification(`🔍 Privacy analysis completed - Found ${totalIssues} messages with privacy issues!`, 'success');
-                }, 2000);
+                    
+                } catch (error) {
+                    console.error('Failed to fetch accumulated privacy results:', error);
+                    this.addLoadingNotification(`⚠️ Server fetch failed: ${error.message}`, 'warning');
+                    
+                    // Fall through to local analysis as last resort
+                }
             }
+            
+            // FALLBACK: Local analysis (slowest path - should rarely be reached)
+            this.addLoadingNotification('⚠️ Falling back to local analysis...', 'warning');
+            
+            const analyzedLog = [];
+            const totalMessages = this.state.conversationLog.length;
+            
+            for (let i = 0; i < totalMessages; i++) {
+                const turn = this.state.conversationLog[i];
+                const userPrivacy = turn.user ? await API.detectPrivacy(turn.user) : null;
+                const botPrivacy = turn.bot ? await API.detectPrivacy(turn.bot) : null;
+                
+                analyzedLog.push({
+                    user: turn.user, 
+                    bot: turn.bot, 
+                    userPrivacy, 
+                    botPrivacy,
+                    hasPrivacyIssues: (userPrivacy && userPrivacy.privacy_issue) || (botPrivacy && botPrivacy.privacy_issue)
+                });
+                
+                // Show progress
+                if (i % 2 === 0) {
+                    this.addLoadingNotification(`Analyzing message ${i + 1}/${totalMessages}...`, 'info');
+                }
+            }
+            
+            this.state.analyzedLog = analyzedLog;
+            this.addLoadingNotification('✅ Local analysis completed!', 'success');
+            this.showPrivacyAnalysisResults();
             
         } catch (error) {
             console.error('Analysis error:', error);
@@ -3538,6 +3512,25 @@ class PrivacyDemoApp {
                 this.showNotification(`❌ Analysis error: ${error.message}`, 'error');
             }, 2000);
         }
+    }
+    
+    // Helper method to show privacy analysis results
+    showPrivacyAnalysisResults() {
+        this.state.showPrivacyAnalysis = true;
+        this.state.editMode = true;
+        this.state.originalLog = JSON.parse(JSON.stringify(this.state.conversationLog));
+        this.state.questionMode = false;
+        
+        this.updateUI();
+        
+        const totalIssues = this.state.analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
+        this.addLoadingNotification(`🎯 Found ${totalIssues} messages with privacy issues! You can now review and edit them.`, 'success');
+        
+        // Show results immediately
+        setTimeout(() => {
+            this.showLoading(false);
+            this.showNotification(`🔍 Privacy analysis ready - Found ${totalIssues} messages with privacy issues!`, 'success');
+        }, 500); // Reduced delay for faster response
     }
 
     // Analyze and export with redirect to thanks page
