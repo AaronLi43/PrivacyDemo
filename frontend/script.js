@@ -1658,6 +1658,12 @@ class PrivacyDemoApp {
 
                 this.state.conversationLog.push({ user: '', bot: botResponse, timestamp: new Date().toISOString() });
 
+                // Ensure immediate privacy detection for the first round
+                try {
+                    const roundIndex = this.state.conversationLog.length - 1;
+                    await this.performRealTimePrivacyAnalysis('', botResponse, roundIndex);
+                } catch (_) {}
+
                 
                 console.log('✅ Conversation started successfully');
                 
@@ -1830,7 +1836,7 @@ class PrivacyDemoApp {
 
     // NEW: Real-time privacy analysis for each conversation round
     async performRealTimePrivacyAnalysis(userMessage, botResponse, roundIndex) {
-        if (USE_SERVER_PRIVACY || this.state.mode !== 'featured' || !this.state.realTimePrivacyAnalysis) {
+        if (this.state.mode !== 'featured' || !this.state.realTimePrivacyAnalysis) {
             return;
         }
 
@@ -1917,8 +1923,11 @@ class PrivacyDemoApp {
         if (analyzedMessages > 0) {
             const progress = Math.round((analyzedMessages / totalMessages) * 100);
             
-            // Show progress notification
-            this.showNotification(`🔍 Privacy Analysis Progress: ${progress}% complete (${privacyIssues} issues found)`, 'info');
+            // Show progress notification (suppressed during conversation in featured mode)
+            const suppressNotices = (this.state.mode === 'featured' && !this.state.showPrivacyAnalysis);
+            if (!suppressNotices) {
+                this.showNotification(`🔍 Privacy Analysis Progress: ${progress}% complete (${privacyIssues} issues found)`, 'info');
+            }
             
             // Update privacy status in header
             this.updatePrivacyAnalysisStatus();
@@ -1926,7 +1935,9 @@ class PrivacyDemoApp {
             // If analysis is complete, show final summary
             if (progress === 100) {
                 setTimeout(() => {
-                    this.showNotification(`✅ Privacy analysis complete! Found ${privacyIssues} privacy issues across ${totalMessages} messages.`, 'success');
+                    if (!suppressNotices) {
+                        this.showNotification(`✅ Privacy analysis complete! Found ${privacyIssues} privacy issues across ${totalMessages} messages.`, 'success');
+                    }
                 }, 1000);
             }
         }
@@ -2047,7 +2058,8 @@ class PrivacyDemoApp {
                 
                 // Show notification if privacy issues are found during prefetch
                 const privacyIssues = json.analyzed_log.filter(entry => entry.hasPrivacyIssues).length;
-                if (privacyIssues > 0) {
+                const suppressNotices = (this.state.mode === 'featured' && !this.state.showPrivacyAnalysis);
+                if (!suppressNotices && privacyIssues > 0) {
                     this.showNotification(`🔍 Privacy analysis updated: ${privacyIssues} issues found`, 'info');
                 }
                 
@@ -4200,7 +4212,7 @@ class PrivacyDemoApp {
         const privacyStatusContainer = document.getElementById('privacy-analysis-status');
         if (!privacyStatusContainer) return;
 
-        if (this.state.mode === 'featured' && this.state.realTimePrivacyAnalysis) {
+        if (this.state.mode === 'featured' && this.state.realTimePrivacyAnalysis && this.state.showPrivacyAnalysis) {
             const summary = this.getPrivacyAnalysisSummary();
             if (summary) {
                 const riskColor = {
@@ -4379,8 +4391,8 @@ class PrivacyDemoApp {
                         // Check if we should show editable messages (analysis mode OR naive mode in edit mode)
             const shouldShowEditable = analysisMode || (this.state.mode === 'naive' && this.state.editMode);
             
-            // NEW: Show privacy warnings in real-time even when not in analysis mode
-            if (this.state.realTimePrivacyAnalysis && analyzed && analyzed.hasPrivacyIssues) {
+            // NEW: Show privacy warnings; suppressed in featured mode during conversation
+            if (this.state.realTimePrivacyAnalysis && analyzed && analyzed.hasPrivacyIssues && !(this.state.mode === 'featured' && !analysisMode)) {
                 // User privacy issue warning sign
                 if (analyzed.userPrivacy && analyzed.userPrivacy.privacy_issue) {
                     userWarning = '<span class="privacy-warning-sign" data-type="user" data-index="' + i + '" style="cursor: pointer;" title="Privacy issue detected">&#9888;&#65039;</span>';
@@ -6203,13 +6215,31 @@ class PrivacyDemoApp {
                     
                     // Add event listeners to sync with the original textarea
                     highlightedDiv.addEventListener('input', (e) => {
-                        userTextarea.value = e.target.innerText;
-                        this.saveMessageEdit(i, e.target.innerText, 'user');
+                        const plainText = e.target.innerText;
+                        userTextarea.value = plainText;
+                        this.saveMessageEdit(i, plainText, 'user');
+                        const updatedHTML = this.highlightSensitiveText(plainText, _userPR);
+                        if (e.target.innerHTML !== updatedHTML) {
+                            e.target.innerHTML = updatedHTML;
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                sel.removeAllRanges();
+                                const range = document.createRange();
+                                range.selectNodeContents(e.target);
+                                range.collapse(false);
+                                sel.addRange(range);
+                            }
+                        }
                     });
                     
                     highlightedDiv.addEventListener('blur', (e) => {
-                        userTextarea.value = e.target.innerText;
-                        this.saveMessageEdit(i, e.target.innerText, 'user');
+                        const plainText = e.target.innerText;
+                        userTextarea.value = plainText;
+                        this.saveMessageEdit(i, plainText, 'user');
+                        const updatedHTML = this.highlightSensitiveText(plainText, _userPR);
+                        if (e.target.innerHTML !== updatedHTML) {
+                            e.target.innerHTML = updatedHTML;
+                        }
                     });
                     
                     // Hide the original textarea and show the highlighted version
@@ -6257,13 +6287,31 @@ class PrivacyDemoApp {
                     
                     // Add event listeners to sync with the original textarea
                     highlightedDiv.addEventListener('input', (e) => {
-                        botTextarea.value = e.target.innerText;
-                        this.saveMessageEdit(i, e.target.innerText, 'bot');
+                        const plainText = e.target.innerText;
+                        botTextarea.value = plainText;
+                        this.saveMessageEdit(i, plainText, 'bot');
+                        const updatedHTML = this.highlightSensitiveText(plainText, _botPR);
+                        if (e.target.innerHTML !== updatedHTML) {
+                            e.target.innerHTML = updatedHTML;
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                sel.removeAllRanges();
+                                const range = document.createRange();
+                                range.selectNodeContents(e.target);
+                                range.collapse(false);
+                                sel.addRange(range);
+                            }
+                        }
                     });
                     
                     highlightedDiv.addEventListener('blur', (e) => {
-                        botTextarea.value = e.target.innerText;
-                        this.saveMessageEdit(i, e.target.innerText, 'bot');
+                        const plainText = e.target.innerText;
+                        botTextarea.value = plainText;
+                        this.saveMessageEdit(i, plainText, 'bot');
+                        const updatedHTML = this.highlightSensitiveText(plainText, _botPR);
+                        if (e.target.innerHTML !== updatedHTML) {
+                            e.target.innerHTML = updatedHTML;
+                        }
                     });
                     
                     // Hide the original textarea and show the highlighted version
