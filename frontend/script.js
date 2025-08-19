@@ -4581,6 +4581,27 @@ class PrivacyDemoApp {
                             analysisEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             analysisEntry.classList.add('nav-highlight');
                             setTimeout(() => analysisEntry.classList.remove('nav-highlight'), 2000);
+                        } else {
+                            console.warn(`Analysis entry not found for ${type}-${idx}`);
+                            // Try alternative selectors
+                            const altSelectors = [
+                                `#analysis-entry-${type}-${idx}`,
+                                `.analysis-entry[data-index="${idx}"][data-type="${type}"]`,
+                                `[data-analysis-index="${idx}"][data-analysis-type="${type}"]`
+                            ];
+                            console.log('Trying alternative selectors:', altSelectors);
+                            
+                            // Try to find any matching element
+                            for (const selector of altSelectors) {
+                                const element = document.querySelector(selector);
+                                if (element) {
+                                    console.log(`Found analysis entry with selector: ${selector}`);
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    element.classList.add('nav-highlight');
+                                    setTimeout(() => element.classList.remove('nav-highlight'), 2000);
+                                    break;
+                                }
+                            }
                         }
                     });
                 });
@@ -4967,7 +4988,7 @@ class PrivacyDemoApp {
                                     ⚠️ Keep Original
                                 </button>
                             `}
-                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="user" type="button">Go to Log</button>
+                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="user" type="button" onclick="app.scrollToLogEntry(${i}, 'user')">Go to Log</button>
                         </div>
                         <div class="choice-status ${userChoice}">
                             ${this.getChoiceStatusText(userChoice)}
@@ -5056,7 +5077,7 @@ class PrivacyDemoApp {
                                     ⚠️ Keep Original
                                 </button>
                             `}
-                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="bot" type="button">Go to Log</button>
+                            <button class="btn btn-info go-to-log-btn" data-log-index="${i}" data-log-type="bot" type="button" onclick="app.scrollToLogEntry(${i}, 'bot')">Go to Log</button>
                         </div>
                         <div class="choice-status ${botChoice}">
                             ${this.getChoiceStatusText(botChoice)}
@@ -5069,20 +5090,7 @@ class PrivacyDemoApp {
             html = '<p class="text-center">No privacy issues found</p>';
         }
         choicesContainer.innerHTML = html;
-        // Bind Go to Log buttons
-        const goToLogBtns = choicesContainer.querySelectorAll('.go-to-log-btn');
-        goToLogBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const idx = btn.getAttribute('data-log-index');
-                const type = btn.getAttribute('data-log-type');
-                const logEntry = document.querySelector(`#log-entry-${type}-${idx}`);
-                if (logEntry) {
-                    logEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    logEntry.classList.add('nav-highlight');
-                    setTimeout(() => logEntry.classList.remove('nav-highlight'), 2000);
-                }
-            });
-        });
+        // Go to Log buttons now use onclick handlers for more reliable navigation
     }
 
     // Make privacy choice (now per message and per issue type)
@@ -6067,9 +6075,11 @@ class PrivacyDemoApp {
             }
         }
 
-        // 2) Always highlight placeholder tokens
+        // 2) Always highlight placeholder tokens with improved NAME recognition
         const placeholderPatterns = [
-            /\[AFFILIATION\d+\]/g, /\[EDUCATIONAL_RECORD\d+\]/g, /\[NAME\d+\]/g,
+            // Enhanced NAME patterns for better recognition
+            /\[NAME\d+\]/gi, /\[Name\d+\]/g, /\[name\d+\]/g,
+            /\[AFFILIATION\d+\]/g, /\[EDUCATIONAL_RECORD\d+\]/g,
             /\[EMAIL\d+\]/g, /\[PHONE_NUMBER\d+\]/g, /\[ADDRESS\d+\]/g, /\[SSN\d+\]/g,
             /\[FINANCIAL_INFORMATION\d+\]/g, /\[TIME\d+\]/g, /\[GEOLOCATION\d+\]/g,
             /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g, /\[HEALTH_INFORMATION\d+\]/g, /\[IP_ADDRESS\d+\]/g,
@@ -6078,7 +6088,7 @@ class PrivacyDemoApp {
             /\[KEYS\d+\]/g, /\[Key\d+\]/g, /\[Geolocation\d+\]/g, /\[Affiliation\d+\]/g,
             /\[Demographic_Attribute\d+\]/g, /\[Time\d+\]/g, /\[Health_Information\d+\]/g,
             /\[Financial_Information\d+\]/g, /\[Education_Record\d+\]/g,
-            /\[Address\d+\]/g, /\[Name\d+\]/g, /\[Phone\d+\]/g, /\[Email\d+\]/g, /\[CreditCard\d+\]/g,
+            /\[Address\d+\]/g, /\[Phone\d+\]/g, /\[Email\d+\]/g, /\[CreditCard\d+\]/g,
             /\[Date\d+\]/g
         ];
         for (const pattern of placeholderPatterns) {
@@ -6117,16 +6127,25 @@ class PrivacyDemoApp {
             return;
         }
 
+        // Ensure conversation log and analyzed log are in sync
+        const maxIndex = Math.min(this.state.conversationLog.length, this.state.analyzedLog.length);
+        
         // Process each message in the conversation
-        for (let i = 0; i < this.state.analyzedLog.length; i++) {
+        for (let i = 0; i < maxIndex; i++) {
             const analyzed = this.state.analyzedLog[i];
+            const conversationEntry = this.state.conversationLog[i];
+            
+            if (!analyzed || !conversationEntry) {
+                console.warn(`Missing data at index ${i}: analyzed=${!!analyzed}, conversation=${!!conversationEntry}`);
+                continue;
+            }
             
             // Handle user message highlighting
             const _userPR = analyzed.userPrivacy || analyzed.privacy;
-            if (_userPR && _userPR.privacy_issue) {
+            if (_userPR && _userPR.privacy_issue && conversationEntry.user) {
                 const userTextarea = document.querySelector(`textarea[data-message-index="${i}"][data-message-type="user"]`);
                 if (userTextarea) {
-                    const originalText = this.state.conversationLog[i].user;
+                    const originalText = conversationEntry.user;
                     const highlightedText = this.highlightSensitiveText(originalText, _userPR);
                     
                     // Create a contenteditable div to replace the textarea for inline highlighting
@@ -6135,6 +6154,8 @@ class PrivacyDemoApp {
                     highlightedDiv.className = 'message-edit-input-highlighted';
                     highlightedDiv.contentEditable = true;
                     highlightedDiv.innerHTML = highlightedText;
+                    highlightedDiv.setAttribute('data-message-index', i);
+                    highlightedDiv.setAttribute('data-message-type', 'user');
                     
                     // Copy the textarea's computed styles to match exactly
                     const textareaStyles = window.getComputedStyle(userTextarea);
@@ -6195,10 +6216,10 @@ class PrivacyDemoApp {
             
             // Handle bot message highlighting
             const _botPR = analyzed.botPrivacy || analyzed.privacy;
-            if (_botPR && _botPR.privacy_issue) {
+            if (_botPR && _botPR.privacy_issue && conversationEntry.bot) {
                 const botTextarea = document.querySelector(`textarea[data-message-index="${i}"][data-message-type="bot"]`);
                 if (botTextarea) {
-                    const originalText = this.state.conversationLog[i].bot;
+                    const originalText = conversationEntry.bot;
                     const highlightedText = this.highlightSensitiveText(originalText, _botPR);
                     
                     // Create a contenteditable div to replace the textarea for inline highlighting
@@ -6207,6 +6228,8 @@ class PrivacyDemoApp {
                     highlightedDiv.className = 'message-edit-input-highlighted';
                     highlightedDiv.contentEditable = true;
                     highlightedDiv.innerHTML = highlightedText;
+                    highlightedDiv.setAttribute('data-message-index', i);
+                    highlightedDiv.setAttribute('data-message-type', 'bot');
                     
                     // Copy the textarea's computed styles to match exactly
                     const textareaStyles = window.getComputedStyle(botTextarea);
@@ -6279,6 +6302,93 @@ class PrivacyDemoApp {
         const textareas = document.querySelectorAll('textarea[data-message-index]');
         textareas.forEach(textarea => {
             textarea.style.display = '';
+        });
+    }
+
+    // Scroll to a specific log entry with fallback selectors
+    scrollToLogEntry(index, type) {
+        console.log(`🔍 Scrolling to log entry: index=${index}, type=${type}`);
+        
+        // Try multiple selectors in order of preference
+        const selectors = [
+            `#log-entry-${type}-${index}`,
+            `textarea[data-message-index="${index}"][data-message-type="${type}"]`,
+            `.message[data-index="${index}"][data-type="${type}"]`,
+            `.message-pair[data-index="${index}"]`,
+            `.message-pair:nth-child(${index + 1})`
+        ];
+        
+        let elementFound = false;
+        for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+                console.log(`✅ Found element with selector: ${selector}`);
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                element.classList.add('nav-highlight');
+                setTimeout(() => element.classList.remove('nav-highlight'), 2000);
+                elementFound = true;
+                break;
+            }
+        }
+        
+        if (!elementFound) {
+            console.warn(`❌ No log entry found for index=${index}, type=${type}`);
+            console.log('Tried selectors:', selectors);
+            
+            // Log current state for debugging
+            console.log('Current conversation log length:', this.state.conversationLog.length);
+            console.log('Current analyzed log length:', this.state.analyzedLog.length);
+            console.log('Conversation log indices:', this.state.conversationLog.map((_, i) => i));
+            console.log('Analyzed log indices:', this.state.analyzedLog.map((_, i) => i));
+        }
+    }
+
+    // Debug method to check navigation alignment
+    debugNavigationAlignment() {
+        console.log('🔍 Debugging navigation alignment...');
+        console.log('Conversation log length:', this.state.conversationLog.length);
+        console.log('Analyzed log length:', this.state.analyzedLog.length);
+        
+        // Check for mismatched indices
+        for (let i = 0; i < Math.max(this.state.conversationLog.length, this.state.analyzedLog.length); i++) {
+            const conv = this.state.conversationLog[i];
+            const analyzed = this.state.analyzedLog[i];
+            if (conv && analyzed) {
+                console.log(`Index ${i}: Conv=${conv.user?.substring(0, 30)}... | Analyzed=${analyzed.userPrivacy?.privacy_issue || 'no issue'}`);
+            } else if (conv) {
+                console.log(`Index ${i}: Conv=${conv.user?.substring(0, 30)}... | Analyzed=missing`);
+            } else if (analyzed) {
+                console.log(`Index ${i}: Conv=missing | Analyzed=${analyzed.userPrivacy?.privacy_issue || 'no issue'}`);
+            }
+        }
+        
+        // Check DOM elements
+        const textareas = document.querySelectorAll('textarea[data-message-index]');
+        const warningSigns = document.querySelectorAll('.privacy-warning-sign');
+        const goToLogBtns = document.querySelectorAll('.go-to-log-btn');
+        
+        console.log('DOM elements found:');
+        console.log('- Textareas:', textareas.length);
+        console.log('- Warning signs:', warningSigns.length);
+        console.log('- Go to log buttons:', goToLogBtns.length);
+        
+        // Check specific elements
+        textareas.forEach(textarea => {
+            const idx = textarea.getAttribute('data-message-index');
+            const type = textarea.getAttribute('data-message-type');
+            console.log(`Textarea: index=${idx}, type=${type}, id=${textarea.id}`);
+        });
+        
+        warningSigns.forEach(sign => {
+            const idx = sign.getAttribute('data-index');
+            const type = sign.getAttribute('data-type');
+            console.log(`Warning sign: index=${idx}, type=${type}`);
+        });
+        
+        goToLogBtns.forEach(btn => {
+            const idx = btn.getAttribute('data-log-index');
+            const type = btn.getAttribute('data-log-type');
+            console.log(`Go to log button: index=${idx}, type=${type}`);
         });
     }
 
@@ -6453,6 +6563,7 @@ if (injectSpeedInsights) {
 
 // Expose test functions globally for debugging
 window.testSurveyQuestions = () => app.testSurveyQuestions();
+window.debugNavigationAlignment = () => app.debugNavigationAlignment();
 window.app = app; // Expose app instance for debugging
 
 // Add CSS for notifications
