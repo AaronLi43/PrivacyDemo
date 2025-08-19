@@ -2246,6 +2246,13 @@ CRITICAL CLASSIFICATION RULES:
 - Academic fields, majors, and subjects are EDUCATIONAL_RECORD
 - Only actual person names (like "John Smith", "Sarah Johnson") should be classified as NAME
 - Universities and organizations should be classified as AFFILIATION
+- TIME must be **concrete**. Only tag TIME if the text includes at least one clear temporal anchor, such as:
+    * A calendar date (e.g., "2023-05-12", "05/12/2023", "May 2023", "on June 5th")
+    * A clock time (e.g., "3pm", "14:30")
+    * A numbered duration with a unit (e.g., "for 3 years", "over 2 months", "in 10 days")
+    * A year with explicit temporal context (e.g., "in 2022", "since 2019", "between 2020 and 2021")
+- DO NOT tag TIME for generic or interrogative phrases without concrete anchors, such as:
+    "when", "specific time", "at that time", "the time", "time period", "these days", "back then".
 
 Use this exact format:
 {
@@ -2317,8 +2324,49 @@ Current user message: "${userMessage}"${contextInfo}`;
             };
         }
         
+
+        // Step 2: Abstraction LLM - Create abstracted text with placeholders
+        // ---- Concrete-PII post-filter to reduce false positives (especially TIME) ----
+        const GENERIC_TIME = /\b(when|specific time|at that time|the time|time period|these days|back then)\b/i;
+        const HAS_MONTH = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+        const HAS_DATE = /\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/;
+        const HAS_TIME = /\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i;
+        const HAS_YEAR = /\b(?:19|20)\d{2}\b/;
+        const HAS_NUM_DURATION = /\b(?:in|for|over|during|since|until)\s+\d+\s+(?:years?|months?|weeks?|days?|hours?|minutes?)\b/i;
+        function isConcreteTime(s) {
+          const t = (s || "").trim();
+          if (!t || GENERIC_TIME.test(t)) return false;
+          return HAS_MONTH.test(t) || HAS_DATE.test(t) || HAS_TIME.test(t) || HAS_YEAR.test(t) || HAS_NUM_DURATION.test(t);
+        }
+        function isConcretePII(p) {
+          if (!p || !p.type || !p.original_text) return false;
+          const txt = p.original_text.trim();
+          if (!txt) return false;
+          switch (p.type) {
+            case 'TIME': return isConcreteTime(txt);
+            case 'NAME': return /\b\p{L}+\b\s+\b\p{L}+\b/u.test(txt); // at least two words
+            case 'AFFILIATION': return !/^(your (school|university|institution)|my company|the company|my school)$/i.test(txt);
+            case 'GEOLOCATION': return /\p{L}/u.test(txt) && !/^(where|location)$/i.test(txt);
+            case 'EDUCATIONAL_RECORD': return /\b(major|degree|b\.?s\.?|bsc|ba|m\.?s\.?|msc|ma|ph\.?d\.?|phd|cs|computer science|electrical|biology|chemistry)\b/i.test(txt);
+            default: return true;
+          }
+        }
+        detectionData.detected_pii = (detectionData.detected_pii || []).filter(isConcretePII);
+        if (detectionData.detected_pii.length === 0) {
+            return {
+                privacy_issue: false,
+                type: null,
+                suggestion: null,
+                explanation: null,
+                affected_text: null,
+                sensitive_text: null
+            };
+        }
+
         // Update placeholders with conversation-wide numbering and duplicate detection
-        let updatedTextWithPlaceholders = detectionData.text_with_placeholders;
+        // Build text_with_placeholders ourselves by replacing EXACT matches only
+        const originalText = String(userMessage || "");
+        let updatedTextWithPlaceholders = originalText;
         const updatedDetectedPii = [];
         const session = getSession(null); // Use default session for now
         
@@ -2358,12 +2406,10 @@ Current user message: "${userMessage}"${contextInfo}`;
             };
             updatedDetectedPii.push(updatedPii);
             
-            // Replace the placeholder in the text
-            const oldPlaceholder = pii.placeholder;
-            if (oldPlaceholder && oldPlaceholder !== newPlaceholder) {
-                const regex = new RegExp(`\\b${oldPlaceholder}\\b`, 'g');
-                updatedTextWithPlaceholders = updatedTextWithPlaceholders.replace(regex, newPlaceholder);
-            }
+            // Replace ONLY the exact original_text (escaped), not arbitrary spans
+            const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const exact = new RegExp(escape(pii.original_text), 'g');
+            updatedTextWithPlaceholders = updatedTextWithPlaceholders.replace(exact, newPlaceholder);
         }
         
         // Update the detection data with conversation-wide numbering
