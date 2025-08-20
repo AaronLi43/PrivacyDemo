@@ -49,9 +49,9 @@ class PrivacyDemoApp {
         // };
         
         this.config = {
-            sidebarHiddenByDefault: true,  // Hide sidebar by default for testing
-            enableSidebarToggle: false,    // Disable sidebar toggle functionality for testing
-            persistSidebarState: false     // Don't persist sidebar state for testing
+            sidebarHiddenByDefault: true,  // Always hide sidebar
+            enableSidebarToggle: false,    // Completely disable sidebar toggle functionality
+            persistSidebarState: false     // Don't persist sidebar state
         };
 
         this.state = {
@@ -1946,75 +1946,54 @@ class PrivacyDemoApp {
     // Set conversation height
 
 
-    // Toggle sidebar visibility
+    // Toggle sidebar visibility - disabled as per requirements
     toggleSidebar() {
-        if (!this.config.enableSidebarToggle) {
-            console.log('Sidebar toggle is disabled in configuration');
-            return;
-        }
+        // Sidebar is always hidden and toggling is disabled
+        console.log('Sidebar toggle is permanently disabled as per requirements');
         
-        this.state.sidebarHidden = !this.state.sidebarHidden;
+        // Force sidebar to always be hidden
+        this.state.sidebarHidden = true;
         this.updateSidebarToggle();
-        
-        if (this.config.persistSidebarState) {
-            this.saveToLocalStorage();
-        }
     }
 
-    // Update sidebar toggle button and container state
+    // Update sidebar toggle button and container state - always hide sidebar
     updateSidebarToggle() {
         const container = document.querySelector('.container');
         const toggleBtn = document.getElementById('toggle-sidebar-btn');
         
         if (!toggleBtn) return;
         
-        // Hide toggle button if sidebar toggle is disabled
-        if (!this.config.enableSidebarToggle) {
-            toggleBtn.style.display = 'none';
-            return;
-        } else {
-            toggleBtn.style.display = 'block';
-        }
+        // Always hide toggle button as sidebar is disabled
+        toggleBtn.style.display = 'none';
         
-        if (this.state.sidebarHidden) {
-            container.classList.add('sidebar-hidden');
-            toggleBtn.innerHTML = '<i class="fas fa-eye"></i><span> Show Config</span>';
-        } else {
-            container.classList.remove('sidebar-hidden');
-            toggleBtn.innerHTML = '<i class="fas fa-bars"></i><span> Hide Config</span>';
-        }
+        // Always ensure sidebar is hidden
+        container.classList.add('sidebar-hidden');
     }
 
-    // Configuration toggle functions
+    // Configuration toggle functions - disabled as per requirements
     toggleSidebarConfig() {
-        this.config.enableSidebarToggle = !this.config.enableSidebarToggle;
+        // Force sidebar toggle to be disabled
+        this.config.enableSidebarToggle = false;
         this.updateSidebarToggle();
         this.updateConfigurationUI();
         this.saveToLocalStorage();
-        this.showNotification(
-            this.config.enableSidebarToggle ? '✅ Sidebar toggle enabled' : '❌ Sidebar toggle disabled', 
-            'info'
-        );
+        this.showNotification('❌ Sidebar is permanently disabled as per requirements', 'info');
     }
 
     toggleSidebarDefaultState() {
-        this.config.sidebarHiddenByDefault = !this.config.sidebarHiddenByDefault;
+        // Force sidebar to be hidden by default
+        this.config.sidebarHiddenByDefault = true;
         this.updateConfigurationUI();
         this.saveToLocalStorage();
-        this.showNotification(
-            this.config.sidebarHiddenByDefault ? '✅ Sidebar will be hidden by default' : '✅ Sidebar will be visible by default', 
-            'info'
-        );
+        this.showNotification('✅ Sidebar is permanently hidden as per requirements', 'info');
     }
 
     toggleSidebarPersistState() {
-        this.config.persistSidebarState = !this.config.persistSidebarState;
+        // No need to persist sidebar state as it's always hidden
+        this.config.persistSidebarState = false;
         this.updateConfigurationUI();
         this.saveToLocalStorage();
-        this.showNotification(
-            this.config.persistSidebarState ? '✅ Sidebar state will be persisted' : '❌ Sidebar state will not be persisted', 
-            'info'
-        );
+        this.showNotification('❌ Sidebar configuration is permanently disabled', 'info');
     }
 
     updateConfigurationUI() {

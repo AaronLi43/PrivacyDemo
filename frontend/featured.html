@@ -846,11 +846,11 @@
         window.app.state.mode = 'featured';
         window.app.updateUI();
         
-        // Enable and show config sidebar for debugging
-        window.app.config.enableSidebarToggle = true;
-        window.app.config.sidebarHiddenByDefault = false;
+        // Sidebar has been disabled per requirements
+        window.app.config.enableSidebarToggle = false;
+        window.app.config.sidebarHiddenByDefault = true;
         window.app.config.persistSidebarState = false;
-        window.app.state.sidebarHidden = false;
+        window.app.state.sidebarHidden = true;
         window.app.updateSidebarToggle();
         window.app.updateConfigurationUI();
         
