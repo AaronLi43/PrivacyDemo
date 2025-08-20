@@ -1808,8 +1808,19 @@ class PrivacyDemoApp {
                     z-index: 2;
                 }
                 .realtime-overlay-content{ padding:inherit; }
-                /* 红线高光（沿用分析面板的类名，确保一致） */
-                .sensitive-text-highlight{ border-bottom:2px solid #dc3545; }
+                /* Red underline highlighting for sensitive text */
+                .realtime-overlay .sensitive-text-highlight{ 
+                    text-decoration: underline;
+                    text-decoration-color: #dc3545;
+                    text-decoration-thickness: 2px;
+                    text-decoration-style: wavy;
+                    background-color: rgba(220, 53, 69, 0.15);
+                    border-radius: 2px;
+                    padding: 1px 2px;
+                    position: relative;
+                    border-bottom: 2px solid #dc3545;
+                    animation: sensitiveTextPulse 2s ease-in-out infinite;
+                }
             `;
             document.head.appendChild(style);
             this._realtimeStyleInjected = true;
