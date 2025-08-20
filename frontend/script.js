@@ -3037,7 +3037,9 @@ class PrivacyDemoApp {
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
-                        survey_completed: this.state.surveyCompleted
+                        survey_completed: this.state.surveyCompleted,
+                        edited_messages_count: this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length,
+                        privacy_features_used: this.getUsedPrivacyFeatures()
                     },
                     conversation: conversationToExport,
                     survey_data: {
@@ -3049,6 +3051,12 @@ class PrivacyDemoApp {
                 // Include original conversation if consent was given
                 if (this.state.consentGiven && this.state.originalLog.length > 0) {
                     exportData.original_conversation = this.state.originalLog;
+                }
+                
+                // Include privacy analysis and suggestions if available
+                if (this.state.analyzedLog && this.state.analyzedLog.length > 0) {
+                    exportData.privacy_analysis = this.state.analyzedLog;
+                    exportData.privacy_suggestions = this.getPrivacySuggestions();
                 }
             }
 
@@ -3100,7 +3108,9 @@ class PrivacyDemoApp {
                         total_messages: conversationToExport.length,
                         consent_given: this.state.consentGiven,
                         consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
-                        survey_completed: this.state.surveyCompleted
+                        survey_completed: this.state.surveyCompleted,
+                        edited_messages_count: this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length,
+                        privacy_features_used: this.getUsedPrivacyFeatures()
                     },
                     conversation: conversationToExport,
                     survey_data: {
@@ -3112,6 +3122,12 @@ class PrivacyDemoApp {
                 // Include original conversation if consent was given
                 if (this.state.consentGiven && this.state.originalLog.length > 0) {
                     exportData.original_conversation = this.state.originalLog;
+                }
+                
+                // Include privacy analysis and suggestions if available
+                if (this.state.analyzedLog && this.state.analyzedLog.length > 0) {
+                    exportData.privacy_analysis = this.state.analyzedLog;
+                    exportData.privacy_suggestions = this.getPrivacySuggestions();
                 }
             }
             const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
@@ -4998,6 +5014,66 @@ class PrivacyDemoApp {
         const container = document.getElementById('conversation-container');
         container.scrollTop = container.scrollHeight;
     }
+    
+    // Analyze an existing conversation log for privacy info and edits
+    analyzeExistingLog(conversationLog, originalLog) {
+        const analysis = {
+            edited_messages_count: 0,
+            edited_messages: [],
+            privacy_suggestions: [],
+            privacy_features_used: {
+                placeholder: 0,
+                blurred_data: 0,
+                ignore: 0
+            }
+        };
+        
+        if (!conversationLog || !conversationLog.length) {
+            return analysis;
+        }
+        
+        // Count edited messages
+        conversationLog.forEach((turn, index) => {
+            if (turn.user_edited || turn.bot_edited) {
+                analysis.edited_messages_count++;
+                analysis.edited_messages.push({
+                    index,
+                    user_edited: turn.user_edited || false,
+                    bot_edited: turn.bot_edited || false
+                });
+            }
+        });
+        
+        // Compare original and edited messages to identify privacy changes
+        if (originalLog && originalLog.length > 0) {
+            for (let i = 0; i < Math.min(conversationLog.length, originalLog.length); i++) {
+                const currentTurn = conversationLog[i];
+                const originalTurn = originalLog[i];
+                
+                // Check user messages
+                if (currentTurn.user !== originalTurn.user) {
+                    analysis.privacy_suggestions.push({
+                        message_index: i,
+                        message_type: 'user',
+                        original_text: originalTurn.user,
+                        edited_text: currentTurn.user
+                    });
+                }
+                
+                // Check bot messages
+                if (currentTurn.bot !== originalTurn.bot) {
+                    analysis.privacy_suggestions.push({
+                        message_index: i,
+                        message_type: 'bot',
+                        original_text: originalTurn.bot,
+                        edited_text: currentTurn.bot
+                    });
+                }
+            }
+        }
+        
+        return analysis;
+    }
 
     // Show loading overlay
     showLoading(show, message = 'Processing...') {
@@ -6188,6 +6264,68 @@ class PrivacyDemoApp {
             console.log('❌ Some sensitive text highlighting tests FAILED');
         }
     }
+    
+    // Analyze existing JSON export to extract privacy information
+    analyzeExistingExport(jsonData) {
+        if (!jsonData) return null;
+        
+        try {
+            const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            
+            // Initialize result object
+            const result = {
+                metadata: {
+                    ...data.metadata,
+                    edited_messages_count: 0,
+                    privacy_features_used: {
+                        placeholder: 0,
+                        blurred_data: 0,
+                        ignore: 0
+                    }
+                },
+                privacy_analysis: [],
+                privacy_suggestions: []
+            };
+            
+            // Extract edited messages count from conversation
+            if (data.conversation && Array.isArray(data.conversation)) {
+                const editedMessages = data.conversation.filter(turn => turn.user_edited || turn.bot_edited);
+                result.metadata.edited_messages_count = editedMessages.length;
+                
+                // Get detailed edit and privacy information
+                const privacyAnalysis = this.analyzeExistingLog(data.conversation, data.original_conversation);
+                
+                // Add details to the result
+                result.privacy_suggestions = privacyAnalysis.privacy_suggestions;
+                
+                // Only if we have originals and current versions, try to analyze privacy issues
+                if (data.original_conversation && data.conversation) {
+                    for (const suggestion of result.privacy_suggestions) {
+                        // Try to determine what privacy feature was used (simplified detection)
+                        const original = suggestion.original_text;
+                        const edited = suggestion.edited_text;
+                        
+                        if (original && edited) {
+                            // Check if text was completely replaced with placeholder-like format
+                            if (edited.includes('[') && edited.includes(']')) {
+                                result.metadata.privacy_features_used.placeholder++;
+                            } 
+                            // Check if text was partially obfuscated/redacted
+                            else if (edited.length < original.length) {
+                                result.metadata.privacy_features_used.blurred_data++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return result;
+            
+        } catch (error) {
+            console.error('Error analyzing export:', error);
+            return null;
+        }
+    }
 }
 
 // Global functions for popup interactions
@@ -6282,6 +6420,7 @@ if (injectSpeedInsights) {
 
 // Expose test functions globally for debugging
 window.testSurveyQuestions = () => app.testSurveyQuestions();
+window.analyzeExport = (jsonData) => app.analyzeExistingExport(jsonData);
 window.app = app; // Expose app instance for debugging
 
 // Add CSS for notifications
