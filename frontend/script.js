@@ -5659,6 +5659,89 @@ class PrivacyDemoApp {
         }
     }
 
+
+    // Ensure highlight CSS exists (used by both realtime overlay & message editor)
+    ensureHighlightStyles() {
+        if (document.getElementById('realtime-privacy-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'realtime-privacy-styles';
+        style.textContent = `
+            .sensitive-text-highlight{ border-bottom:2px solid #dc3545; }
+            .message-edit-input-highlighted{ white-space:pre-wrap; word-wrap:break-word; }
+        `;
+            document.head.appendChild(style);
+    }
+    
+    // Derive a "type" from placeholder like [Time1] / [EDUCATIONAL_RECORD2] -> 'time' / 'educational_record'
+    _deriveTypeFromPlaceholder(ph) {
+        const m = /^\[([A-Za-z_]+)\d+\]$/.exec(ph || '');
+        return m ? m[1].toLowerCase() : '';
+    }
+    
+    // Compute spans mapping from original text using the replacing (placeholder) version
+    _computeSpansFromReplacing(original, replacing) {
+        const PLACEH = /\[(?:[A-Za-z_]+)\d+\]/g; // support [Time1] / [EDUCATIONAL_RECORD1] / [Affiliation2] etc.
+        const parts = [];
+        let last = 0, m;
+        while ((m = PLACEH.exec(replacing)) !== null) {
+            if (m.index > last) parts.push({ kind:'text', value: replacing.slice(last, m.index) });
+            parts.push({ kind:'ph', value: m[0] });
+            last = m.index + m[0].length;
+        }
+        if (last < replacing.length) parts.push({ kind:'text', value: replacing.slice(last) });
+    
+        // Sequential alignment: use text fragments as anchors to locate positions, and assign the interval of the original text between anchors to the preceding placeholder.
+        // (In most real scenarios, there may be conjunctions/punctuation between placeholders; this is just a fallback.)
+        const spans = [];
+        let cursor = 0;
+        let pendingPH = [];
+        const findNext = (needle, from) => {
+            if (!needle) return from;
+            const idx = original.indexOf(needle, from);
+            return idx < 0 ? from : idx;
+        };
+        for (const p of parts) {
+            if (p.kind === 'ph') {
+                pendingPH.push(p.value);
+                continue;
+            }
+            // text anchor
+            const anchor = findNext(p.value, cursor);
+            const gapStart = cursor;
+            const gapEnd   = anchor;
+            if (pendingPH.length && gapEnd >= gapStart) {
+                // If multiple placeholders appear in a row, divide the interval evenly (usually there will be conjunctions/punctuation between placeholders in real scenarios; this is just a fallback.)
+                const total = gapEnd - gapStart;
+                const slice = Math.floor(total / pendingPH.length) || 0;
+                let s = gapStart;
+                for (let i = 0; i < pendingPH.length; i++) {
+                    const e = (i === pendingPH.length - 1) ? gapEnd : (s + slice);
+                    if (e > s) {
+                        spans.push({ start: s, end: e, placeholder: pendingPH[i], type: this._deriveTypeFromPlaceholder(pendingPH[i]) });
+                    }
+                    s = e;
+                }
+            }
+            pendingPH = [];
+            // Move the cursor to the anchor point after
+            cursor = anchor + p.value.length;
+        }
+        // There may still be unassigned placeholders at the end, assign the original text to them
+        if (pendingPH.length && cursor < original.length) {
+            const total = original.length - cursor;
+            const slice = Math.floor(total / pendingPH.length) || 0;
+            let s = cursor;
+            for (let i = 0; i < pendingPH.length; i++) {
+                const e = (i === pendingPH.length - 1) ? original.length : (s + slice);
+                if (e > s) {
+                spans.push({ start: s, end: e, placeholder: pendingPH[i], type: this._deriveTypeFromPlaceholder(pendingPH[i]) });
+            }
+            s = e;
+            }
+        }
+        return spans;
+    }
+    
     // Highlight sensitive text with red underlines using backend sensitive_text field and placeholder patterns
     highlightSensitiveText(text, privacyResult) {
 
@@ -5692,11 +5775,38 @@ class PrivacyDemoApp {
             return text;
         }
 
+        this.ensureHighlightStyles();
         let highlightedText = text;
         
         // Debug logging to help identify highlighting issues
         console.log('Highlighting text:', text);
         console.log('Privacy result:', privacyResult);
+
+        // 0) Best path: if there is safer_versions.replacing (with placeholders), compute spans from it directly, then wrap the original text
+        try {
+            const replacing = privacyResult?.safer_versions?.replacing;
+            if (typeof replacing === 'string' && replacing.length) {
+                const spans = this._computeSpansFromReplacing(text, replacing);
+                if (spans.length) {
+                    let html = '';
+                    let i = 0;
+                    const esc = (s) => {
+                    const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
+                };
+                for (const sp of spans.sort((a,b)=>a.start-b.start)) {
+                    if (sp.start > i) html += esc(text.slice(i, sp.start));
+                    const frag = text.slice(sp.start, sp.end);
+                    html += `<span class="sensitive-text-highlight" data-type="${esc(sp.type)}" data-placeholder="${esc(sp.placeholder)}">${esc(frag)}</span>`;
+                    i = sp.end;
+                }
+                if (i < text.length) html += esc(text.slice(i));
+                return html;
+        }
+            }
+            } catch (e) {
+                console.warn('Span computation failed, fallback to old logic:', e);
+            }
+
 
         // 1. Highlight original sensitive text if available
         let sensitiveText = privacyResult.sensitive_text;
@@ -5814,6 +5924,8 @@ class PrivacyDemoApp {
         if (!this.state.showPrivacyAnalysis || !this.state.analyzedLog.length) {
             return;
         }
+        // Ensure styles are available
+        this.ensureHighlightStyles();
 
         // Process each message in the conversation
         for (let i = 0; i < this.state.analyzedLog.length; i++) {
