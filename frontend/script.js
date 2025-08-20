@@ -5750,6 +5750,33 @@ class PrivacyDemoApp {
             div.textContent = s ?? '';
             return div.innerHTML;
         };
+        
+        // Check if the text being highlighted is a placeholder or fake data version
+        const isPlaceholderOrFake = () => {
+            // If the text being processed matches either the placeholder or fake data version, don't highlight
+            if (privacyResult?.safer_versions) {
+                const replacing = privacyResult.safer_versions.replacing;
+                const abstraction = privacyResult.safer_versions.abstraction;
+                
+                const isReplacing = replacing && text === replacing;
+                const isAbstraction = abstraction && text === abstraction;
+                
+                if (isReplacing || isAbstraction) {
+                    console.log('Skipping highlighting for placeholder/fake data:', { 
+                        text, 
+                        isReplacing, 
+                        isAbstraction 
+                    });
+                    return true;
+                }
+            }
+            return false;
+        };
+        
+        // Skip highlighting if this is placeholder or fake data
+        if (isPlaceholderOrFake()) {
+            return escapeHtml(text);
+        }
 
         // 1) highlight based on detected_spans (most reliable)
         const spans = Array.isArray(privacyResult?.detected_spans) ? [...privacyResult.detected_spans] : [];
@@ -5784,28 +5811,31 @@ class PrivacyDemoApp {
 
         // 0) Best path: if there is safer_versions.replacing (with placeholders), compute spans from it directly, then wrap the original text
         try {
-            const replacing = privacyResult?.safer_versions?.replacing;
-            if (typeof replacing === 'string' && replacing.length) {
-                const spans = this._computeSpansFromReplacing(text, replacing);
-                if (spans.length) {
-                    let html = '';
-                    let i = 0;
-                    const esc = (s) => {
-                    const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
-                };
-                for (const sp of spans.sort((a,b)=>a.start-b.start)) {
-                    if (sp.start > i) html += esc(text.slice(i, sp.start));
-                    const frag = text.slice(sp.start, sp.end);
-                    html += `<span class="sensitive-text-highlight" data-type="${esc(sp.type)}" data-placeholder="${esc(sp.placeholder)}">${esc(frag)}</span>`;
-                    i = sp.end;
+            // Skip this section if the text being analyzed is a placeholder or fake data version
+            if (!isPlaceholderOrFake()) {
+                const replacing = privacyResult?.safer_versions?.replacing;
+                if (typeof replacing === 'string' && replacing.length) {
+                    const spans = this._computeSpansFromReplacing(text, replacing);
+                    if (spans.length) {
+                        let html = '';
+                        let i = 0;
+                        const esc = (s) => {
+                            const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
+                        };
+                        for (const sp of spans.sort((a,b)=>a.start-b.start)) {
+                            if (sp.start > i) html += esc(text.slice(i, sp.start));
+                            const frag = text.slice(sp.start, sp.end);
+                            html += `<span class="sensitive-text-highlight" data-type="${esc(sp.type)}" data-placeholder="${esc(sp.placeholder)}">${esc(frag)}</span>`;
+                            i = sp.end;
+                        }
+                        if (i < text.length) html += esc(text.slice(i));
+                        return html;
+                    }
                 }
-                if (i < text.length) html += esc(text.slice(i));
-                return html;
+            }
+        } catch (e) {
+            console.warn('Span computation failed, fallback to old logic:', e);
         }
-            }
-            } catch (e) {
-                console.warn('Span computation failed, fallback to old logic:', e);
-            }
 
 
         // 1. Highlight original sensitive text if available
@@ -5865,55 +5895,9 @@ class PrivacyDemoApp {
             });
         }
 
-        // 2. Highlight placeholder patterns (new placeholders like [AFFILIATION1], [EDUCATIONAL_RECORD1], etc.)
-        const placeholderPatterns = [
-            /\[AFFILIATION\d+\]/g,
-            /\[EDUCATIONAL_RECORD\d+\]/g,
-            /\[NAME\d+\]/g,
-            /\[EMAIL\d+\]/g,
-            /\[PHONE_NUMBER\d+\]/g,
-            /\[ADDRESS\d+\]/g,
-            /\[SSN\d+\]/g,
-            /\[FINANCIAL_INFORMATION\d+\]/g,
-            /\[TIME\d+\]/g,
-            /\[GEOLOCATION\d+\]/g,
-            /\[DEMOGRAPHIC_ATTRIBUTE\d+\]/g,
-            /\[HEALTH_INFORMATION\d+\]/g,
-            /\[IP_ADDRESS\d+\]/g,
-            /\[URL\d+\]/g,
-            /\[DRIVERS_LICENSE\d+\]/g,
-            /\[PASSPORT_NUMBER\d+\]/g,
-            /\[TAXPAYER_IDENTIFICATION_NUMBER\d+\]/g,
-            /\[ID_NUMBER\d+\]/g,
-            /\[USERNAME\d+\]/g,
-            /\[KEYS\d+\]/g,
-            // New format patterns as requested
-            /\[Key\d+\]/g,
-            /\[Geolocation\d+\]/g,
-            /\[Affiliation\d+\]/g,
-            /\[Demographic_Attribute\d+\]/g,
-            /\[Time\d+\]/g,
-            /\[Health_Information\d+\]/g,
-            /\[Financial_Information\d+\]/g,
-            /\[Education_Record\d+\]/g,
-            // Legacy patterns for backward compatibility
-            /\[Address\d+\]/g,
-            /\[Name\d+\]/g,
-            /\[Phone\d+\]/g,
-            /\[Email\d+\]/g,
-            /\[CreditCard\d+\]/g,
-            /\[Date\d+\]/g
-        ];
-
-        // Apply highlighting to all placeholder patterns
-        placeholderPatterns.forEach(pattern => {
-            const beforeHighlight = highlightedText;
-            highlightedText = highlightedText.replace(pattern, '<span class="sensitive-text-highlight">$&</span>');
-            
-            if (beforeHighlight !== highlightedText) {
-                console.log(`Successfully highlighted placeholder pattern: ${pattern.source}`);
-            }
-        });
+        // We no longer highlight placeholder patterns directly in this function
+        // Placeholders are only highlighted if they are part of the original text that contained PII
+        // and was subsequently replaced, not if they ARE the replacement.
 
         console.log('Final highlighted text:', highlightedText);
         return highlightedText;
