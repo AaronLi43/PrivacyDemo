@@ -355,8 +355,16 @@
         <!-- Two Column Layout for Privacy Analysis & Export Stage -->
         <div id="two-column-layout" class="two-column-layout" style="display:none;">
           <div class="left-column">
-            <div class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
-              <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-edit"></i> <strong>Privacy Analysis Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
+            <div class="edit-instructions" style="margin-bottom: 1.25rem; padding: 1.25rem; background-color: #fff3cd; border-radius: 8px; border-left: 6px solid #dc3545; box-shadow: 0 2px 8px rgba(220,53,69,0.08);">
+              <p style="margin: 0; font-size: 1.1rem; color: #212529; font-weight: bold;">
+                <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 0.5em;"></i>
+                <span style="color: #dc3545;">Attention:</span> <span style="color: #212529;">You are in <strong>Privacy Analysis Mode</strong>.</span>
+              </p>
+              <ul style="margin: 0.75em 0 0 1.5em; color: #212529; font-size: 1rem;">
+                <li><strong>Review your conversation below.</strong></li>
+                <li><strong>Click any message</strong> to edit or remove sensitive information <span style="color: #dc3545;">before sharing</span>.</li>
+                <li>Red underlined text highlights <span style="color: #dc3545; font-weight: bold;">privacy issues</span>—click for suggestions.</li>
+              </ul>
             </div>
             <div id="analysis-conversation-container" class="conversation-container">
               <div class="empty-state">
@@ -372,20 +380,17 @@
               </div>
               <div class="privacy-analysis-content">
                 <div class="analysis-header">
-                  <p>Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.</p>
-                  <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
-                    <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
-                  </label>
-                </div>
-                <div class="analysis-stats">
-                  <div class="stat-card">
-                    <span class="stat-number" id="total-messages">0</span>
-                    <span class="stat-label">Total Messages</span>
-                  </div>
-                  <div class="stat-card">
-                    <span class="stat-number" id="privacy-issues">0</span>
-                    <span class="stat-label">Privacy Issues</span>
-                  </div>
+                  <p>
+                    Privacy analysis has been completed on all messages. Click on red underlined text to see suggestions.
+                    <br>
+                    <label style="display:block;margin:0.5em 0 1em 0;font-weight:normal;">
+                      <input type="checkbox" id="privacy-filter-toggle" /> Show only messages with privacy issues
+                    </label>
+                    <span style="display:block; margin-top: 0.5em; font-size: 1.05em;">
+                      <strong style="color:#007bff;" id="total-messages">0</strong> total messages,
+                      <strong style="color:#dc3545;" id="privacy-issues">0</strong> privacy issues detected.
+                    </span>
+                  </p>
                 </div>
                 <div id="privacy-choices" class="privacy-choices">
                   <!-- Privacy choice buttons will be generated here -->

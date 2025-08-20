@@ -403,8 +403,15 @@
           <div class="chat-header">
             <h2 id="chat-header-title"><i class="fas fa-comments"></i> Chat Interface</h2>
           </div>
-          <div id="edit-instructions-chat" class="edit-instructions" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #007bff; display: none;">
-            <p style="margin: 0; font-size: 0.9rem; color: #495057;"><i class="fas fa-info-circle"></i> <strong>Edit Mode:</strong> You can edit any message in your conversation if you do not want that content shared. Click on any message to edit it.</p>
+          <div id="edit-instructions-chat" class="edit-instructions" style="margin-bottom: 1.25rem; padding: 1.25rem; background-color: #fff3cd; border-radius: 8px; border-left: 6px solid #dc3545; box-shadow: 0 2px 8px rgba(220,53,69,0.08); display: none;">
+            <p style="margin: 0; font-size: 1.1rem; color: #212529; font-weight: bold;">
+              <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 0.5em;"></i>
+              <span style="color: #dc3545;">Attention:</span> <span style="color: #212529;">You are in <strong>Edit Mode</strong>.</span>
+            </p>
+            <ul style="margin: 0.75em 0 0 1.5em; color: #212529; font-size: 1rem;">
+              <li><strong>Review your conversation below.</strong></li>
+              <li><strong>Click any message</strong> to edit or remove sensitive information <span style="color: #dc3545;">before sharing</span>.</li>
+            </ul>
           </div>
           <div id="conversation-container" class="conversation-container">
             <div class="empty-state">

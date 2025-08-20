@@ -4598,7 +4598,7 @@ class PrivacyDemoApp {
                                 </button>
                                 <button class="btn btn-primary" onclick="app.makePrivacyChoice(${i}, 'user', 'accept_fake')" 
                                         ${!fakeDataVersion ? 'disabled' : ''}>
-                                    🎭 Accept Fake Data
+                                    🎭 Accept Blurred Data
                                 </button>
                             ` : `
                                 <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'user', 'keep')">
@@ -4687,7 +4687,7 @@ class PrivacyDemoApp {
                                 </button>
                                 <button class="btn btn-primary" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept_fake')" 
                                         ${!fakeDataVersion ? 'disabled' : ''}>
-                                    🎭 Accept Fake Data
+                                    🎭 Accept Blurred Data
                                 </button>
                             ` : `
                                 <button class="btn btn-warning" onclick="app.makePrivacyChoice(${i}, 'bot', 'keep')">
@@ -4912,7 +4912,7 @@ class PrivacyDemoApp {
             case 'accept':
                 return '✅ Choice: Accept Placeholder - Will use placeholder text in export';
             case 'accept_fake':
-                return '🎭 Choice: Accept Fake Data - Will use fake data text in export';
+                return '🎭 Choice: Accept Blurred Data - Will use fake data text in export';
             case 'keep':
                 return '⚠️ Choice: Keep Original - Will use original text in export';
             default:
