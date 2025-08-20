@@ -2323,6 +2323,26 @@ Current user message: "${userMessage}"${contextInfo}`;
                 sensitive_text: null
             };
         }
+
+        // Build spans (no original text returned)
+        const spans = [];
+        try {
+          const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          for (const pii of updatedDetectedPii) {
+            if (!pii.original_text) continue;
+            const re = new RegExp(escape(pii.original_text), 'gi');
+            let m;
+            while ((m = re.exec(userMessage)) !== null) {
+              spans.push({
+                start: m.index,
+                end: m.index + m[0].length,
+                type: pii.type,
+                placeholder: pii.newPlaceholder || pii.placeholder || null
+              });
+            }
+          }
+        } catch(e) { /* swallow */ }
+
         
 
         // Step 2: Abstraction LLM - Create abstracted text with placeholders
@@ -2503,6 +2523,7 @@ Use this exact format:
                         explanation: `Protected information abstracted: ${protectedTexts}`,
                         affected_text: protectedTexts,      // Only return placeholders, avoid frontend re-using original text for replacement
                         sensitive_text: protectedTexts,
+                        highlights: spans,
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: abstractedText
@@ -2534,6 +2555,7 @@ Use this exact format:
                         explanation: abstractionData.explanation || detectionData.detected_pii[0].explanation,
                         affected_text: abstractionData.affected_text || detectionData.affected_text,
                         sensitive_text: abstractionData.sensitive_text || detectionData.affected_text,
+                        highlights: spans,
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: abstractionData.suggestion ? 
@@ -2550,6 +2572,7 @@ Use this exact format:
                         explanation: abstractionData.explanation || 'No sensitive information found',
                         affected_text: abstractionData.affected_text || '',
                         sensitive_text: abstractionData.sensitive_text || '',
+                        detected_spans: spans,
                         safer_versions: {
                             replacing: detectionData.text_with_placeholders,
                             abstraction: detectionData.text_with_placeholders

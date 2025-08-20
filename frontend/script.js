@@ -5650,6 +5650,33 @@ class PrivacyDemoApp {
 
     // Highlight sensitive text with red underlines using backend sensitive_text field and placeholder patterns
     highlightSensitiveText(text, privacyResult) {
+
+        const escapeHtml = (s) => {
+            const div = document.createElement('div');
+            div.textContent = s ?? '';
+            return div.innerHTML;
+        };
+
+        // 1) highlight based on detected_spans (most reliable)
+        const spans = Array.isArray(privacyResult?.detected_spans) ? [...privacyResult.detected_spans] : [];
+        if (spans.length > 0) {
+        // deduplicate, sort, and truncate to text boundaries
+        spans.sort((a,b) => a.start - b.start);
+        let html = '';
+        let cursor = 0;
+        for (const s of spans) {
+        const start = Math.max(0, Math.min(text.length, s.start|0));
+        const end   = Math.max(start, Math.min(text.length, s.end|0));
+        if (start > cursor) html += escapeHtml(text.slice(cursor, start));
+        const frag = text.slice(start, end);
+        html += `<span class="sensitive-text-highlight" data-type="${escapeHtml(s.type||'')}" data-placeholder="${escapeHtml(s.placeholder||'')}">${escapeHtml(frag)}</span>`;
+        cursor = end;
+        }
+
+        if (cursor < text.length) html += escapeHtml(text.slice(cursor));
+        return html;
+        } 
+
         if (!privacyResult || !privacyResult.privacy_issue) {
             return text;
         }
