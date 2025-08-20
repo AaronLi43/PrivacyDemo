@@ -1785,17 +1785,86 @@ class PrivacyDemoApp {
         }
     }
 
-    // Display real-time privacy issues in the input field
+// Display real-time privacy issues in the input field (with red underline overlay)
     displayRealTimePrivacyIssues(text, privacyResult) {
         const chatInput = document.getElementById('chat-input');
-        
-        if (!privacyResult.privacy_issue) {
+        if (!chatInput) return;
+
+        // no issue, clear and exit
+        if (!privacyResult || !privacyResult.privacy_issue) {
             this.clearRealTimeDetection();
             return;
         }
 
-        // No highlight: just show warning
-        this.showRealTimeWarning(privacyResult);
+        // 1) inject styles only once
+        if (!this._realtimeStyleInjected) {
+            const style = document.createElement('style');
+            style.id = 'realtime-privacy-styles';
+            style.textContent = `
+                .realtime-overlay-wrapper{ position:relative; width:100%; }
+                .realtime-overlay{
+                    position:absolute; inset:0; pointer-events:none;
+                    white-space:pre-wrap; word-wrap:break-word; overflow:auto;
+                    z-index: 2;
+                }
+                .realtime-overlay-content{ padding:inherit; }
+                /* 红线高光（沿用分析面板的类名，确保一致） */
+                .sensitive-text-highlight{ border-bottom:2px solid #dc3545; }
+            `;
+            document.head.appendChild(style);
+            this._realtimeStyleInjected = true;
+        }
+
+        // 2) ensure wrapper and overlay exist (reuse this.state.realTimeOverlay for cleanup)
+        let wrapper = chatInput.closest('.realtime-overlay-wrapper');
+        if (!wrapper) {
+               wrapper = document.createElement('div');
+                wrapper.className = 'realtime-overlay-wrapper';
+            chatInput.parentNode.insertBefore(wrapper, chatInput);
+            wrapper.appendChild(chatInput);
+        }
+
+        let overlay = this.state.realTimeOverlay;
+        if (!overlay || !overlay.isConnected) {
+            overlay = document.createElement('div');
+            overlay.className = 'realtime-overlay';
+            const content = document.createElement('div');
+            content.className = 'realtime-overlay-content';
+            overlay.appendChild(content);
+            wrapper.appendChild(overlay);
+            this.state.realTimeOverlay = overlay;
+
+            // 同步滚动
+            chatInput.addEventListener('scroll', () => {
+                overlay.scrollTop = chatInput.scrollTop;
+                overlay.scrollLeft = chatInput.scrollLeft;
+            });
+        }
+
+        // 3) sync font/line-height/padding, ensure line breaks align
+        const cs = getComputedStyle(chatInput);
+        overlay.style.padding       = cs.padding;
+        overlay.style.font          = cs.font;
+        overlay.style.lineHeight    = cs.lineHeight;
+        overlay.style.letterSpacing = cs.letterSpacing;
+        overlay.style.borderRadius  = cs.borderRadius;
+
+        // 4) generate HTML with red underline (reuse existing highlightSensitiveText)
+        //    this function will label sensitive_text / suggestion / placeholders
+        const content = overlay.querySelector('.realtime-overlay-content');
+        const html = this.highlightSensitiveText(text, privacyResult);
+        content.innerHTML = html;
+
+        // 5) make the real text invisible, only show overlay (keep cursor visible)
+        if (!chatInput.dataset.origColor) {
+            chatInput.dataset.origColor = cs.color || '';
+        }
+        chatInput.style.color = 'transparent';
+        chatInput.style.caretColor = chatInput.dataset.origColor || cs.color || '';
+
+        // 6) sync scrolling
+        overlay.scrollTop = chatInput.scrollTop;
+        overlay.scrollLeft = chatInput.scrollLeft;
     }
 
     // Show real-time warning indicator
@@ -1831,9 +1900,18 @@ class PrivacyDemoApp {
         // Remove overlay
         if (this.state.realTimeOverlay && typeof this.state.realTimeOverlay.remove === 'function') {
             this.state.realTimeOverlay.remove();
-            this.state.realTimeOverlay = null;
-        } else {
-            this.state.realTimeOverlay = null;
+        }
+        this.state.realTimeOverlay = null;
+
+        // Restore chat input color/caret
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            if (chatInput.dataset.origColor) {
+                chatInput.style.color = chatInput.dataset.origColor;
+            } else {
+                chatInput.style.removeProperty('color');
+            }
+            chatInput.style.removeProperty('caret-color');
         }
 
         // Remove warning
