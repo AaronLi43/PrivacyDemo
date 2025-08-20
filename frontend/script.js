@@ -3645,7 +3645,7 @@ class PrivacyDemoApp {
         const conversationToExport = this.state.conversationLog;
         
         // Count edited messages
-        const editedMessages = this.state.conversationLog.filter(turn => turn.edited).length;
+        const editedMessages = this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length;
         
         const exportData = {
             metadata: {
@@ -3700,7 +3700,8 @@ class PrivacyDemoApp {
                     // NEW: keep a mirrored tag inside details
                     original_data_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored')
                 },
-                survey_completed: this.state.surveyCompleted
+                survey_completed: this.state.surveyCompleted,
+                edited_messages_count: this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length
             },
             conversation: conversationToExport,
             survey_data: {
@@ -3798,7 +3799,9 @@ class PrivacyDemoApp {
                     survey_data_included: this.state.surveyCompleted,
                     privacy_choices_included: Object.keys(this.state.privacyChoices).length > 0
                 },
-                survey_completed: this.state.surveyCompleted
+                survey_completed: this.state.surveyCompleted,
+                edited_messages_count: this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length,
+                privacy_features_used: this.getUsedPrivacyFeatures()
             },
             conversation: conversationToExport,
             survey_data: {
@@ -4918,6 +4921,28 @@ class PrivacyDemoApp {
             default:
                 return '';
         }
+    }
+    
+    // Get used privacy features (placeholder, blurred data, or ignore)
+    getUsedPrivacyFeatures() {
+        const features = {
+            placeholder: 0,
+            blurred_data: 0,
+            ignore: 0
+        };
+        
+        // Count privacy choices by type
+        Object.values(this.state.privacyChoices).forEach(choiceObj => {
+            if (choiceObj.user === 'accept') features.placeholder++;
+            if (choiceObj.user === 'accept_fake') features.blurred_data++;
+            if (choiceObj.user === 'keep') features.ignore++;
+            
+            if (choiceObj.bot === 'accept') features.placeholder++;
+            if (choiceObj.bot === 'accept_fake') features.blurred_data++;
+            if (choiceObj.bot === 'keep') features.ignore++;
+        });
+        
+        return features;
     }
 
     // Scroll to bottom of conversation
