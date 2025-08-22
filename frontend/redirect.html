@@ -72,14 +72,16 @@
             const pid = sp.get('PROLIFIC_PID');
             const study = sp.get('STUDY_ID');
             const session = sp.get('SESSION_ID');
-            return { pid, study, session };
+            // Optional: target total sample size for this study; default is 150
+            const target = parseInt(sp.get('TARGET') || '150', 10);
+            return { pid, study, session, target };
         }
     
         // Allow test mode if not coming from Prolific
         function ensureProlificOrTest() {
             const sp = new URLSearchParams(window.location.search);
             const forceTest = sp.get('test') === '1' || sp.get('preview') === 'true';
-            let { pid, study, session } = getProlificParams();
+            let { pid, study, session, target } = getProlificParams();
 
             if (!pid || !study || !session) {
                 if (!forceTest) {
@@ -100,7 +102,8 @@
             localStorage.setItem('prolific_pid', pid);
             localStorage.setItem('prolific_study', study);
             localStorage.setItem('prolific_session', session);
-            return { pid, study, session, test_mode: localStorage.getItem('prolific_test_mode') === 'true' };
+            localStorage.setItem('prolific_target', target);
+            return { pid, study, session, target, test_mode: localStorage.getItem('prolific_test_mode') === 'true' };
         }
 
         function addTestBanner() {
@@ -200,10 +203,12 @@
             }
         ];
 
-        // Function to get random mode
-        function getRandomMode() {
+        // Function to get random mode from a given list
+        function getRandomMode(candidates = modes) {
             const randomIndex = Math.floor(Math.random() * modes.length);
-            return modes[randomIndex];
+            const pool = candidates.length ? candidates : modes;
+            const idx = Math.floor(Math.random() * pool.length);
+            return pool[idx];
         }
 
         // Function to redirect to selected mode
@@ -226,6 +231,48 @@
             }, 2000);
         }
 
+        // --- NEW: try backend allocation first ---
+        async function allocateModeViaBackend({ pid, study, session, target, test_mode }) {
+            try {
+                const resp = await fetch('https://privacydemo.onrender.com/api/study/allocate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        study,
+                        pid,
+                        session,
+                        desired_total: Number.isFinite(target) ? target : 150,
+                        // If you want test_mode to not count towards the real quota, you can handle it in the backend
+                        test_mode: !!test_mode,
+                        strategy: "balanced",
+                        pilot_min: 2
+                    })
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                // Expect backend to return { mode: 'naive' | 'neutral' | 'featured' }
+                const modeName = data?.mode;
+                const found = modes.find(m => m.name === modeName);
+                if (found) return found;
+                    throw new Error('Invalid mode from server');
+            } catch (e) {
+                console.warn('⚠️ Backend allocation failed, will fallback locally:', e);
+                return null;
+            }
+        }
+
+        // --- NEW: optional - fetch status to locally filter "not-full" modes as a fallback ---
+        async function fetchStudyStatus(study, target) {
+            try {
+                const resp = await fetch(`https://privacydemo.onrender.com/api/study/status?study=${encodeURIComponent(study)}&desired_total=${encodeURIComponent(target)}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return await resp.json(); // 期望 { counts: {naive: n, neutral: n, featured: n}, cap_per_mode: k }
+            } catch (e) {
+                console.warn('⚠️ Fetch status failed:', e);
+                return null;
+            }
+        }
+
         // Main execution
         document.addEventListener('DOMContentLoaded', async function() {
             // Reset all data first
@@ -238,10 +285,40 @@
             const prolific = ensureProlificOrTest();
             logProlificStart(prolific);
             
-            // Select mode and redirect (preserving original params as before)
-            const selectedMode = getRandomMode();
+            // Try backend allocation first
+            let selectedMode = await allocateModeViaBackend(prolific);
+            if (!selectedMode) {
+                // Fallback to local mode selection: prioritize "not-full" modes
+                const status = await fetchStudyStatus(prolific.study, prolific.target);
+                if (status?.counts && Number.isFinite(status?.cap_per_mode)) {
+                    const { counts, cap_per_mode } = status;
+                    const notFull = modes.filter(m => (counts[m.name] || 0) < cap_per_mode);
+                    if (notFull.length === 0) {
+                        // Show "Study is full" friendly message, or redirect to end page
+                        showStudyFullMessage(); // You can implement a simple message function
+                        return; // No redirect
+                    }
+                    selectedMode = getRandomMode(notFull);
+                } else {
+                    // If we can't get status, just randomize
+                    selectedMode = getRandomMode(modes);
+                }
+            }
             redirectToMode(selectedMode);
         });
     </script>
+
+    <script>
+        function showStudyFullMessage() {
+          const el = document.getElementById('status') || document.body;
+          const div = document.createElement('div');
+          div.style.padding = '16px';
+          div.style.margin = '16px';
+          div.style.border = '1px solid #ddd';
+          div.style.borderRadius = '8px';
+          div.innerText = 'This study is full. Thank you for your interest!';
+          el.appendChild(div);
+        }
+      </script>
 </body>
 </html> 

@@ -7,6 +7,8 @@ import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { createClient as createRedisClient } from 'redis';
+
 // Debug environment variables
 console.log('🔧 Environment variables loaded:');
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
@@ -283,6 +285,183 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// -----------------------------
+// NEW: Study allocation support
+// -----------------------------
+const MODES = ['naive', 'neutral', 'featured'];
+function capPerMode(desired_total) {
+  const total = Number.isFinite(desired_total) ? desired_total : 150;
+  return Math.floor(total / 3);
+}
+
+// Redis client
+let redis;
+async function ensureRedis() {
+  if (!redis) {
+    redis = createRedisClient({ url: process.env.REDIS_URL });
+    redis.on('error', (e) => console.error('❌ Redis error:', e?.message));
+    await redis.connect();
+    console.log('✅ Redis connected for study allocation');
+  }
+}
+
+// Atomic allocate via Lua: read counts -> filter not-full -> random pick -> INCR
+const ALLOCATE_LUA = `
+local study = ARGV[1]
+local cap = tonumber(ARGV[2])
+local test_mode = ARGV[3] == "true"
+local strategy = ARGV[4] or "balanced"
+local pilot_min = tonumber(ARGV[5] or "0")
+
+if test_mode then
+  local modes = {"naive","neutral","featured"}
+  local idx = math.random(1, #modes)
+  return modes[idx]
+end
+
+local keys = {
+  "study:"..study..":count:naive",
+  "study:"..study..":count:neutral",
+  "study:"..study..":count:featured"
+}
+local counts = {}
+for i,k in ipairs(keys) do
+  counts[i] = tonumber(redis.call("GET", k) or "0")
+end
+local candidates = {}
+if counts[1] < cap then table.insert(candidates, 1) end
+if counts[2] < cap then table.insert(candidates, 2) end
+if counts[3] < cap then table.insert(candidates, 3) end
+if #candidates == 0 then return "" end
+math.randomseed( tonumber(string.sub(tostring(redis.call('TIME')[2]), -6)) )
+local pickIdx = candidates[ math.random(1, #candidates) ]
+redis.call("INCR", keys[pickIdx])
+if pickIdx == 1 then return "naive" end
+if pickIdx == 2 then return "neutral" end
+return "featured"
+-- candidates that are not full
+local not_full = {}
+if counts[1] < cap then table.insert(not_full, 1) end
+if counts[2] < cap then table.insert(not_full, 2) end
+if counts[3] < cap then table.insert(not_full, 3) end
+if #not_full == 0 then return "" end
++
+-- pilot: if pilot_min is set and there are groups with count < pilot_min, only pick from these groups
+local pilot_candidates = {}
+if pilot_min > 0 then
+  for _,i in ipairs(not_full) do
+    if counts[i] < pilot_min then
+      table.insert(pilot_candidates, i)
+    end
+  end
+end
+
+local pool = (#pilot_candidates > 0) and pilot_candidates or not_full
+
+-- set random seed based on microsecond tail of Redis TIME
+math.randomseed( tonumber(string.sub(tostring(redis.call('TIME')[2]), -6)) )
+
+local function pick_random(arr)
+  return arr[ math.random(1, #arr) ]
+end
+
+local function pick_balanced(arr)
+  local minc = 1/0
+  for _,i in ipairs(arr) do
+    if counts[i] < minc then minc = counts[i] end
+  end
+  local ties = {}
+  for _,i in ipairs(arr) do
+   if counts[i] == minc then table.insert(ties, i) end
+  end
+  return pick_random(ties)
+end
+
+local function pick_weighted(arr)
+  local total_w = 0
+  local weights = {}
+  for _,i in ipairs(arr) do
+    local w = cap - counts[i]
+    if w < 1 then w = 1 end
+    table.insert(weights, {i, w})
+    total_w = total_w + w
+  end
+  local r = math.random(1, total_w)
+  local acc = 0
+  for _,pair in ipairs(weights) do
+    acc = acc + pair[2]
+    if r <= acc then return pair[1] end
+  end
+  return arr[#arr]
+end
+
+local pickIdx
+if strategy == "random" then
+  pickIdx = pick_random(pool)
+elseif strategy == "weighted" then
+  pickIdx = pick_weighted(pool)
+else
+  
+  pickIdx = pick_balanced(pool)
+end
+
+redis.call("INCR", keys[pickIdx])
+if pickIdx == 1 then return "naive" end
+if pickIdx == 2 then return "neutral" end
+return "featured"
+`;
+
+// POST /api/study/allocate
+app.post('/api/study/allocate', async (req, res) => {
+  try {
+    const { study, pid, session, desired_total = 150, test_mode = false, strategy = "balanced", pilot_min = 0 } = req.body || {};
+    if (!study) return res.status(400).json({ error: 'missing study' });
+    await ensureRedis();
+    const cap = capPerMode(parseInt(desired_total, 10));
+    const mode = await redis.eval(ALLOCATE_LUA, { keys: [], arguments: [String(study), String(cap), String(!!test_mode), String(strategy || "balanced"), String(pilot_min || 0,10)] });
+    if (!mode) return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
+
+    // Optional: append a small log list
+    const logKey = `study:${study}:alloc:log`;
+    await redis.lPush(logKey, JSON.stringify({ ts: Date.now(), pid, session, mode, desired_total: Number(desired_total) }));
+    await redis.lTrim(logKey, 0, 9999);
+
+    return res.json({ mode, cap_per_mode: cap, strategy: strategy, pilot_min_per_group: Number(pilot_min) });
+
+  } catch (e) {
+    console.error('allocate error', e);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET /api/study/status?study=...&desired_total=150
+app.get('/api/study/status', async (req, res) => {
+  try {
+    const study = req.query.study;
+    const desired_total = parseInt(req.query.desired_total || '150', 10);
+    if (!study) return res.status(400).json({ error: 'missing study' });
+    await ensureRedis();
+    const cap = capPerMode(desired_total);
+    const [n1, n2, n3] = await redis.mGet([
+      `study:${study}:count:naive`,
+      `study:${study}:count:neutral`,
+      `study:${study}:count:featured`
+    ]);
+    return res.json({
+      counts: {
+        naive: parseInt(n1 || '0', 10),
+        neutral: parseInt(n2 || '0', 10),
+        featured: parseInt(n3 || '0', 10)
+      },
+      cap_per_mode: cap
+    });
+  } catch (e) {
+    console.error('status error', e);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+
 // Test route to verify CORS is working
 app.get('/api/test-cors', (req, res) => {
     console.log('🔧 Test CORS route hit from origin:', req.headers.origin);
@@ -323,7 +502,12 @@ app.get('/', (req, res) => {
         timestamp: new Date().toISOString(),
         corsOrigins: corsOrigins,
         serverTime: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        // NEW: surface the two endpoints for quick discovery
+        study_allocation_endpoints: {
+          allocate: '/api/study/allocate',
+          status: '/api/study/status'
+        }
     });
 });
 
