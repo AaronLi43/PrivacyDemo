@@ -869,7 +869,42 @@
         }, 2000);
       }
       
-      // Note: Neutral mode doesn't have specific survey questions to show
+      // Show mode-specific questions for neutral mode
+      // Note: In neutral mode, we don't have mode-specific questions,
+      // but we need to ensure that naive and featured questions are hidden
+      const naiveQuestions = document.getElementById('naive-specific-questions');
+      const featuredQuestions = document.getElementById('featured-specific-questions');
+      
+      if (naiveQuestions) {
+        naiveQuestions.style.display = 'none';
+      }
+      
+      if (featuredQuestions) {
+        featuredQuestions.style.display = 'none';
+      }
+      
+      // Override the updateSurveyQuestionsForMode function to ensure correct question visibility
+      const originalUpdateSurveyQuestionsForMode = window.app.updateSurveyQuestionsForMode;
+      window.app.updateSurveyQuestionsForMode = function() {
+        console.log('Modified updateSurveyQuestionsForMode called in neutral mode');
+        originalUpdateSurveyQuestionsForMode.call(window.app);
+        
+        // Double-check that mode-specific questions are hidden in neutral mode
+        setTimeout(() => {
+          const naiveQuestionsCheck = document.getElementById('naive-specific-questions');
+          const featuredQuestionsCheck = document.getElementById('featured-specific-questions');
+          
+          if (naiveQuestionsCheck) {
+            naiveQuestionsCheck.style.display = 'none';
+            console.log('Naive questions hidden in neutral mode');
+          }
+          
+          if (featuredQuestionsCheck) {
+            featuredQuestionsCheck.style.display = 'none';
+            console.log('Featured questions hidden in neutral mode');
+          }
+        }, 200);
+      };
     });
   </script>
 </body>

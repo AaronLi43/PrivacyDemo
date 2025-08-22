@@ -876,11 +876,42 @@
         }, 2000);
       }
       
-      // Show naive-specific questions in the survey
+      // Show naive-specific questions and hide featured-specific questions in the survey
       const naiveQuestions = document.getElementById('naive-specific-questions');
+      const featuredQuestions = document.getElementById('featured-specific-questions');
+      
       if (naiveQuestions) {
         naiveQuestions.style.display = 'block';
+        console.log('Naive-specific questions displayed in naive.html initialization');
       }
+      
+      if (featuredQuestions) {
+        featuredQuestions.style.display = 'none';
+        console.log('Featured-specific questions hidden in naive.html initialization');
+      }
+      
+      // Override the updateSurveyQuestionsForMode function to ensure correct question visibility
+      const originalUpdateSurveyQuestionsForMode = window.app.updateSurveyQuestionsForMode;
+      window.app.updateSurveyQuestionsForMode = function() {
+        console.log('Modified updateSurveyQuestionsForMode called in naive mode');
+        originalUpdateSurveyQuestionsForMode.call(window.app);
+        
+        // Double-check that only naive-specific questions are visible
+        setTimeout(() => {
+          const naiveQuestionsCheck = document.getElementById('naive-specific-questions');
+          const featuredQuestionsCheck = document.getElementById('featured-specific-questions');
+          
+          if (naiveQuestionsCheck && window.app.state.mode === 'naive') {
+            naiveQuestionsCheck.style.display = 'block';
+            console.log('Naive questions visibility enforced after update in naive mode');
+          }
+          
+          if (featuredQuestionsCheck) {
+            featuredQuestionsCheck.style.display = 'none';
+            console.log('Featured questions hidden in naive mode');
+          }
+        }, 200);
+      };
     });
   </script>
 </body>

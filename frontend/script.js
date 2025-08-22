@@ -5533,10 +5533,35 @@ class PrivacyDemoApp {
         const surveyData = {};
         const maxQuestions = 18;
         
+        console.log(`Collecting survey data for mode: ${this.state.mode}`);
+        console.log(`Questions range: 1-${maxQuestions}`);
+        
+        // Log which questions we expect to see based on the mode
+        let expectedQuestions;
+        if (this.state.mode === 'naive') {
+            expectedQuestions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 18]; // q1-q9 + demographics
+            console.log('In naive mode, expecting questions:', expectedQuestions);
+        } else if (this.state.mode === 'featured') {
+            expectedQuestions = [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18]; // q1-q4, q10-q14 + demographics
+            console.log('In featured mode, expecting questions:', expectedQuestions);
+        } else { // neutral
+            expectedQuestions = [1, 2, 3, 4, 15, 16, 17, 18]; // q1-q4 + demographics
+            console.log('In neutral mode, expecting questions:', expectedQuestions);
+        }
+        
         for (let i = 1; i <= maxQuestions; i++) {
             const value = formData.get(`q${i}`);
             if (value !== null) { // Only include questions that exist in the form
-                surveyData[`q${i}`] = value || '';
+                const shouldCollect = expectedQuestions.includes(i);
+                
+                if (shouldCollect) {
+                    surveyData[`q${i}`] = value || '';
+                    console.log(`Question q${i}: Collected value of length ${(value || '').length}`);
+                } else {
+                    console.log(`Question q${i}: Skipped (not applicable for ${this.state.mode} mode)`);
+                }
+            } else {
+                console.log(`Question q${i}: Not found in form`);
             }
         }
         
@@ -5707,11 +5732,29 @@ class PrivacyDemoApp {
         const form = document.getElementById('survey-form');
         if (!form) return false;
         
+        console.log('Checking survey completeness for mode:', this.state.mode);
+        
         // Only check visible fields (hidden mode-specific questions are not counted)
         const isVisible = (el) => {
             // offsetParent==null is considered invisible; also ignore disabled fields
             if (!el || el.disabled || el.type === 'hidden') return false;
             if (el.offsetParent === null) return false;
+            
+            // Check if the element is in a mode-specific section that should be hidden
+            // based on current mode
+            const naiveSection = el.closest('#naive-specific-questions');
+            const featuredSection = el.closest('#featured-specific-questions');
+            
+            if (naiveSection && this.state.mode !== 'naive') {
+                console.log('Element is in naive section but mode is not naive:', el.id);
+                return false;
+            }
+            
+            if (featuredSection && this.state.mode !== 'featured') {
+                console.log('Element is in featured section but mode is not featured:', el.id);
+                return false;
+            }
+            
             return true;
         };
 

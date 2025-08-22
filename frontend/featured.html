@@ -886,7 +886,24 @@
       const featuredQuestions = document.getElementById('featured-specific-questions');
       if (featuredQuestions) {
         featuredQuestions.style.display = 'block';
+        console.log('Featured questions displayed in featured.html initialization');
       }
+      
+      // Override the updateSurveyQuestionsForMode function to ensure featured questions are shown
+      const originalUpdateSurveyQuestionsForMode = window.app.updateSurveyQuestionsForMode;
+      window.app.updateSurveyQuestionsForMode = function() {
+        console.log('Modified updateSurveyQuestionsForMode called, ensuring featured questions are displayed');
+        originalUpdateSurveyQuestionsForMode.call(window.app);
+        
+        // Double-check that featured questions are visible
+        setTimeout(() => {
+          const featuredQuestionsCheck = document.getElementById('featured-specific-questions');
+          if (featuredQuestionsCheck && window.app.state.mode === 'featured') {
+            featuredQuestionsCheck.style.display = 'block';
+            console.log('Featured questions visibility enforced after update');
+          }
+        }, 200);
+      };
     });
   </script>
 </body>
