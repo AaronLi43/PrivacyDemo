@@ -296,12 +296,33 @@ function capPerMode(desired_total) {
 
 // Redis client
 let redis;
+let usingInMemoryFallback = false;
+const inMemoryCounters = {};
+
 async function ensureRedis() {
-  if (!redis) {
+  if (redis) return;
+  
+  try {
+    if (!process.env.REDIS_URL) {
+      console.log('⚠️ No REDIS_URL provided, using in-memory allocation fallback');
+      usingInMemoryFallback = true;
+      return;
+    }
+    
     redis = createRedisClient({ url: process.env.REDIS_URL });
-    redis.on('error', (e) => console.error('❌ Redis error:', e?.message));
+    redis.on('error', (e) => {
+      console.error('❌ Redis error:', e?.message);
+      if (!usingInMemoryFallback) {
+        console.log('⚠️ Switching to in-memory allocation fallback');
+        usingInMemoryFallback = true;
+      }
+    });
     await redis.connect();
     console.log('✅ Redis connected for study allocation');
+  } catch (e) {
+    console.error('❌ Failed to connect to Redis:', e?.message);
+    console.log('⚠️ Using in-memory allocation fallback');
+    usingInMemoryFallback = true;
   }
 }
 
@@ -418,13 +439,62 @@ app.post('/api/study/allocate', async (req, res) => {
     if (!study) return res.status(400).json({ error: 'missing study' });
     await ensureRedis();
     const cap = capPerMode(parseInt(desired_total, 10));
-    const mode = await redis.eval(ALLOCATE_LUA, { keys: [], arguments: [String(study), String(cap), String(!!test_mode), String(strategy || "balanced"), String(pilot_min || 0,10)] });
-    if (!mode) return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
+    
+    let mode;
+    
+    if (usingInMemoryFallback) {
+      // Simple in-memory allocation logic
+      if (!inMemoryCounters[study]) {
+        inMemoryCounters[study] = {
+          naive: 0,
+          neutral: 0,
+          featured: 0
+        };
+      }
+      
+      const counts = inMemoryCounters[study];
+      const candidates = [];
+      
+      if (counts.naive < cap) candidates.push('naive');
+      if (counts.neutral < cap) candidates.push('neutral');
+      if (counts.featured < cap) candidates.push('featured');
+      
+      if (candidates.length === 0) {
+        return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
+      }
+      
+      // Select the mode with the lowest count (balanced strategy)
+      if (strategy === "balanced" || strategy === "weighted") {
+        let minCount = Infinity;
+        let minMode = null;
+        
+        for (const candidate of candidates) {
+          if (counts[candidate] < minCount) {
+            minCount = counts[candidate];
+            minMode = candidate;
+          }
+        }
+        
+        mode = minMode;
+      } else {
+        // Random selection
+        mode = candidates[Math.floor(Math.random() * candidates.length)];
+      }
+      
+      // Increment the counter
+      counts[mode]++;
+      
+      console.log(`📊 In-memory allocation for study ${study}: ${mode} (counts: ${JSON.stringify(counts)})`);      
+    } else {
+      // Use Redis for allocation
+      mode = await redis.eval(ALLOCATE_LUA, { keys: [], arguments: [String(study), String(cap), String(!!test_mode), String(strategy || "balanced"), String(pilot_min || 0,10)] });
+      if (!mode) return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
 
-    // Optional: append a small log list
-    const logKey = `study:${study}:alloc:log`;
-    await redis.lPush(logKey, JSON.stringify({ ts: Date.now(), pid, session, mode, desired_total: Number(desired_total) }));
-    await redis.lTrim(logKey, 0, 9999);
+      // Optional: append a small log list
+      const logKey = `study:${study}:alloc:log`;
+      await redis.lPush(logKey, JSON.stringify({ ts: Date.now(), pid, session, mode, desired_total: Number(desired_total) }));
+      await redis.lTrim(logKey, 0, 9999);
+    }
 
     return res.json({ mode, cap_per_mode: cap, strategy: strategy, pilot_min_per_group: Number(pilot_min) });
 
@@ -442,17 +512,32 @@ app.get('/api/study/status', async (req, res) => {
     if (!study) return res.status(400).json({ error: 'missing study' });
     await ensureRedis();
     const cap = capPerMode(desired_total);
-    const [n1, n2, n3] = await redis.mGet([
-      `study:${study}:count:naive`,
-      `study:${study}:count:neutral`,
-      `study:${study}:count:featured`
-    ]);
-    return res.json({
-      counts: {
+    
+    let counts;
+    
+    if (usingInMemoryFallback) {
+      // Use in-memory counters
+      counts = {
+        naive: inMemoryCounters[study]?.naive || 0,
+        neutral: inMemoryCounters[study]?.neutral || 0,
+        featured: inMemoryCounters[study]?.featured || 0
+      };
+    } else {
+      // Use Redis
+      const [n1, n2, n3] = await redis.mGet([
+        `study:${study}:count:naive`,
+        `study:${study}:count:neutral`,
+        `study:${study}:count:featured`
+      ]);
+      counts = {
         naive: parseInt(n1 || '0', 10),
         neutral: parseInt(n2 || '0', 10),
         featured: parseInt(n3 || '0', 10)
-      },
+      };
+    }
+    
+    return res.json({
+      counts,
       cap_per_mode: cap
     });
   } catch (e) {
