@@ -140,11 +140,11 @@ export function hasTag(state, tag) {
     }
   }
   
-  // After passing the final question, switch to summary/end actions
+  // After passing the final question, allow follow-ups first, then end when ready to advance
   export function finalizeIfLastAndPassed(state, mainQuestions, completionAuditVerdict) {
-    if (completionAuditVerdict === "ALLOW_NEXT_QUESTION" && isFinalQuestion(state, mainQuestions)) {
-      state.allowedActions = new Set(["SUMMARIZE_QUESTION", "END"]);
-    }
+    // Don't immediately restrict actions on final question - allow follow-ups first
+    // The interview will end naturally when shouldAdvance is true and there are no more questions
+    // This allows the final question to have follow-ups like any other question
   }
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
