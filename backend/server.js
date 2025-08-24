@@ -964,14 +964,34 @@ function isCoveredOrSkipped(session, q, fid) {
 
 // Helper function to check if all follow-ups for a question are covered
 function areAllFollowupsCovered(session, question) {
-    if (!session || !question) return false;
+    if (!session || !question) {
+        console.log('areAllFollowupsCovered: missing session or question', { hasSession: !!session, question });
+        return false;
+    }
     
     // Get all follow-ups for this question
     const followups = getFollowupsForQuestion(question);
-    if (!followups || followups.length === 0) return true;
+    if (!followups || followups.length === 0) {
+        console.log('areAllFollowupsCovered: no followups found', { question });
+        return true;
+    }
     
     // Check if all follow-ups are marked as covered
-    return followups.every(followup => isCoveredOrSkipped(session, question, followup.id));
+    const coverageResults = followups.map(followup => ({
+        id: followup.id,
+        covered: isCoveredOrSkipped(session, question, followup.id)
+    }));
+    
+    const allCovered = followups.every(followup => isCoveredOrSkipped(session, question, followup.id));
+    
+    console.log('areAllFollowupsCovered: coverage check', {
+        question: question.substring(0, 50) + '...',
+        followupsCount: followups.length,
+        coverageResults,
+        allCovered
+    });
+    
+    return allCovered;
 }
 
 const EVENT_KW = new Set([

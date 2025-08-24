@@ -151,15 +151,27 @@ export function hasTag(state, tag) {
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
     // For the final question, require ALL follow-ups to be covered before advancing
     const isFinal = isFinalQuestion(state, mainQuestions);
+    console.log('shouldAdvance: decision check', {
+      isFinal,
+      hasSession: !!session,
+      hasFollowupCoveredFn: !!areAllFollowupsCoveredFn,
+      completionAuditVerdict,
+      question: question ? question.substring(0, 50) + '...' : null
+    });
+    
     if (isFinal && session && areAllFollowupsCoveredFn) {
       // For final question, ignore skip flags and only advance if all follow-ups are covered
-      return areAllFollowupsCoveredFn(session, question);
+      const allCovered = areAllFollowupsCoveredFn(session, question);
+      console.log('shouldAdvance: final question check', { allCovered });
+      return allCovered;
     }
     
     // For non-final questions, use the existing logic
     const pass = wantsImmediateNext(state, completionAuditVerdict);
     const skipped = !!(state?.perQuestion?.[question]?.skip);
-    return pass || skipped;
+    const result = pass || skipped;
+    console.log('shouldAdvance: non-final question logic', { pass, skipped, result });
+    return result;
   }
   
   // Move to the next question; main questions run into done
