@@ -90,8 +90,8 @@ class PrivacyDemoApp {
             hasNavigated: false, // Track if legitimate navigation has occurred
             // Audit LLM properties
             auditLLMEnabled: false,
-            // Copy/paste functionality - DISABLED
-            copyPasteEnabled: false,
+            // Copy/paste functionality - ENABLED FOR TESTING
+            copyPasteEnabled: true,
             // Follow-up questions properties
             followUpQuestions: [],
             currentFollowUpQuestionIndex: 0,
@@ -553,48 +553,64 @@ class PrivacyDemoApp {
         console.log('🔒 Copy/paste disabled on element:', element.tagName, element.id || element.className);
     }
 
-    // Toggle copy/paste functionality - DISABLED
+    // Toggle copy/paste functionality - ENABLED FOR TESTING
     toggleCopyPaste() {
-        // Copy/paste is permanently disabled for security
-        this.state.copyPasteEnabled = false;
+        // Toggle copy/paste functionality for testing
+        this.state.copyPasteEnabled = !this.state.copyPasteEnabled;
         this.updateCopyPasteToggle();
         this.applyCopyPasteSettings();
         this.saveToLocalStorage();
         
-        // Show notification that copy/paste is permanently disabled
-        this.showNotification('Copy & paste is permanently disabled for security reasons.', 'warning');
+        // Show notification about copy/paste toggle for testing
+        const status = this.state.copyPasteEnabled ? 'enabled' : 'disabled';
+        this.showNotification(`Copy & paste ${status} for testing.`, this.state.copyPasteEnabled ? 'success' : 'warning');
     }
 
-    // Update copy/paste toggle button UI - Always shows disabled
+    // Update copy/paste toggle button UI - Shows current state for testing
     updateCopyPasteToggle() {
         const toggleBtn = document.getElementById('copy-paste-toggle');
         if (!toggleBtn) return;
 
-        // Always show disabled state since copy/paste is permanently disabled
-        toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Permanently Disabled';
-        toggleBtn.className = 'btn btn-danger';
-        toggleBtn.disabled = true;
-        toggleBtn.title = 'Copy & paste is permanently disabled for security reasons';
+        // Show current state for testing
+        if (this.state.copyPasteEnabled) {
+            toggleBtn.innerHTML = '<i class="fas fa-unlock"></i> Enabled (Testing)';
+            toggleBtn.style.backgroundColor = '#28a745';
+        } else {
+            toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Disabled';
+            toggleBtn.style.backgroundColor = '#dc3545';
+        }
+        toggleBtn.className = 'btn btn-primary';
+        toggleBtn.disabled = false;
+        toggleBtn.title = 'Toggle copy & paste functionality for testing';
     }
 
     // Apply copy/paste settings to all relevant elements - Always disabled
     applyCopyPasteSettings() {
         const chatInput = document.getElementById('chat-input');
         if (chatInput) {
-            // Always disable copy/paste for security
-            this.disableCopyPaste(chatInput);
+            // Apply copy/paste settings based on current state for testing
+            if (this.state.copyPasteEnabled) {
+                this.enableCopyPaste(chatInput);
+            } else {
+                this.disableCopyPaste(chatInput);
+            }
         }
 
         // Apply to any textarea elements in edit mode
         const textareas = document.querySelectorAll('textarea');
         textareas.forEach(textarea => {
-            // Always disable copy/paste for security
-            this.disableCopyPaste(textarea);
+            // Apply copy/paste settings based on current state for testing
+            if (this.state.copyPasteEnabled) {
+                this.enableCopyPaste(textarea);
+            } else {
+                this.disableCopyPaste(textarea);
+            }
         });
         
-        console.log('🔒 Copy/paste permanently disabled on all input elements');
+        const status = this.state.copyPasteEnabled ? 'enabled' : 'disabled';
+        console.log(`🔧 Copy/paste ${status} on all input elements for testing`);
         
-        // No need to force disable - copy/paste is now applied once per page load
+        // Copy/paste settings applied based on current state for testing
     }
     
     // Force disable copy/paste on all elements (additional security) - REMOVED
@@ -1280,6 +1296,74 @@ class PrivacyDemoApp {
                 e.preventDefault();
                 console.log('Ctrl+C survey shortcut disabled for security');
                 this.showNotification('Ctrl+C survey shortcut is disabled for security reasons.', 'warning');
+                return;
+            }
+        });
+
+        // TESTING SHORTCUTS for chatbot functionality
+        document.addEventListener('keydown', (e) => {
+            // Quick message send (Ctrl+Enter)
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                const chatInput = document.getElementById('chat-input');
+                if (chatInput && chatInput.value.trim()) {
+                    this.sendMessage();
+                    this.showNotification('Quick send: Message sent!', 'success');
+                }
+                return;
+            }
+
+            // Clear chat input (Ctrl+L)
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                const chatInput = document.getElementById('chat-input');
+                if (chatInput) {
+                    chatInput.value = '';
+                    chatInput.focus();
+                    this.showNotification('Chat input cleared!', 'info');
+                }
+                return;
+            }
+
+            // Toggle copy/paste (Ctrl+P) - for testing
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                this.toggleCopyPaste();
+                return;
+            }
+
+            // Send test message (Ctrl+M) - for testing
+            if (e.ctrlKey && e.key === 'm') {
+                e.preventDefault();
+                const testMessages = [
+                    "Hello, this is a test message.",
+                    "Can you help me with privacy settings?",
+                    "What personal information do you collect?",
+                    "I have concerns about data sharing.",
+                    "This is a sample user inquiry for testing."
+                ];
+                const randomMessage = testMessages[Math.floor(Math.random() * testMessages.length)];
+                const chatInput = document.getElementById('chat-input');
+                if (chatInput) {
+                    chatInput.value = randomMessage;
+                    chatInput.focus();
+                    this.showNotification('Test message inserted! Press Enter to send.', 'info');
+                }
+                return;
+            }
+
+            // Reset conversation (Ctrl+R) - for testing
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                this.resetConversation();
+                this.showNotification('Conversation reset for testing!', 'success');
+                return;
+            }
+
+            // Show shortcuts help (Ctrl+H)
+            if (e.ctrlKey && e.key === 'h') {
+                e.preventDefault();
+                this.showTestingShortcuts();
                 return;
             }
         });
@@ -5142,6 +5226,70 @@ class PrivacyDemoApp {
                 }, 300);
             }
         }, 5000);
+    }
+
+    // Show testing shortcuts help popup
+    showTestingShortcuts() {
+        const shortcutsHTML = `
+            <div id="shortcuts-popup" class="popup" style="display: flex;">
+                <div class="popup-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+                    <h3>🚀 Testing Shortcuts</h3>
+                    <div style="text-align: left;">
+                        <h4>Copy & Paste Testing:</h4>
+                        <ul>
+                            <li><strong>Ctrl+P</strong> - Toggle copy/paste functionality</li>
+                            <li><strong>Ctrl+C, Ctrl+V, Ctrl+X</strong> - Standard copy/paste/cut operations</li>
+                        </ul>
+                        
+                        <h4>Chatbot Testing:</h4>
+                        <ul>
+                            <li><strong>Ctrl+Enter</strong> - Quick send message (instead of clicking Send)</li>
+                            <li><strong>Ctrl+L</strong> - Clear chat input field</li>
+                            <li><strong>Ctrl+M</strong> - Insert random test message</li>
+                            <li><strong>Ctrl+R</strong> - Reset conversation</li>
+                            <li><strong>Ctrl+N</strong> - Manual next question (in question mode)</li>
+                        </ul>
+                        
+                        <h4>Export & Survey Testing:</h4>
+                        <ul>
+                            <li><strong>Ctrl+T</strong> - Test survey submission</li>
+                        </ul>
+                        
+                        <h4>General:</h4>
+                        <ul>
+                            <li><strong>Ctrl+H</strong> - Show this shortcuts help</li>
+                            <li><strong>F12</strong> - Open Developer Tools (allowed for testing)</li>
+                        </ul>
+                        
+                        <p style="margin-top: 20px; color: #666; font-style: italic;">
+                            Note: These shortcuts are enabled for testing purposes. 
+                            Copy/paste functionality can be toggled between enabled/disabled states.
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button onclick="document.getElementById('shortcuts-popup').remove()" class="btn btn-primary">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove any existing shortcuts popup
+        const existingPopup = document.getElementById('shortcuts-popup');
+        if (existingPopup) {
+            existingPopup.remove();
+        }
+        
+        // Add popup to page
+        document.body.insertAdjacentHTML('beforeend', shortcutsHTML);
+        
+        // Close popup when clicking outside
+        document.getElementById('shortcuts-popup').addEventListener('click', (e) => {
+            if (e.target.id === 'shortcuts-popup') {
+                e.target.remove();
+            }
+        });
     }
 
     // Save to localStorage
