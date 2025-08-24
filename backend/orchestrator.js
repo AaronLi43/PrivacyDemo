@@ -151,27 +151,15 @@ export function hasTag(state, tag) {
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
     // For the final question, require ALL follow-ups to be covered before advancing
     const isFinal = isFinalQuestion(state, mainQuestions);
-    console.log('shouldAdvance: decision check', {
-      isFinal,
-      hasSession: !!session,
-      hasFollowupCoveredFn: !!areAllFollowupsCoveredFn,
-      completionAuditVerdict,
-      question: question ? question.substring(0, 50) + '...' : null
-    });
-    
     if (isFinal && session && areAllFollowupsCoveredFn) {
-      // For final question, ignore skip flags and only advance if all follow-ups are covered
-      const allCovered = areAllFollowupsCoveredFn(session, question);
-      console.log('shouldAdvance: final question check', { allCovered });
-      return allCovered;
+      // Only advance from final question if all follow-ups are explicitly covered
+      return areAllFollowupsCoveredFn(session, question);
     }
     
     // For non-final questions, use the existing logic
     const pass = wantsImmediateNext(state, completionAuditVerdict);
     const skipped = !!(state?.perQuestion?.[question]?.skip);
-    const result = pass || skipped;
-    console.log('shouldAdvance: non-final question logic', { pass, skipped, result });
-    return result;
+    return pass || skipped;
   }
   
   // Move to the next question; main questions run into done
@@ -361,23 +349,17 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
     return `${pref}${ensureEndsWithQuestion(utter || "Could you tell me a bit more")}`;
   }
 
-  export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}, mainQuestions = [], session = null, areAllFollowupsCoveredFn = null) {
+  export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
     const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || shouldAutoAdvanceByTags(state));
 
 
     const backgroundOnly = !!(presenceAudit?.background_only);
     
     if (noExp) {
-        // For the final question, don't skip if there are uncovered follow-ups
-        const isFinal = isFinalQuestion(state, mainQuestions);
-        const shouldSkipFinalQuestion = !isFinal || (areAllFollowupsCoveredFn && areAllFollowupsCoveredFn(session, question));
-        
-        if (shouldSkipFinalQuestion) {
-            // Skip this question: only allow advancing/transitioning to summary
-            state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
-            state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
-            clearPendingFollowup(state);
-        }
+        // Skip this question: only allow advancing/transitioning to summary
+        state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+        state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
+        clearPendingFollowup(state);
     }
     state.styleHints = {
         ...state.styleHints,

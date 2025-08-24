@@ -587,7 +587,8 @@ const unifiedQuestions = [
     "Can you walk me through a specific time when you used AI before and during job interviews?",
     "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
     "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
-    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+    "You've completed the interview. Please share your thoughts on the interview process and your experience using AI during the interview."
 ];
 
 // Maintain backward compatibility by mapping all modes to the same questions
@@ -964,52 +965,14 @@ function isCoveredOrSkipped(session, q, fid) {
 
 // Helper function to check if all follow-ups for a question are covered
 function areAllFollowupsCovered(session, question) {
-    if (!session || !question) {
-        console.log('areAllFollowupsCovered: missing session or question', { hasSession: !!session, question });
-        return false;
-    }
+    if (!session || !question) return false;
     
     // Get all follow-ups for this question
     const followups = getFollowupsForQuestion(question);
-    if (!followups || followups.length === 0) {
-        console.log('areAllFollowupsCovered: no followups found', { question });
-        return true;
-    }
+    if (!followups || followups.length === 0) return true;
     
     // Check if all follow-ups are marked as covered
-    const coverageResults = followups.map(followup => ({
-        id: followup.id,
-        covered: isCoveredOrSkipped(session, question, followup.id)
-    }));
-    
-    const allCovered = followups.every(followup => isCoveredOrSkipped(session, question, followup.id));
-    
-    console.log('areAllFollowupsCovered: coverage check', {
-        question: question.substring(0, 50) + '...',
-        followupsCount: followups.length,
-        coverageResults,
-        allCovered
-    });
-    
-    return allCovered;
-}
-
-// Helper function to check coverage based on current audit results (more reliable than session data)
-function areCurrentFollowupsCovered(completionAudit) {
-    if (!completionAudit || !completionAudit.coverage_map) {
-        console.log('areCurrentFollowupsCovered: no audit or coverage_map');
-        return false;
-    }
-    
-    const allCovered = completionAudit.coverage_map.every(item => item.covered === true);
-    console.log('areCurrentFollowupsCovered: audit-based check', {
-        coverageMap: completionAudit.coverage_map,
-        allCovered,
-        verdict: completionAudit.verdict
-    });
-    
-    // Only advance if the audit explicitly says to allow next question AND all follow-ups are covered
-    return completionAudit.verdict === "ALLOW_NEXT_QUESTION" && allCovered;
+    return followups.every(followup => isCoveredOrSkipped(session, question, followup.id));
 }
 
 const EVENT_KW = new Set([
@@ -1320,6 +1283,10 @@ app.post('/api/chat', async (req, res) => {
             step
           });
           
+          // Mark welcome as sent to prevent repeated greetings
+          if (!session.flags) session.flags = {};
+          session.flags.welcomeSent = true;
+          
           return res.json({
             success: true,
             bot_response: fullMessage,
@@ -1398,37 +1365,37 @@ app.post('/api/chat', async (req, res) => {
 
                 if (!session.flags) session.flags = {};
                 if (!session.flags.welcomeSent) {
-                    const welcomePrefix =
-                        state?.welcomeText ||
-                        "Hi! Thanks for joining—I'll ask a few short questions and some small follow-ups to keep us on track.";
-                }
-
-                const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
-                if (firstQ) {
-                  const { prefix, suffix } = await polishFollowupConnectors({
-                    followupPrompt: firstQ,
-                    currentQuestion: firstQ,
-                    conversationHistory: session.conversationHistory,
-                    styleHints: state.styleHints || {}
-                  });
-                  const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
-                  const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
-                  const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
-                  const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
-                  const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
-                  const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
-                  session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
-                  return res.json({
-                    success: true,
-                    bot_response: msg,
-                    conversation_history: session.conversationHistory,
-                    step,
-                    question_completed: false,
-                    pending_followup_exists: false,
-                    allowed_actions: Array.from(state.allowedActions),
-                    interview_finished: false,
-                    session_id: currentSessionId
-                         });
+                    const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
+                    if (firstQ) {
+                      const { prefix, suffix } = await polishFollowupConnectors({
+                        followupPrompt: firstQ,
+                        currentQuestion: firstQ,
+                        conversationHistory: session.conversationHistory,
+                        styleHints: state.styleHints || {}
+                      });
+                      const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
+                      const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+                      const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+                      const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
+                      const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
+                      const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
+                      session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
+                      
+                      // Mark welcome as sent to prevent repeated greetings
+                      session.flags.welcomeSent = true;
+                      
+                      return res.json({
+                        success: true,
+                        bot_response: msg,
+                        conversation_history: session.conversationHistory,
+                        step,
+                        question_completed: false,
+                        pending_followup_exists: false,
+                        allowed_actions: Array.from(state.allowedActions),
+                        interview_finished: false,
+                        session_id: currentSessionId
+                             });
+                    }
                 }
               }
           // ====== Executor call ======
@@ -1707,20 +1674,14 @@ const pending = allFUs.filter(
   
           // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
           storeAuditsWithTags(state, { completionAudit, presenceAudit, orchestrator_tags: completionAudit?.orchestrator_tags });
-          applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit }, mainQuestions, session, areAllFollowupsCovered);
+          applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit });
           allowNextIfAuditPass(state, completionAudit?.verdict);
           finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
 
         // Adapted to use new advancement logic and composeAssistantMessage for next question transition
         const currentQuestion = qNow;
         const qKey = getQuestionKey(currentQuestion);
-        // For final question, use the current audit results instead of potentially stale session data
-        const isCurrentlyFinal = isFinalQuestion(state, mainQuestions);
-        const shouldAdvanceResult = isCurrentlyFinal 
-          ? areCurrentFollowupsCovered(completionAudit)
-          : shouldAdvance(completionAudit?.verdict, state, currentQuestion, session, mainQuestions, areAllFollowupsCovered);
-          
-        if (shouldAdvanceResult) {
+        if (shouldAdvance(completionAudit?.verdict, state, currentQuestion, session, mainQuestions, areAllFollowupsCovered)) {
           // Freeze old question
           session.qStatus = session.qStatus || {};
           session.qStatus[qKey] = session.qStatus[qKey] || "completed";
