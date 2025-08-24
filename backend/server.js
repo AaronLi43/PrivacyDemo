@@ -994,6 +994,24 @@ function areAllFollowupsCovered(session, question) {
     return allCovered;
 }
 
+// Helper function to check coverage based on current audit results (more reliable than session data)
+function areCurrentFollowupsCovered(completionAudit) {
+    if (!completionAudit || !completionAudit.coverage_map) {
+        console.log('areCurrentFollowupsCovered: no audit or coverage_map');
+        return false;
+    }
+    
+    const allCovered = completionAudit.coverage_map.every(item => item.covered === true);
+    console.log('areCurrentFollowupsCovered: audit-based check', {
+        coverageMap: completionAudit.coverage_map,
+        allCovered,
+        verdict: completionAudit.verdict
+    });
+    
+    // Only advance if the audit explicitly says to allow next question AND all follow-ups are covered
+    return completionAudit.verdict === "ALLOW_NEXT_QUESTION" && allCovered;
+}
+
 const EVENT_KW = new Set([
     "when",
     "interview_timeline_and_when_ai_used",
@@ -1696,7 +1714,13 @@ const pending = allFUs.filter(
         // Adapted to use new advancement logic and composeAssistantMessage for next question transition
         const currentQuestion = qNow;
         const qKey = getQuestionKey(currentQuestion);
-        if (shouldAdvance(completionAudit?.verdict, state, currentQuestion, session, mainQuestions, areAllFollowupsCovered)) {
+        // For final question, use the current audit results instead of potentially stale session data
+        const isCurrentlyFinal = isFinalQuestion(state, mainQuestions);
+        const shouldAdvanceResult = isCurrentlyFinal 
+          ? areCurrentFollowupsCovered(completionAudit)
+          : shouldAdvance(completionAudit?.verdict, state, currentQuestion, session, mainQuestions, areAllFollowupsCovered);
+          
+        if (shouldAdvanceResult) {
           // Freeze old question
           session.qStatus = session.qStatus || {};
           session.qStatus[qKey] = session.qStatus[qKey] || "completed";
