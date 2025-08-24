@@ -962,6 +962,18 @@ function isCoveredOrSkipped(session, q, fid) {
     return typeof s === "object" && (s.status === "covered" || s.status === "skipped_na");
 }
 
+// Helper function to check if all follow-ups for a question are covered
+function areAllFollowupsCovered(session, question) {
+    if (!session || !question) return false;
+    
+    // Get all follow-ups for this question
+    const followups = getFollowupsForQuestion(question);
+    if (!followups || followups.length === 0) return true;
+    
+    // Check if all follow-ups are marked as covered
+    return followups.every(followup => isCoveredOrSkipped(session, question, followup.id));
+}
+
 const EVENT_KW = new Set([
     "when",
     "interview_timeline_and_when_ai_used",
@@ -1433,7 +1445,7 @@ app.post('/api/chat', async (req, res) => {
           
 
 
-          const completionAudit = await auditQuestionCompletion(
+          const completionAudit = await auditQuestionPSS(
             message,
             aiResponse,
             qNow,
@@ -1664,7 +1676,7 @@ const pending = allFUs.filter(
         // Adapted to use new advancement logic and composeAssistantMessage for next question transition
         const currentQuestion = qNow;
         const qKey = getQuestionKey(currentQuestion);
-        if (shouldAdvance(completionAudit?.verdict, state, currentQuestion)) {
+        if (shouldAdvance(completionAudit?.verdict, state, currentQuestion, session, mainQuestions, areAllFollowupsCovered)) {
           // Freeze old question
           session.qStatus = session.qStatus || {};
           session.qStatus[qKey] = session.qStatus[qKey] || "completed";
@@ -1857,7 +1869,8 @@ async function auditQuestionPSS(
     currentQuestion,
     conversationHistory,
     isFinalQuestionFlag = false,   // Keep parameter, no longer dependent on prompt
-    followUpMode = false       // Keep parameter, no longer dependent on prompt
+    followUpMode = false,       // Keep parameter, no longer dependent on prompt
+    session
   ) {
     if (!openaiClient) {
         console.log('⚠️  Audit LLM not available - skipping follow-up coverage audit');
@@ -1881,6 +1894,7 @@ async function auditQuestionPSS(
         - "Covered" means the specific follow-up question was explicitly asked AND answered, not just that the information was mentioned in passing.
         - Focus on whether each follow-up prompt was actually asked as a direct question, regardless of whether related info was provided elsewhere.
         - A follow-up is only "covered" if there's evidence the assistant explicitly asked that specific follow-up question.
+    
         - Use ALL recent turns for evidence (not just the last message).
         - If ALL follow-ups are covered => verdict = "ALLOW_NEXT_QUESTION".
         - Otherwise => verdict = "REQUIRE_MORE" and choose exactly ONE next follow-up that remains uncovered (prefer earlier order)
