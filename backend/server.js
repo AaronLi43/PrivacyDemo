@@ -1878,8 +1878,9 @@ async function auditQuestionPSS(
         ${JSON.stringify(fuPayload, null, 2)}
 
         Rules:
-        - "Covered" means the user has clearly provided the key information implied by the follow-up prompt (look for direct answers or equivalent info).
-        - Be lenient to paraphrases; focus on substance (time/place/people/tool/result/motivation/etc.).
+        - "Covered" means the specific follow-up question was explicitly asked AND answered, not just that the information was mentioned in passing.
+        - Focus on whether each follow-up prompt was actually asked as a direct question, regardless of whether related info was provided elsewhere.
+        - A follow-up is only "covered" if there's evidence the assistant explicitly asked that specific follow-up question.
         - Use ALL recent turns for evidence (not just the last message).
         - If ALL follow-ups are covered => verdict = "ALLOW_NEXT_QUESTION".
         - Otherwise => verdict = "REQUIRE_MORE" and choose exactly ONE next follow-up that remains uncovered (prefer earlier order)
