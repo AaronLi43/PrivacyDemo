@@ -286,221 +286,129 @@ const upload = multer({
 });
 
 // -----------------------------
-// NEW: Study allocation support
+// NEW: Study allocation support (IN-MEMORY only, with snapshot)
 // -----------------------------
 const MODES = ['naive', 'neutral', 'featured'];
+const SNAPSHOT_PATH = path.join(process.cwd(), 'alloc_snapshot.json');
+const USE_MEMORY = String(process.env.ALLOCATION_BACKEND || 'memory') === 'memory';
+
 function capPerMode(desired_total) {
   const total = Number.isFinite(desired_total) ? desired_total : 150;
   return Math.floor(total / 3);
 }
 
-// Redis client
-let redis;
-let usingInMemoryFallback = false;
-const inMemoryCounters = {};
+// 内存状态
+const studyCounts = new Map();                 // Map<study, {naive,neutral,featured}>
+const studyPidMap = new Map();                 // Map<study, Map<pid, mode>>
+const rateBuckets = new Map();                 // 简单 IP 限流
+const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '120', 10);
 
-async function ensureRedis() {
-  if (redis) return;
-  
+// 恢复快照
+function loadSnapshot() {
   try {
-    if (!process.env.REDIS_URL) {
-      console.log('⚠️ No REDIS_URL provided, using in-memory allocation fallback');
-      usingInMemoryFallback = true;
-      return;
-    }
-    
-    redis = createRedisClient({ url: process.env.REDIS_URL });
-    redis.on('error', (e) => {
-      console.error('❌ Redis error:', e?.message);
-      if (!usingInMemoryFallback) {
-        console.log('⚠️ Switching to in-memory allocation fallback');
-        usingInMemoryFallback = true;
+    if (fs.existsSync(SNAPSHOT_PATH)) {
+      const data = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8'));
+      if (data && data.studyCounts) {
+        for (const [k, v] of Object.entries(data.studyCounts)) studyCounts.set(k, v);
       }
-    });
-    await redis.connect();
-    console.log('✅ Redis connected for study allocation');
+      if (data && data.studyPidMap) {
+        for (const [k, obj] of Object.entries(data.studyPidMap)) {
+          const m = new Map(Object.entries(obj));
+          studyPidMap.set(k, m);
+        }
+      }
+      console.log('🧩 in-memory snapshot loaded');
+    }
   } catch (e) {
-    console.error('❌ Failed to connect to Redis:', e?.message);
-    console.log('⚠️ Using in-memory allocation fallback');
-    usingInMemoryFallback = true;
+    console.warn('⚠️ loadSnapshot failed:', e?.message || e);
   }
 }
-
-// Atomic allocate via Lua: read counts -> filter not-full -> random pick -> INCR
-const ALLOCATE_LUA = `
-local study = ARGV[1]
-local cap = tonumber(ARGV[2])
-local test_mode = ARGV[3] == "true"
-local strategy = ARGV[4] or "balanced"
-local pilot_min = tonumber(ARGV[5] or "0")
-
-if test_mode then
-  local modes = {"naive","neutral","featured"}
-  local idx = math.random(1, #modes)
-  return modes[idx]
-end
-
-local keys = {
-  "study:"..study..":count:naive",
-  "study:"..study..":count:neutral",
-  "study:"..study..":count:featured"
+function saveSnapshot() {
+  try {
+    const obj = {
+      studyCounts: Object.fromEntries(studyCounts.entries()),
+      studyPidMap: Object.fromEntries(
+        Array.from(studyPidMap.entries()).map(([k, m]) => [k, Object.fromEntries(m.entries())])
+      )
+    };
+    fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(obj));
+  } catch (e) {
+    console.warn('⚠️ saveSnapshot failed:', e?.message || e);
+  }
 }
-local counts = {}
-for i,k in ipairs(keys) do
-  counts[i] = tonumber(redis.call("GET", k) or "0")
-end
-local candidates = {}
-if counts[1] < cap then table.insert(candidates, 1) end
-if counts[2] < cap then table.insert(candidates, 2) end
-if counts[3] < cap then table.insert(candidates, 3) end
-if #candidates == 0 then return "" end
-math.randomseed( tonumber(string.sub(tostring(redis.call('TIME')[2]), -6)) )
-local pickIdx = candidates[ math.random(1, #candidates) ]
-redis.call("INCR", keys[pickIdx])
-if pickIdx == 1 then return "naive" end
-if pickIdx == 2 then return "neutral" end
-return "featured"
--- candidates that are not full
-local not_full = {}
-if counts[1] < cap then table.insert(not_full, 1) end
-if counts[2] < cap then table.insert(not_full, 2) end
-if counts[3] < cap then table.insert(not_full, 3) end
-if #not_full == 0 then return "" end
-+
--- pilot: if pilot_min is set and there are groups with count < pilot_min, only pick from these groups
-local pilot_candidates = {}
-if pilot_min > 0 then
-  for _,i in ipairs(not_full) do
-    if counts[i] < pilot_min then
-      table.insert(pilot_candidates, i)
-    end
-  end
-end
+loadSnapshot();
+setInterval(saveSnapshot, parseInt(process.env.SNAPSHOT_INTERVAL_MS || '5000', 10)).unref?.();
+process.on('SIGTERM', () => { try { saveSnapshot(); } catch {} });
 
-local pool = (#pilot_candidates > 0) and pilot_candidates or not_full
+// 工具
+function getStudyCounts(study) { return studyCounts.get(study) || { naive:0, neutral:0, featured:0 }; }
+function setStudyCounts(study, counts) { studyCounts.set(study, counts); }
+function getPidMap(study) { const m = studyPidMap.get(study) || new Map(); if (!studyPidMap.has(study)) studyPidMap.set(study, m); return m; }
+function pickBalanced(pool, counts) {
+  let min = Infinity, ties = [];
+  for (const m of pool) {
+    const v = counts[m];
+    if (v < min) { min = v; ties = [m]; }
+    else if (v === min) ties.push(m);
+  }
+  return ties[Math.floor(Math.random() * ties.length)];
+}
 
--- set random seed based on microsecond tail of Redis TIME
-math.randomseed( tonumber(string.sub(tostring(redis.call('TIME')[2]), -6)) )
+// 简单 IP 限流：每分钟每 IP 120 次（可改 RATE_LIMIT_PER_MIN）
+function rateLimit(req, res, next) {
+  if (!RATE_LIMIT_PER_MIN || RATE_LIMIT_PER_MIN <= 0) return next();
+  // Render 后面有代理
+  req.app.set('trust proxy', true);
+  const ip = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || 'unknown';
+  const key = `${ip}:${new Date().toISOString().slice(0,16)}`; // 精确到分钟
+  const c = (rateBuckets.get(key) || 0) + 1;
+  rateBuckets.set(key, c);
+  if (c > RATE_LIMIT_PER_MIN) return res.status(429).json({ error: 'rate_limited' });
+  next();
+}
 
-local function pick_random(arr)
-  return arr[ math.random(1, #arr) ]
-end
-
-local function pick_balanced(arr)
-  local minc = 1/0
-  for _,i in ipairs(arr) do
-    if counts[i] < minc then minc = counts[i] end
-  end
-  local ties = {}
-  for _,i in ipairs(arr) do
-   if counts[i] == minc then table.insert(ties, i) end
-  end
-  return pick_random(ties)
-end
-
-local function pick_weighted(arr)
-  local total_w = 0
-  local weights = {}
-  for _,i in ipairs(arr) do
-    local w = cap - counts[i]
-    if w < 1 then w = 1 end
-    table.insert(weights, {i, w})
-    total_w = total_w + w
-  end
-  local r = math.random(1, total_w)
-  local acc = 0
-  for _,pair in ipairs(weights) do
-    acc = acc + pair[2]
-    if r <= acc then return pair[1] end
-  end
-  return arr[#arr]
-end
-
-local pickIdx
-if strategy == "random" then
-  pickIdx = pick_random(pool)
-elseif strategy == "weighted" then
-  pickIdx = pick_weighted(pool)
-else
-  
-  pickIdx = pick_balanced(pool)
-end
-
-redis.call("INCR", keys[pickIdx])
-if pickIdx == 1 then return "naive" end
-if pickIdx == 2 then return "neutral" end
-return "featured"
-`;
+// Redis Lua block removed: not needed for in-memory mode
 
 // POST /api/study/allocate
-app.post('/api/study/allocate', async (req, res) => {
+app.post('/api/study/allocate', rateLimit, async (req, res) => {
   try {
-    const { study, pid, session, desired_total = 150, test_mode = false, strategy = "balanced", pilot_min = 0 } = req.body || {};
+    const { study, pid, session, desired_total = 150, test_mode = false, desired_strategy = 'balanced', pilot_min_per_group = 0 } = req.body || {};
     if (!study) return res.status(400).json({ error: 'missing study' });
-    await ensureRedis();
+
+    if (!USE_MEMORY) return res.status(500).json({ error: 'server_misconfigured', detail: 'Set ALLOCATION_BACKEND=memory for in-memory mode' });
     const cap = capPerMode(parseInt(desired_total, 10));
-    
-    let mode;
-    
-    if (usingInMemoryFallback) {
-      // Simple in-memory allocation logic
-      if (!inMemoryCounters[study]) {
-        inMemoryCounters[study] = {
-          naive: 0,
-          neutral: 0,
-          featured: 0
-        };
-      }
-      
-      const counts = inMemoryCounters[study];
-      const candidates = [];
-      
-      if (counts.naive < cap) candidates.push('naive');
-      if (counts.neutral < cap) candidates.push('neutral');
-      if (counts.featured < cap) candidates.push('featured');
-      
-      if (candidates.length === 0) {
-        return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
-      }
-      
-      // Select the mode with the lowest count (balanced strategy)
-      if (strategy === "balanced" || strategy === "weighted") {
-        let minCount = Infinity;
-        let minMode = null;
-        
-        for (const candidate of candidates) {
-          if (counts[candidate] < minCount) {
-            minCount = counts[candidate];
-            minMode = candidate;
-          }
-        }
-        
-        mode = minMode;
-      } else {
-        // Random selection
-        mode = candidates[Math.floor(Math.random() * candidates.length)];
-      }
-      
-      // Increment the counter
-      counts[mode]++;
-      
-      console.log(`📊 In-memory allocation for study ${study}: ${mode} (counts: ${JSON.stringify(counts)})`);      
-    } else {
-      // Use Redis for allocation
-      mode = await redis.eval(ALLOCATE_LUA, { keys: [], arguments: [String(study), String(cap), String(!!test_mode), String(strategy || "balanced"), String(pilot_min || 0,10)] });
-      if (!mode) return res.status(200).json({ mode: null, full: true, cap_per_mode: cap });
-
-      // Optional: append a small log list
-      const logKey = `study:${study}:alloc:log`;
-      await redis.lPush(logKey, JSON.stringify({ ts: Date.now(), pid, session, mode, desired_total: Number(desired_total) }));
-      await redis.lTrim(logKey, 0, 9999);
+    const pidKey = String(pid || session || ''); // 幂等 key
+    const pidMap = getPidMap(study);
+    if (pidKey && pidMap.has(pidKey)) {
+      const old = pidMap.get(pidKey);
+      return res.json({ mode: old, cap_per_mode: cap, strategy: desired_strategy, pilot_min_per_group: Number(pilot_min_per_group), backend: 'memory', idempotent: true });
     }
-
-    return res.json({ mode, cap_per_mode: cap, strategy: strategy, pilot_min_per_group: Number(pilot_min) });
-
+    const counts = { ...getStudyCounts(study) };
+    const notFull = [];
+    if (counts.naive    < cap) notFull.push('naive');
+    if (counts.neutral  < cap) notFull.push('neutral');
+    if (counts.featured < cap) notFull.push('featured');
+    if (notFull.length === 0) {
+      return res.status(200).json({ mode: null, full: true, cap_per_mode: cap, backend: 'memory' });
+    }
+    // pilot 最小保底
+    let pool = notFull;
+    const pilotMin = parseInt(pilot_min_per_group || 0, 10);
+    if (pilotMin > 0) {
+      const pool2 = pool.filter(m => counts[m] < pilotMin);
+      if (pool2.length) pool = pool2;
+    }
+    // 策略：balanced（weighted/random 如需再开）
+    const pick = pickBalanced(pool, counts);
+    if (!test_mode) {
+      counts[pick] += 1;
+      setStudyCounts(study, counts);
+      if (pidKey) pidMap.set(pidKey, pick);
+    }
+    return res.json({ mode: pick, cap_per_mode: cap, strategy: desired_strategy, pilot_min_per_group: Number(pilot_min_per_group), backend: 'memory' });
   } catch (e) {
     console.error('allocate error', e);
-    return res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal', detail: e?.message || 'memory allocation failed' });
   }
 });
 
@@ -510,42 +418,37 @@ app.get('/api/study/status', async (req, res) => {
     const study = req.query.study;
     const desired_total = parseInt(req.query.desired_total || '150', 10);
     if (!study) return res.status(400).json({ error: 'missing study' });
-    await ensureRedis();
+    if (!USE_MEMORY) return res.status(500).json({ error: 'server_misconfigured', detail: 'Set ALLOCATION_BACKEND=memory for in-memory mode' });
     const cap = capPerMode(desired_total);
+    const counts = getStudyCounts(study);
+    const pm = getPidMap(study);
+    return res.json({ counts, cap_per_mode: cap, assigned_unique: pm.size, backend: 'memory' });
     
-    let counts;
-    
-    if (usingInMemoryFallback) {
-      // Use in-memory counters
-      counts = {
-        naive: inMemoryCounters[study]?.naive || 0,
-        neutral: inMemoryCounters[study]?.neutral || 0,
-        featured: inMemoryCounters[study]?.featured || 0
-      };
-    } else {
-      // Use Redis
-      const [n1, n2, n3] = await redis.mGet([
-        `study:${study}:count:naive`,
-        `study:${study}:count:neutral`,
-        `study:${study}:count:featured`
-      ]);
-      counts = {
-        naive: parseInt(n1 || '0', 10),
-        neutral: parseInt(n2 || '0', 10),
-        featured: parseInt(n3 || '0', 10)
-      };
-    }
-    
-    return res.json({
-      counts,
-      cap_per_mode: cap
-    });
   } catch (e) {
     console.error('status error', e);
-    return res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal', detail: e?.message || 'memory status failed' });
   }
 });
 
+
+app.post('/api/study/reset', async (req, res) => {
+  try {
+    const token = req.get('X-Admin-Token');
+    if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const { study } = req.body || {};
+    if (!study) return res.status(400).json({ error: 'missing study' });
+    if (!USE_MEMORY) return res.status(500).json({ error: 'server_misconfigured', detail: 'Set ALLOCATION_BACKEND=memory for in-memory mode' });
+    studyCounts.delete(study);
+    studyPidMap.delete(study);
+    saveSnapshot();
+    return res.json({ ok: true, study, backend: 'memory' });
+       } catch (e) {
+         console.error('reset error', e);
+    return res.status(500).json({ error: 'internal', detail: e?.message || 'memory reset failed' });
+       }
+     });
 
 // Test route to verify CORS is working
 app.get('/api/test-cors', (req, res) => {
