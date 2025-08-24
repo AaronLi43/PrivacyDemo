@@ -1669,7 +1669,7 @@ const pending = allFUs.filter(
   
           // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
           storeAuditsWithTags(state, { completionAudit, presenceAudit, orchestrator_tags: completionAudit?.orchestrator_tags });
-          applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit });
+          applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit }, mainQuestions, session, areAllFollowupsCovered);
           allowNextIfAuditPass(state, completionAudit?.verdict);
           finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
 

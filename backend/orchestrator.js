@@ -152,7 +152,7 @@ export function hasTag(state, tag) {
     // For the final question, require ALL follow-ups to be covered before advancing
     const isFinal = isFinalQuestion(state, mainQuestions);
     if (isFinal && session && areAllFollowupsCoveredFn) {
-      // Only advance from final question if all follow-ups are explicitly covered
+      // For final question, ignore skip flags and only advance if all follow-ups are covered
       return areAllFollowupsCoveredFn(session, question);
     }
     
@@ -349,17 +349,23 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
     return `${pref}${ensureEndsWithQuestion(utter || "Could you tell me a bit more")}`;
   }
 
-  export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
+  export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}, mainQuestions = [], session = null, areAllFollowupsCoveredFn = null) {
     const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || shouldAutoAdvanceByTags(state));
 
 
     const backgroundOnly = !!(presenceAudit?.background_only);
     
     if (noExp) {
-        // Skip this question: only allow advancing/transitioning to summary
-        state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
-        state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
-        clearPendingFollowup(state);
+        // For the final question, don't skip if there are uncovered follow-ups
+        const isFinal = isFinalQuestion(state, mainQuestions);
+        const shouldSkipFinalQuestion = !isFinal || (areAllFollowupsCoveredFn && areAllFollowupsCoveredFn(session, question));
+        
+        if (shouldSkipFinalQuestion) {
+            // Skip this question: only allow advancing/transitioning to summary
+            state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
+            state.perQuestion[question] = { ...(state.perQuestion[question]||{}), skip: true };
+            clearPendingFollowup(state);
+        }
     }
     state.styleHints = {
         ...state.styleHints,
