@@ -588,7 +588,7 @@ const unifiedQuestions = [
     "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
     "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
     "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
-    "What was the interview process like?"
+    "How did you feel about the interview process?"
 ];
 
 // Maintain backward compatibility by mapping all modes to the same questions
@@ -716,7 +716,11 @@ const FOLLOWUPS_BY_QUESTION = {
         ] }
     ],
     [unifiedQuestions[6]]: [
-
+        { id: "Q7_F1", prompt: "What was the interview process like?", keywords: [
+            "interview","process","experience","interview process","interview experience","interview timeline",
+            "interview questions","interview questions and answers","interview questions and answers",
+            "interview questions and answers"
+        ] }
     ]
 };
 
