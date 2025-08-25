@@ -573,12 +573,7 @@ let globalPiiCounters = {
     EDUCATIONAL_RECORD: 0
 };
 
-// Background questions (3 questions - no follow-ups needed)
-// const backgroundQuestions = [
-//     "Tell me about your educational background - what did you study in college or university?",
-//     "I'd love to hear about your current work and how you got into it by job interviews?",
-//     "What first got you interested in using GenAI tools like ChatGPT or Gemini for job interviews?"
-// ];
+// All questions are main questions - no background/main distinction
 
 // Main predefined questions stored on server - unified since all modes use the same questions
 const unifiedQuestions = [
@@ -815,10 +810,7 @@ const mainQuestions = unifiedQuestions;
     }
 }
 
-// Helper function to check if a question is a background question
-// function isBackgroundQuestion(question) {
-//     return backgroundQuestions.includes(question);
-// }
+// All questions require follow-ups - no special background question handling
 
 
 
@@ -1202,7 +1194,6 @@ app.get('/api/predefined_questions/:mode', (req, res) => {
         res.json({
             success: true,
             questions: predefinedQuestions[mode],
-            backgroundQuestions: [],
             mainQuestions: predefinedQuestions[mode],
             mode: mode
         });
@@ -1341,7 +1332,7 @@ app.post('/api/chat', async (req, res) => {
       // Context maintenance
       manageConversationContext(currentSessionId);
   
-      // Questions (background + main questions) - use global arrays for consistency
+      // Questions - all questions are main questions requiring follow-ups
     //   const mainQuestions = (predefinedQuestions && predefinedQuestions.length ? predefinedQuestions : unifiedQuestions);
     const clientMainQs = Array.isArray(clientPredefined) ? clientPredefined : [];
     const mainQuestions = clientMainQs.length
@@ -1488,7 +1479,6 @@ app.post('/api/chat', async (req, res) => {
           console.log("🔍 Follow-up retrieval debug:", {
             question: qNow ? qNow.substring(0, 50) + '...' : 'null',
             questionIndex: state.mainIdx,
-            isQ6: state.mainIdx === 5,
             followupsFound: allFUs ? allFUs.length : 0,
             followupDetails: allFUs ? allFUs.map(f => ({ id: f.id, prompt: f.prompt.substring(0, 30) + '...' })) : []
           });
@@ -1523,7 +1513,6 @@ const pending = allFUs.filter(
           console.log("[coverage]", {
             q: qNow ? qNow.substring(0, 50) + '...' : 'null',
             questionIndex: state.mainIdx,
-            isQ6: state.mainIdx === 5,
             totalFollowups: allFUs.length,
             followupIds: allFUs.map(f => f.id),
             covered: [...coveredIds],
@@ -1613,45 +1602,16 @@ const pending = allFUs.filter(
           // ====== Presence Audit ======
           const presT0 = Date.now();
           
-          // Skip presence audit for background questions - they don't need follow-up questions
-        //   if (isBackgroundQuestion) {
-        //     presenceAudit = {
-        //       hasQuestion: false,
-        //       reason: 'Background question - no follow-up needed',
-        //       confidence: 1.0,
-        //       shouldRegenerate: false
-        //     };
-        //     log.info('background question - presence audit skipped');
-        //   } else {
-        //     presenceAudit = await auditQuestionPresence(
-        //       message,
-        //       aiResponse,
-        //       qNow,
-        //       session.conversationHistory,
-        //       isFinalQuestionValue,
-        //       followUpMode
-        //     );
-        //   }
-
-        //   presenceAudit = await auditQuestionPresence(
-        //     message,
-        //     aiResponse,
-        //     qNow,
-        //     session.conversationHistory,
-        //     isFinalQuestionValue,
-        //     followUpMode
-        //   );
-
-        // const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
-        const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
-        presenceAudit = await auditQuestionPresence(
-                     message,
-                     /* draft */ aiResponse,
-                     qNow,
-                     session.conversationHistory,
-                     isFinalQuestionValue,
-                     presenceFollowUpMode
-                   );
+          // All questions get presence audit - no background question special handling
+          const presenceFollowUpMode = (parsedExec && parsedExec.action === "SUMMARIZE_QUESTION") ? false : followUpMode;
+          presenceAudit = await auditQuestionPresence(
+            message,
+            aiResponse,
+            qNow,
+            session.conversationHistory,
+            isFinalQuestionValue,
+            presenceFollowUpMode
+          );
 
           const presDur = Date.now() - presT0;
   
@@ -1710,11 +1670,9 @@ const pending = allFUs.filter(
             usedPolish = true;
           }
   
-          // ====== Store audits → Apply heuristics → Permit actions (strict order) ======
+          // ====== Store audits → Apply heuristics (strict order) ======
           storeAuditsWithTags(state, { completionAudit, presenceAudit, orchestrator_tags: completionAudit?.orchestrator_tags });
           applyHeuristicsFromAudits(state, qNow, { completionAudit, presenceAudit });
-          allowNextIfAuditPass(state, completionAudit?.verdict);
-          finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
 
         // Adapted to use new advancement logic and composeAssistantMessage for next question transition
         const currentQuestion = qNow;
@@ -1771,6 +1729,10 @@ const pending = allFUs.filter(
             missing: completionAudit?.missing
           });
         }
+
+        // ====== Apply action permissions after advancement decision ======
+        allowNextIfAuditPass(state, completionAudit?.verdict);
+        finalizeIfLastAndPassed(state, mainQuestions, completionAudit?.verdict);
   
         } catch (err) {
           log.error('executor/audit pipeline error', { error: err.message, stack: err.stack });

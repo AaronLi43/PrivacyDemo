@@ -5,12 +5,12 @@
 export const WELCOME_TEXT =
   "Welcome to the study! We’re excited to learn about how you’ve used AI for job interviews and your thoughts on the ethical considerations involved. Your input will help researchers better understand this important and emerging use of AI in real-world contexts. There are no right or wrong answers; every experience you share will provide valuable insights.\n\nFirst of all, I’d like to learn a bit more about your background before we discuss your specific experiences using AI for job interviews.";
 
-export function initState(session, { maxFollowups = { background: 0, main: 3 } } = {}) {
+export function initState(session, { maxFollowups = { main: 3 } } = {}) {
     if (!session.state) {
       session.state = {
         phase: "main",
         mainIdx: 0,
-        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]),// Allowed actions for main questions
+        allowedActions: new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY", "SUMMARIZE_QUESTION", "NEXT_QUESTION"]),
         perQuestion: {},            // question -> { followups: number, lastScores: null }
         maxFollowups: { main: (maxFollowups?.main ?? 3) },
         lastAudit: null,
@@ -22,8 +22,6 @@ export function initState(session, { maxFollowups = { background: 0, main: 3 } }
         // Recent follow-up coverage (for debugging/visualization only)
         followupCoverage: []
       };
-      
-      // No need to call resetAllowedForQuestion since we already set the correct actions above
     }
     return session.state;
   }
@@ -124,37 +122,17 @@ export function hasTag(state, tag) {
      return hasPendingFollowup(state) ? ["ASK_FOLLOWUP"] : Array.from(state.allowedActions);
   }
     
-// Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
+// Audit gating: require follow-ups for all questions before allowing advancement
  export function allowNextIfAuditPass(state, completionAuditVerdict) {
-    // Special handling for Q6: don't immediately advance even if audit passes
-    const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 5);
-    
     console.log('🔍 allowNextIfAuditPass check:', {
       phase: state.phase,
       mainIdx: state.mainIdx,
-      isSubstantialFinalQuestion,
       completionAuditVerdict,
       wantsImmediateNext: wantsImmediateNext(state, completionAuditVerdict)
     });
     
-    // For Q6, always allow follow-ups regardless of audit verdict
-    if (isSubstantialFinalQuestion) {
-      console.log('🔍 Q6 detected: forcing follow-up actions');
-      if (hasPendingFollowup(state)) {
-        state.allowedActions = new Set(["ASK_FOLLOWUP"]);
-      } else {
-        state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY"]);
-      }
-      return;
-    }
-    
-    // Use the helper function to determine if we should immediately advance to next question (supports verdict or tag)
-    if (wantsImmediateNext(state, completionAuditVerdict)) {
-      clearPendingFollowup(state);
-      state.allowedActions = new Set(["NEXT_QUESTION", "SUMMARIZE_QUESTION"]);
-      return;
-    }
-    // Audit failed: if there's a pending follow-up, only allow ASK_FOLLOWUP; otherwise allow regular clarification
+    // Always prioritize follow-ups over immediate advancement
+    // Only allow advancement if there are truly no follow-ups for this question
     if (hasPendingFollowup(state)) {
       state.allowedActions = new Set(["ASK_FOLLOWUP"]);
     } else {
@@ -169,30 +147,29 @@ export function hasTag(state, tag) {
     // This allows the final question to have follow-ups like any other question
   }
   
-  // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
+  // Based on audit, decide whether to advance; require ALL follow-ups before advancing any question
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
-         // For Q6 (the substantial final question about hidden AI use), require ALL follow-ups before advancing
-     // Q6 is the 6th question (index 5) and is the key final question that needs thorough coverage
-     const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 5);
-    
     console.log('🔍 shouldAdvance check:', {
       phase: state.phase,
       mainIdx: state.mainIdx,
-      isSubstantialFinalQuestion,
       completionAuditVerdict,
       hasSession: !!session,
       hasFollowupCoveredFn: !!areAllFollowupsCoveredFn,
       questionPreview: question ? question.substring(0, 50) + '...' : null
     });
     
-    if (isSubstantialFinalQuestion && session && areAllFollowupsCoveredFn) {
-      // Only advance from Q6 if all its follow-ups are explicitly covered
+    // For ALL questions, require follow-up coverage before advancing
+    if (session && areAllFollowupsCoveredFn && question) {
       const allCovered = areAllFollowupsCoveredFn(session, question);
-      console.log('🔍 Q6 follow-up coverage check:', { allCovered });
+      console.log('🔍 Follow-up coverage check:', { 
+        questionIndex: state.mainIdx,
+        allCovered,
+        questionPreview: question.substring(0, 50) + '...'
+      });
       return allCovered;
     }
     
-    // For other questions (including Q7 wrap-up), use the existing logic
+    // Fallback: if no follow-up checking available, use audit result or skip status
     const pass = wantsImmediateNext(state, completionAuditVerdict);
     const skipped = !!(state?.perQuestion?.[question]?.skip);
     return pass || skipped;
@@ -387,9 +364,6 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
 
   export function applyHeuristicsFromAudits(state, question, { completionAudit, presenceAudit } = {}) {
     const noExp = !!(presenceAudit?.no_experience || completionAudit?.no_experience || shouldAutoAdvanceByTags(state));
-
-
-    const backgroundOnly = !!(presenceAudit?.background_only);
     
     if (noExp) {
         // Skip this question: only allow advancing/transitioning to summary
@@ -402,8 +376,7 @@ export function storeAuditsWithTags(state, { completionAudit, presenceAudit, orc
         prefer_transition: true,
         gentle_tone: true,
         ask_outcome_only_if_event: true,
-        skip_if_no_experience: true,
-        avoid_outcome_for_background_only: backgroundOnly || false
+        skip_if_no_experience: true
     };
   }
     
