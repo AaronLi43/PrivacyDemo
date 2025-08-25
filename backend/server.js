@@ -951,16 +951,6 @@ function isCoveredOrSkipped(session, q, fid) {
     const key = getFollowupKey(q, fid);
     const s = session.followupStatus?.[key];
     
-    // Debug logging for Q6 follow-ups
-    if (fid.startsWith('Q6_')) {
-        console.log(`🔍 isCoveredOrSkipped debug for ${fid}:`, {
-            key,
-            status: s,
-            type: typeof s,
-            result: !s ? false : (s === "covered" ? true : (typeof s === "object" && (s.status === "covered" || s.status === "skipped_na")))
-        });
-    }
-    
     if (!s) return false;
     if (s === "covered") return true; // Compatible with old values
     return typeof s === "object" && (s.status === "covered" || s.status === "skipped_na");
@@ -1118,11 +1108,12 @@ async function auditQuestionCompletion(
                     markFollowupCovered(session, currentQuestion, it.id);
                     console.log(`🔍 Marking ${it.id} as COVERED based on audit`);
                 } else {
-                    // Clear follow-up if audit says it's not covered
+                    // Clear follow-up if audit says it's not covered (including previously skipped ones)
                     const key = getFollowupKey(currentQuestion, it.id);
                     if (session.followupStatus && session.followupStatus[key]) {
+                        const wasSkipped = session.followupStatus[key]?.status === 'skipped_na';
                         delete session.followupStatus[key];
-                        console.log(`🔍 Clearing ${it.id} as NOT COVERED based on audit`);
+                        console.log(`🔍 Clearing ${it.id} as NOT COVERED based on audit${wasSkipped ? ' (was previously skipped)' : ''}`);
                     }
                 }
             }
@@ -1502,18 +1493,17 @@ app.post('/api/chat', async (req, res) => {
             .map(it => it.id)
           );
 
+          // Auto-skipping disabled: Always ask all follow-ups regardless of user reluctance
+          // This ensures complete follow-up coverage before advancing to next question
           const deny = await detectNoExperience(message, qNow, session.conversationHistory);
           if (deny.no_experience) {
-            // If the user refused to answer, skip all follow-ups for this question.
-            // If the user has no experience, keep the original logic: for event-based questions, skip all; otherwise, only skip event-dependent follow-ups.
-            const eventBased = isEventBasedMainQuestion(qNow);
-            const skipAll = (deny.cause === "refusal") || eventBased;
-            for (const fu of allFUs) {
-              const shouldSkip = skipAll || isEventDependentFollowup(fu);
-              if (shouldSkip && !isCoveredOrSkipped(session, qNow, fu.id)) {
-                markFollowupSkipped(session, qNow, fu.id, `${deny.cause || 'no_experience'}: ${deny.reason || 'LLM'}`);
-              }
-            }
+            console.log(`🔍 Detected user reluctance/no-experience but auto-skip is DISABLED:`, {
+              cause: deny.cause,
+              reason: deny.reason,
+              question: qNow.substring(0, 50) + '...',
+              action: 'Continue asking follow-ups anyway'
+            });
+            // Don't skip any follow-ups - let the conversation continue naturally
           }
 
 // Both covered and skipped follow-ups are considered "completed", no longer pending
@@ -1984,11 +1974,12 @@ async function auditQuestionPSS(
                         markFollowupCovered(session, currentQuestion, item.id);
                         console.log(`🔍 Marking ${item.id} as COVERED based on audit (2nd location)`);
                     } else {
-                        // Clear follow-up if audit says it's not covered
+                        // Clear follow-up if audit says it's not covered (including previously skipped ones)
                         const key = getFollowupKey(currentQuestion, item.id);
                         if (session.followupStatus && session.followupStatus[key]) {
+                            const wasSkipped = session.followupStatus[key]?.status === 'skipped_na';
                             delete session.followupStatus[key];
-                            console.log(`🔍 Clearing ${item.id} as NOT COVERED based on audit (2nd location)`);
+                            console.log(`🔍 Clearing ${item.id} as NOT COVERED based on audit (2nd location)${wasSkipped ? ' (was previously skipped)' : ''}`);
                         }
                     }
                 }

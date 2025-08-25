@@ -2691,11 +2691,11 @@ class PrivacyDemoApp {
                     if (this.state.justCompletedQuestion || this.state.currentQuestionIndex === null || this.state.currentQuestionIndex === undefined) {
                         const nextQuestionIndex = this.getNextUncompletedQuestionIndex();
                         
-                        // If all questions are completed, end the conversation
+                        // If all questions are completed, let the backend handle conversation ending
+                        // Don't terminate here - trust the backend's question_completed signal
                         if (nextQuestionIndex === -1) {
-                            this.state.questionsCompleted = true;
-                            this.state.questionMode = false;
-                            this.stopConversationAndShowCongratulation();
+                            console.log('All questions marked as completed - waiting for backend to signal conversation end');
+                            // Don't terminate here - let the backend's follow-up completion logic handle it
                             return;
                         }
                         
@@ -2914,22 +2914,21 @@ class PrivacyDemoApp {
                         
                         // Check if this was the final question
                         if (isFinalQuestion) {
-                            console.log('Final question completed! Ending conversation.');
-                            this.state.questionsCompleted = true;
-                            this.state.questionMode = false;
+                            console.log('Final question completed! But check if all follow-ups are done.');
                             
-                            // If this was a wrap-up response, show special notification
+                            // Don't immediately end - the backend will signal when ALL follow-ups are complete
+                            // Just show progress notification
                             if (hasWrapUpLanguage) {
-                                console.log('Wrap-up response detected - conversation concluded with thank you message');
+                                console.log('Wrap-up response detected - conversation may be concluding');
                                 this.showNotification('🎉 Conversation completed! Thank you for sharing your experiences.', 'success');
                             }
                             
-                            // Show final completion notification
+                            // Show progress notification but don't terminate yet
                             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
-                            this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
+                            this.showNotification(`✅ Question ${totalQuestions}/${totalQuestions} completed!`, 'success');
                             
-                            // Stop conversation and show congratulation popup
-                            this.stopConversationAndShowCongratulation();
+                            // Let the backend handle final termination based on follow-up completion
+                            // Don't call stopConversationAndShowCongratulation() here
                         } else {
                             // Show notification to user about progress
                             const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
@@ -2967,22 +2966,20 @@ class PrivacyDemoApp {
                             console.log(`Final question exchanges: ${currentQuestionExchanges}`);
                             
                             if (currentQuestionExchanges >= 6) { // Allow 6 exchanges before auto-completing (increased to encourage more personal stories)
-                                console.log('Final question has had enough exchanges, auto-completing conversation...');
+                                console.log('Final question has had enough exchanges, but still need to check follow-ups...');
                                 
                                 // Mark the final question as completed
                                 if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
                                     this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
                                 }
                                 
-                                this.state.questionsCompleted = true;
-                                this.state.questionMode = false;
-                                
-                                // Show final completion notification
+                                // Show progress notification but don't terminate yet
                                 const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
-                                this.showNotification(`🎉 All ${totalQuestions} questions completed!`, 'success');
+                                this.showNotification(`✅ Question ${totalQuestions}/${totalQuestions} completed! Checking follow-ups...`, 'success');
                                 
-                                // Stop conversation and show congratulation popup
-                                this.stopConversationAndShowCongratulation();
+                                // Let the backend determine if all follow-ups are complete
+                                // Don't auto-terminate here - trust the backend's follow-up completion logic
+                                console.log('Auto-completion triggered but deferring to backend for follow-up completion check');
                             }
                         }
                     }
@@ -2996,17 +2993,20 @@ class PrivacyDemoApp {
                     // Monitor for questions after bot response (for user agent)
                     this.monitorForQuestions();
                     
-                    // Check if all predefined questions are completed
-                    // The questions array from backend already includes both background (3) and main (7) questions
-                    // So we just need to check against the total questions length
-                    const totalQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
-                    
-                    if (this.state.completedQuestionIndices.length >= totalQuestionsCount) {
-                        console.log(`All ${totalQuestionsCount} questions completed - ending conversation`);
-                        this.state.questionsCompleted = true;
-                        this.state.questionMode = false;
-                        this.stopConversationAndShowCongratulation();
-                        return;
+                    // Check if conversation should end based on backend's completion signal
+                    // The backend now properly handles follow-up requirements before marking questions complete
+                    // Trust the backend's question_completed signal rather than counting questions
+                    if (response && response.question_completed) {
+                        const totalQuestionsCount = this.state.predefinedQuestions[this.state.mode].length;
+                        const isFinalQuestion = this.state.currentQuestionIndex === totalQuestionsCount - 1;
+                        
+                        if (isFinalQuestion) {
+                            console.log('Final question and all its follow-ups completed - ending conversation');
+                            this.state.questionsCompleted = true;
+                            this.state.questionMode = false;
+                            this.stopConversationAndShowCongratulation();
+                            return;
+                        }
                     }
                     
                     return;
