@@ -716,11 +716,7 @@ const FOLLOWUPS_BY_QUESTION = {
         ] }
     ],
     [unifiedQuestions[6]]: [
-        { id: "Q7_F1", prompt: "What was the interview process like?", keywords: [
-            "interview","process","experience","interview process","interview experience","interview timeline",
-            "interview questions","interview questions and answers","interview questions and answers",
-            "interview questions and answers"
-        ] }
+
     ]
 };
 
@@ -1488,8 +1484,9 @@ app.post('/api/chat', async (req, res) => {
           }
 
 // Both covered and skipped follow-ups are considered "completed", no longer pending
+// Also exclude follow-ups that have been asked but not yet covered (to prevent repeats)
 const pending = allFUs.filter(
-  f => !coveredIds.has(f.id) && !isCoveredOrSkipped(session, qNow, f.id)
+  f => !coveredIds.has(f.id) && !isCoveredOrSkipped(session, qNow, f.id) && !hasBeenAsked(session, qNow, f.id)
 );
         //   const pending = allFUs.filter(f => !coveredIds.has(f.id));
           
