@@ -126,6 +126,28 @@ export function hasTag(state, tag) {
     
 // Audit gating: if completion audit passes, allow asking follow-ups; otherwise disable them
  export function allowNextIfAuditPass(state, completionAuditVerdict) {
+    // Special handling for Q6: don't immediately advance even if audit passes
+    const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 5);
+    
+    console.log('🔍 allowNextIfAuditPass check:', {
+      phase: state.phase,
+      mainIdx: state.mainIdx,
+      isSubstantialFinalQuestion,
+      completionAuditVerdict,
+      wantsImmediateNext: wantsImmediateNext(state, completionAuditVerdict)
+    });
+    
+    // For Q6, always allow follow-ups regardless of audit verdict
+    if (isSubstantialFinalQuestion) {
+      console.log('🔍 Q6 detected: forcing follow-up actions');
+      if (hasPendingFollowup(state)) {
+        state.allowedActions = new Set(["ASK_FOLLOWUP"]);
+      } else {
+        state.allowedActions = new Set(["ASK_FOLLOWUP", "REQUEST_CLARIFY"]);
+      }
+      return;
+    }
+    
     // Use the helper function to determine if we should immediately advance to next question (supports verdict or tag)
     if (wantsImmediateNext(state, completionAuditVerdict)) {
       clearPendingFollowup(state);
@@ -151,11 +173,23 @@ export function hasTag(state, tag) {
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
          // For Q6 (the substantial final question about hidden AI use), require ALL follow-ups before advancing
      // Q6 is the 6th question (index 5) and is the key final question that needs thorough coverage
-     const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 6);
+     const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 5);
+    
+    console.log('🔍 shouldAdvance check:', {
+      phase: state.phase,
+      mainIdx: state.mainIdx,
+      isSubstantialFinalQuestion,
+      completionAuditVerdict,
+      hasSession: !!session,
+      hasFollowupCoveredFn: !!areAllFollowupsCoveredFn,
+      questionPreview: question ? question.substring(0, 50) + '...' : null
+    });
     
     if (isSubstantialFinalQuestion && session && areAllFollowupsCoveredFn) {
       // Only advance from Q6 if all its follow-ups are explicitly covered
-      return areAllFollowupsCoveredFn(session, question);
+      const allCovered = areAllFollowupsCoveredFn(session, question);
+      console.log('🔍 Q6 follow-up coverage check:', { allCovered });
+      return allCovered;
     }
     
     // For other questions (including Q7 wrap-up), use the existing logic
