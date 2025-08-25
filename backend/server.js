@@ -716,10 +716,11 @@ const FOLLOWUPS_BY_QUESTION = {
         ] }
     ],
     [unifiedQuestions[6]]: [
-        { id: "Q7_F1", prompt: "What was the interview process like?", keywords: [
-            "interview","process","experience","interview process","interview experience","interview timeline",
-            "interview questions","interview questions and answers","interview questions and answers",
-            "interview questions and answers"
+        { id: "Q7_F1", prompt: "What improvements would you like to see in the interview process?", keywords: [
+            "improve","improvements","improvement","better","better interview","better process","better experience",
+            "better interview process","better interview experience","better interview timeline",
+            "better interview questions","better interview questions and answers","better interview questions and answers",
+            "better interview questions and answers"
         ] }
     ]
 };
