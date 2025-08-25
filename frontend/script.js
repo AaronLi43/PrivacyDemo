@@ -2975,7 +2975,7 @@ class PrivacyDemoApp {
                                 
                                 // Show progress notification but don't terminate yet
                                 const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
-                                this.showNotification(`✅ Question ${totalQuestions}/${totalQuestions} completed! Checking follow-ups...`, 'success');
+                                // Notification removed as requested
                                 
                                 // Let the backend determine if all follow-ups are complete
                                 // Don't auto-terminate here - trust the backend's follow-up completion logic
