@@ -149,14 +149,20 @@ export function hasTag(state, tag) {
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
-    // For the final question, require ALL follow-ups to be covered before advancing
-    const isFinal = isFinalQuestion(state, mainQuestions);
-    if (isFinal && session && areAllFollowupsCoveredFn) {
-      // Only advance from final question if all follow-ups are explicitly covered
+    // For the second-to-last question (substantial final question), require ALL follow-ups before advancing
+    // This adapts to any question list length - the penultimate question needs thorough coverage
+    const isSubstantialFinalQuestion = (
+      state.phase === "main" && 
+      mainQuestions.length >= 2 && 
+      state.mainIdx === mainQuestions.length - 2
+    );
+    
+    if (isSubstantialFinalQuestion && session && areAllFollowupsCoveredFn) {
+      // Only advance from substantial final question if all its follow-ups are explicitly covered
       return areAllFollowupsCoveredFn(session, question);
     }
     
-    // For non-final questions, use the existing logic
+    // For other questions (including the final wrap-up question), use the existing logic
     const pass = wantsImmediateNext(state, completionAuditVerdict);
     const skipped = !!(state?.perQuestion?.[question]?.skip);
     return pass || skipped;
