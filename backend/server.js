@@ -1907,11 +1907,11 @@ async function auditQuestionPSS(
         - If ALL follow-ups are covered => verdict = "ALLOW_NEXT_QUESTION".
         - Otherwise => verdict = "REQUIRE_MORE" and choose exactly ONE next follow-up that remains uncovered (prefer earlier order)
 
-        OUTPUT JSON ONLY (no markdown):
+        OUTPUT VALID JSON ONLY (no markdown, no extra commas):
         {
           "question_id": "<text>",
           "coverage_map": [
-            { "id": "Qx_Fy", "covered": true|false, "evidence": "1-2 short phrases from the user that justify the decision or empty if false" }
+            { "id": "Qx_Fy", "covered": true|false, "evidence": "single quoted phrase or empty string" }
           ],
           "next_followup_id": "Qx_Fy" | null,
           "next_followup_prompt": "string | null",
@@ -1919,6 +1919,8 @@ async function auditQuestionPSS(
           "confidence": 0.0-1.0,
           "notes": "brief"
         }
+        
+        IMPORTANT: Evidence field must be a single string, no extra commas or quotes inside.
         `;
 
         const recent = conversationHistory.slice(-10);
@@ -1948,7 +1950,15 @@ async function auditQuestionPSS(
         }
         let parsed;
         try {
-            parsed = JSON.parse(raw);
+            // Clean up common JSON formatting issues
+            let cleanedRaw = raw;
+            // Fix malformed evidence fields with extra commas
+            cleanedRaw = cleanedRaw.replace(/"evidence":\s*"([^"]*)",\s*"([^"]*)"/, '"evidence": "$1 $2"');
+            // Remove trailing commas
+            cleanedRaw = cleanedRaw.replace(/,\s*}/g, '}');
+            cleanedRaw = cleanedRaw.replace(/,\s*]/g, ']');
+            
+            parsed = JSON.parse(cleanedRaw);
         } catch (e) {
             console.error('Failed to parse follow-up coverage audit JSON:', e);
             console.log('Raw audit response:', raw);
@@ -1956,7 +1966,7 @@ async function auditQuestionPSS(
         }
 
         // —— 同步会话中的覆盖状态 —— //
-        const session = getSession((conversationHistory[0] && conversationHistory[0].sessionId) || null) || getSession(null);
+        // Use the session parameter passed to the function
         if (Array.isArray(parsed.coverage_map)) {
             parsed.coverage_map.forEach(item => {
                 if (item && item.id && item.covered === true) {

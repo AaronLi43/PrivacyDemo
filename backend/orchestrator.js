@@ -149,9 +149,9 @@ export function hasTag(state, tag) {
   
   // Based on audit, decide whether to advance; we use "audit-first", only advance when ALLOW_NEXT_QUESTION
   export function shouldAdvance(completionAuditVerdict, state, question, session = null, mainQuestions = [], areAllFollowupsCoveredFn = null) {
-    // For Q6 (the substantial final question about hidden AI use), require ALL follow-ups before advancing
-    // Q6 is the 6th question (index 5) and is the key final question that needs thorough coverage
-    const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 6);
+         // For Q6 (the substantial final question about hidden AI use), require ALL follow-ups before advancing
+     // Q6 is the 6th question (index 5) and is the key final question that needs thorough coverage
+     const isSubstantialFinalQuestion = (state.phase === "main" && state.mainIdx === 5);
     
     if (isSubstantialFinalQuestion && session && areAllFollowupsCoveredFn) {
       // Only advance from Q6 if all its follow-ups are explicitly covered
