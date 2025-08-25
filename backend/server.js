@@ -582,8 +582,7 @@ const unifiedQuestions = [
     "Can you walk me through a specific time when you used AI before and during job interviews?",
     "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
     "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
-    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
-    "How did you feel about the interview process?"
+    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
 ];
 
 // Maintain backward compatibility by mapping all modes to the same questions
@@ -708,14 +707,6 @@ const FOLLOWUPS_BY_QUESTION = {
             "why","feel","share","openly","private","confidential","sensitive","sensitive information",
             "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
             "reputation","principle","moral","self-reflection"
-        ] }
-    ],
-    [unifiedQuestions[6]]: [
-        { id: "Q7_F1", prompt: "What improvements would you like to see in the interview process?", keywords: [
-            "improve","improvements","improvement","better","better interview","better process","better experience",
-            "better interview process","better interview experience","better interview timeline",
-            "better interview questions","better interview questions and answers","better interview questions and answers",
-            "better interview questions and answers"
         ] }
     ]
 };
@@ -957,7 +948,19 @@ function markFollowupSkipped(session, q, fid, reason = "inapplicable") {
     { status: "skipped_na", reason, ts: Date.now() };
 }
 function isCoveredOrSkipped(session, q, fid) {
-    const s = session.followupStatus?.[getFollowupKey(q, fid)];
+    const key = getFollowupKey(q, fid);
+    const s = session.followupStatus?.[key];
+    
+    // Debug logging for Q6 follow-ups
+    if (fid.startsWith('Q6_')) {
+        console.log(`🔍 isCoveredOrSkipped debug for ${fid}:`, {
+            key,
+            status: s,
+            type: typeof s,
+            result: !s ? false : (s === "covered" ? true : (typeof s === "object" && (s.status === "covered" || s.status === "skipped_na")))
+        });
+    }
+    
     if (!s) return false;
     if (s === "covered") return true; // Compatible with old values
     return typeof s === "object" && (s.status === "covered" || s.status === "skipped_na");
@@ -1110,9 +1113,19 @@ async function auditQuestionCompletion(
     // Synchronize coverage status to the current session
     if (session && Array.isArray(parsed.coverage_map)) {
         for (const it of parsed.coverage_map) {
-        if (it?.id && it.covered === true) {
-            markFollowupCovered(session, currentQuestion, it.id);
-        }
+            if (it?.id) {
+                if (it.covered === true) {
+                    markFollowupCovered(session, currentQuestion, it.id);
+                    console.log(`🔍 Marking ${it.id} as COVERED based on audit`);
+                } else {
+                    // Clear follow-up if audit says it's not covered
+                    const key = getFollowupKey(currentQuestion, it.id);
+                    if (session.followupStatus && session.followupStatus[key]) {
+                        delete session.followupStatus[key];
+                        console.log(`🔍 Clearing ${it.id} as NOT COVERED based on audit`);
+                    }
+                }
+            }
         }
     }
     // Fallback to select the next follow-up
@@ -1966,8 +1979,18 @@ async function auditQuestionPSS(
         // Use the session parameter passed to the function
         if (Array.isArray(parsed.coverage_map)) {
             parsed.coverage_map.forEach(item => {
-                if (item && item.id && item.covered === true) {
-                    markFollowupCovered(session, currentQuestion, item.id);
+                if (item && item.id) {
+                    if (item.covered === true) {
+                        markFollowupCovered(session, currentQuestion, item.id);
+                        console.log(`🔍 Marking ${item.id} as COVERED based on audit (2nd location)`);
+                    } else {
+                        // Clear follow-up if audit says it's not covered
+                        const key = getFollowupKey(currentQuestion, item.id);
+                        if (session.followupStatus && session.followupStatus[key]) {
+                            delete session.followupStatus[key];
+                            console.log(`🔍 Clearing ${item.id} as NOT COVERED based on audit (2nd location)`);
+                        }
+                    }
                 }
             });
         }
