@@ -587,8 +587,8 @@ const unifiedQuestions = [
     "Can you walk me through a specific time when you used AI before and during job interviews?",
     "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
     "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
-    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
-    "How did you feel about the interview process?"
+    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    
 ];
 
 // Maintain backward compatibility by mapping all modes to the same questions
@@ -713,13 +713,6 @@ const FOLLOWUPS_BY_QUESTION = {
             "why","feel","share","openly","private","confidential","sensitive","sensitive information",
             "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
             "reputation","principle","moral","self-reflection"
-        ] }
-    ],
-    [unifiedQuestions[6]]: [
-        { id: "Q7_F1", prompt: "What was the interview process like?", keywords: [
-            "interview","process","experience","interview process","interview experience","interview timeline",
-            "interview questions","interview questions and answers","interview questions and answers",
-            "interview questions and answers"
         ] }
     ]
 };
@@ -1482,7 +1475,16 @@ app.post('/api/chat', async (req, res) => {
             followUpMode,
             session
           );
-          const allFUs = getFollowupsForQuestion(qNow);        
+          const allFUs = getFollowupsForQuestion(qNow);
+          
+          console.log("🔍 Follow-up retrieval debug:", {
+            question: qNow ? qNow.substring(0, 50) + '...' : 'null',
+            questionIndex: state.mainIdx,
+            isQ6: state.mainIdx === 5,
+            followupsFound: allFUs ? allFUs.length : 0,
+            followupDetails: allFUs ? allFUs.map(f => ({ id: f.id, prompt: f.prompt.substring(0, 30) + '...' })) : []
+          });
+          
           const coveredIds = new Set(
           (completionAudit?.coverage_map || [])
             .filter(it => it?.covered)
@@ -1511,10 +1513,15 @@ const pending = allFUs.filter(
           
           // log for debugging
           console.log("[coverage]", {
-            q: qNow,
+            q: qNow ? qNow.substring(0, 50) + '...' : 'null',
+            questionIndex: state.mainIdx,
+            isQ6: state.mainIdx === 5,
+            totalFollowups: allFUs.length,
+            followupIds: allFUs.map(f => f.id),
             covered: [...coveredIds],
             pending: pending.map(f => f.id),
-            verdict: completionAudit?.verdict
+            verdict: completionAudit?.verdict,
+            auditCoverageMap: completionAudit?.coverage_map
           });
 
 
@@ -1906,7 +1913,7 @@ async function auditQuestionPSS(
     }
 
     try {
-        // 取出该主问题的 follow-ups
+        // Retrieve the follow-ups for the current main question
         const fuList = getFollowupsForQuestion(currentQuestion); 
         const fuPayload = fuList.map(f => ({ id: f.id, prompt: f.prompt, keywords: f.keywords || [] }));
 
