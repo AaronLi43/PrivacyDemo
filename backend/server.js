@@ -588,7 +588,7 @@ const unifiedQuestions = [
     "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
     "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
     "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
-    "You've completed the interview. Please share your thoughts on the interview process and your experience using AI during the interview."
+    "What was the interview process like?"
 ];
 
 // Maintain backward compatibility by mapping all modes to the same questions
@@ -1286,10 +1286,6 @@ app.post('/api/chat', async (req, res) => {
             step
           });
           
-          // Mark welcome as sent to prevent repeated greetings
-          if (!session.flags) session.flags = {};
-          session.flags.welcomeSent = true;
-          
           return res.json({
             success: true,
             bot_response: fullMessage,
@@ -1368,37 +1364,37 @@ app.post('/api/chat', async (req, res) => {
 
                 if (!session.flags) session.flags = {};
                 if (!session.flags.welcomeSent) {
-                    const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
-                    if (firstQ) {
-                      const { prefix, suffix } = await polishFollowupConnectors({
-                        followupPrompt: firstQ,
-                        currentQuestion: firstQ,
-                        conversationHistory: session.conversationHistory,
-                        styleHints: state.styleHints || {}
-                      });
-                      const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
-                      const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
-                      const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
-                      const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
-                      const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
-                      const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
-                      session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
-                      
-                      // Mark welcome as sent to prevent repeated greetings
-                      session.flags.welcomeSent = true;
-                      
-                      return res.json({
-                        success: true,
-                        bot_response: msg,
-                        conversation_history: session.conversationHistory,
-                        step,
-                        question_completed: false,
-                        pending_followup_exists: false,
-                        allowed_actions: Array.from(state.allowedActions),
-                        interview_finished: false,
-                        session_id: currentSessionId
-                             });
-                    }
+                    const welcomePrefix =
+                        state?.welcomeText ||
+                        "Hi! Thanks for joining—I'll ask a few short questions and some small follow-ups to keep us on track.";
+                }
+
+                const firstQ = qNow || getCurrentQuestion(state, mainQuestions);
+                if (firstQ) {
+                  const { prefix, suffix } = await polishFollowupConnectors({
+                    followupPrompt: firstQ,
+                    currentQuestion: firstQ,
+                    conversationHistory: session.conversationHistory,
+                    styleHints: state.styleHints || {}
+                  });
+                  const core = firstQ.trim().endsWith("?") ? firstQ.trim() : (firstQ.trim() + "?");
+                  const cleaned = sanitizeAndDedupeConnectors(core, prefix, suffix);
+                  const left = cleaned.prefix ? (cleaned.prefix + " ") : "";
+                  const right = cleaned.suffix ? (" " + cleaned.suffix) : "";
+                  const welcome = (typeof WELCOME_TEXT === "string" && WELCOME_TEXT) ? WELCOME_TEXT : "Welcome!";
+                  const msg = `${welcome}\n\n${(left + core + right).replace(/\s+\?/, "?")}`;
+                  session.conversationHistory.push({ role: 'assistant', content: msg, timestamp: new Date().toISOString(), step });
+                  return res.json({
+                    success: true,
+                    bot_response: msg,
+                    conversation_history: session.conversationHistory,
+                    step,
+                    question_completed: false,
+                    pending_followup_exists: false,
+                    allowed_actions: Array.from(state.allowedActions),
+                    interview_finished: false,
+                    session_id: currentSessionId
+                         });
                 }
               }
           // ====== Executor call ======
@@ -1484,9 +1480,8 @@ app.post('/api/chat', async (req, res) => {
           }
 
 // Both covered and skipped follow-ups are considered "completed", no longer pending
-// Also exclude follow-ups that have been asked but not yet covered (to prevent repeats)
 const pending = allFUs.filter(
-  f => !coveredIds.has(f.id) && !isCoveredOrSkipped(session, qNow, f.id) && !hasBeenAsked(session, qNow, f.id)
+  f => !coveredIds.has(f.id) && !isCoveredOrSkipped(session, qNow, f.id)
 );
         //   const pending = allFUs.filter(f => !coveredIds.has(f.id));
           
