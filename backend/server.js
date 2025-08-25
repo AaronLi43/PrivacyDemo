@@ -714,6 +714,13 @@ const FOLLOWUPS_BY_QUESTION = {
             "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
             "reputation","principle","moral","self-reflection"
         ] }
+    ],
+    [unifiedQuestions[6]]: [
+        { id: "Q7_F1", prompt: "What was the interview process like?", keywords: [
+            "interview","process","experience","interview process","interview experience","interview timeline",
+            "interview questions","interview questions and answers","interview questions and answers",
+            "interview questions and answers"
+        ] }
     ]
 };
 
