@@ -667,7 +667,10 @@ class PrivacyDemoApp {
         const startStudyBtn = document.getElementById('start-study-btn');
         if (startStudyBtn) {
             startStudyBtn.addEventListener('click', () => {
-                this.showStepPage('qualification');
+                this.showFreeEditPopup();
+                this.showStepPage('chat');
+                this.startChatInterface();
+                this.saveToLocalStorage();
             });
         }
 
