@@ -90,8 +90,8 @@ class PrivacyDemoApp {
             hasNavigated: false, // Track if legitimate navigation has occurred
             // Audit LLM properties
             auditLLMEnabled: false,
-            // Copy/paste functionality - ENABLED FOR TESTING
-            copyPasteEnabled: true,
+            // Copy/paste functionality - DISABLED FOR SECURITY
+            copyPasteEnabled: false,
             // Follow-up questions properties
             followUpQuestions: [],
             currentFollowUpQuestionIndex: 0,
