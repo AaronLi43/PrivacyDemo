@@ -24,6 +24,10 @@
       "dest": "/frontend/thanks.html"
     },
     {
+      "src": "/thanks-qualification",
+      "dest": "/frontend/thanks-qualification.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }

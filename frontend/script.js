@@ -667,10 +667,7 @@ class PrivacyDemoApp {
         const startStudyBtn = document.getElementById('start-study-btn');
         if (startStudyBtn) {
             startStudyBtn.addEventListener('click', () => {
-                this.showFreeEditPopup();
-                this.showStepPage('chat');
-                this.startChatInterface();
-                this.saveToLocalStorage();
+                this.showStepPage('qualification');
             });
         }
 
@@ -740,8 +737,8 @@ class PrivacyDemoApp {
                     this.startChatInterface();
                     this.saveToLocalStorage();
                 } else {
-                    // Redirect to thank you page if not qualified
-                    this.redirectToThanksPage();
+                    // Redirect to qualification-specific thank you page if not qualified
+                    this.redirectToThanksPage(true);
                 }
             });
         }
@@ -5950,9 +5947,9 @@ class PrivacyDemoApp {
 
 
     // Redirect to thanks page
-    redirectToThanksPage() {
+    redirectToThanksPage(isFromQualification = false) {
         try {
-            const thanksUrl = `thanks.html`;
+            const thanksUrl = isFromQualification ? `thanks-qualification.html` : `thanks.html`;
             console.log('Redirecting to thanks page:', thanksUrl);
             
             // Show a notification before redirecting
