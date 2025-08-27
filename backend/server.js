@@ -3800,128 +3800,128 @@ function isEventBasedMainQuestion(q) {
         return /(use ai|used ai|close call|hide)/.test(qkey);
       }      
 
-// ===== Built-in Prolific NO-CODE poller (嵌入式) =====
+// ===== Built-in Prolific NO-CODE poller (embedded) =====
 (() => {
     const PROLIFIC_TOKEN = process.env.PROLIFIC_TOKEN;
-    const BACKEND_BASE   = process.env.BACKEND_BASE; // 例: https://privacydemo.onrender.com
-    const STUDY_ID       = process.env.STUDY_ID || ''; // 可选：只轮询某个 study
-    const INTERVAL_MS    = Math.max(60, Number(process.env.POLL_INTERVAL_SEC || 300)) * 1000; // 默认 5 分钟
-    +
-    +  if (!PROLIFIC_TOKEN || !BACKEND_BASE) {
-    +    console.log('ℹ️  NO-CODE poller disabled (missing PROLIFIC_TOKEN or BACKEND_BASE).');
-    +    return;
-    +  }
-    +
-    +  const PROLIFIC_BASE = 'https://api.prolific.com/api/v1';
-    +  const processed = new Set(); // 去重（进程内，重启后会重扫）
-    +  let running = false;
-    +
-    +  async function getFetch() {
-    +    if (typeof global.fetch === 'function') return global.fetch;
-    +    const { fetch } = await import('undici'); // Node <18 fallback
-    +    return fetch;
-    +  }
-    +
-    +  function isNoCode(sub) {
-    +    const cc = String(sub.completion_code || '').trim().toUpperCase();
-    +    const status = String(sub.status || '').trim().toUpperCase();
-    +    const noCode = !cc || cc === 'NOCODE' || cc === 'NO CODE' || cc === 'NULL' || cc === 'NONE';
-    +    const candidate = status === 'AWAITING_REVIEW' || status === 'SUBMITTED' || status === 'APPROVED';
-    +    return noCode && candidate;
-    +  }
-    +
-    +  async function httpJSON(url, opts = {}, timeoutMs = 20000) {
-    +    const f = await getFetch();
-    +    const ctrl = new AbortController();
-    +    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    +    try {
-    +      const res = await f(url, { ...opts, signal: ctrl.signal });
-    +      const text = await res.text();
-    +      let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
-    +      if (!res.ok) {
-    +        const err = new Error(`HTTP ${res.status} ${res.statusText}`);
-    +        err.status = res.status; err.body = json;
-    +        throw err;
-    +      }
-    +      return json;
-    +    } finally { clearTimeout(t); }
-    +  }
-    +
-    +  async function listSubmissions() {
-    +    let url = `${PROLIFIC_BASE}/submissions/`;
-    +    if (STUDY_ID) url += `?study=${encodeURIComponent(STUDY_ID)}`;
-    +    const all = [];
-    +    let guard = 0;
-    +    while (url && guard++ < 50) {
-    +      const page = await httpJSON(url, { headers: { Authorization: `Bearer ${PROLIFIC_TOKEN}` } }, 30000);
-    +      const items = page.results || page.data || [];
-    +      all.push(...items);
-    +      url = page.next || page.links?.next || null;
-    +      if (url && url.startsWith('/')) url = `https://api.prolific.com${url}`;
-    +    }
-    +    return all;
-    +  }
-    +
-    +  async function uploadNoCode({ pid, study, session, submission_id, status, when }) {
-    +    const payload = {
-    +      exportData: {
-    +        metadata: {
-    +          mode: 'neutral',
-    +          export_timestamp: new Date().toISOString(),
-    +          study_context: { whether_share_original: 'Shared' },
-    +          nocode_autosave: true,
-    +          source: 'server_poller',
-    +          submission_id, status, detected_at: when
-    +        },
-    +        conversation: [],
-    +        snapshot: { prolific: { pid, study, session, submission_id, status, when } }
-    +      },
-    +      pid, study, session, mode: 'neutral', sharedOriginal: 'Shared'
-    +    };
-    +    return httpJSON(`${BACKEND_BASE}/api/upload-to-s3`, {
-    +      method: 'POST',
-    +      headers: { 'Content-Type': 'application/json' },
-    +      body: JSON.stringify(payload)
-    +    }, 30000);
-    +  }
-    +
-    +  async function tick() {
-    +    if (running) return;
-    +    running = true;
-    +    const label = STUDY_ID ? `study=${STUDY_ID}` : 'ALL studies';
-    +    console.log(`[poller] scanning (${label})…`);
-    +    try {
-    +      const subs = await listSubmissions();
-    +      const targets = subs.filter(isNoCode).filter(s => !processed.has(s.id));
-    +      if (!targets.length) {
-    +        console.log('[poller] no new NO-CODE items (pulled:', subs.length, ')');
-    +        return;
-    +      }
-    +      console.log(`[poller] found ${targets.length} NO-CODE submissions`);
-    +      for (const s of targets) {
-    +        const pid   = s.participant_id || s.participant || '';
-    +        const study = s.study_id || STUDY_ID || '';
-    +        const sess  = s.session_id || s.session || '';
-    +        const when  = s.submitted_at || s.updated_at || s.created_at || new Date().toISOString();
-    +        try {
-    +          const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when });
-    +          console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid})`);
-    +          processed.add(s.id);
-    +        } catch (e) {
-    +          console.error('[poller] upload failed:', e.message, e.body || '');
-    +        }
-    +      }
-    +    } catch (e) {
-    +      console.error('[poller] listSubmissions failed:', e.message, e.body || '');
-    +    } finally {
-    +      running = false;
-    +    }
-    +  }
-    +
-    +  setTimeout(tick, 5000);                        // 服务启动 5s 后先跑一轮
-    +  setInterval(tick, INTERVAL_MS);                // 周期轮询
-    +  console.log(`✅ Prolific NO-CODE poller started (interval=${INTERVAL_MS/1000}s, study=${STUDY_ID || 'ALL'})`);
-    +})();
+    const BACKEND_BASE   = process.env.BACKEND_BASE; // Example: https://privacydemo.onrender.com
+    const STUDY_ID       = process.env.STUDY_ID || ''; // Optional: only poll a specific study
+    const INTERVAL_MS    = Math.max(60, Number(process.env.POLL_INTERVAL_SEC || 300)) * 1000; // Default 5 minutes
+
+    if (!PROLIFIC_TOKEN || !BACKEND_BASE) {
+        console.log('ℹ️  NO-CODE poller disabled (missing PROLIFIC_TOKEN or BACKEND_BASE).');
+        return;
+    }
+    
+    const PROLIFIC_BASE = 'https://api.prolific.com/api/v1';
+    const processed = new Set(); // Deduplication (in-process, will rescan after restart)
+    let running = false;
+
+    async function getFetch() {
+        if (typeof global.fetch === 'function') return global.fetch;
+        const { fetch } = await import('undici'); // Node <18 fallback
+        return fetch;
+    }
+    
+    function isNoCode(sub) {
+        const cc = String(sub.completion_code || '').trim().toUpperCase();
+        const status = String(sub.status || '').trim().toUpperCase();
+        const noCode = !cc || cc === 'NOCODE' || cc === 'NO CODE' || cc === 'NULL' || cc === 'NONE';
+        const candidate = status === 'AWAITING_REVIEW' || status === 'SUBMITTED' || status === 'APPROVED';
+        return noCode && candidate;
+    }
+    
+    async function httpJSON(url, opts = {}, timeoutMs = 20000) {
+        const f = await getFetch();
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const res = await f(url, { ...opts, signal: ctrl.signal });
+            const text = await res.text();
+            let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+            if (!res.ok) {
+                const err = new Error(`HTTP ${res.status} ${res.statusText}`);
+                err.status = res.status; err.body = json;
+                throw err;
+            }
+            return json;
+        } finally { clearTimeout(t); }
+    }
+    
+    async function listSubmissions() {
+        let url = `${PROLIFIC_BASE}/submissions/`;
+        if (STUDY_ID) url += `?study=${encodeURIComponent(STUDY_ID)}`;
+        const all = [];
+        let guard = 0;
+        while (url && guard++ < 50) {
+            const page = await httpJSON(url, { headers: { Authorization: `Bearer ${PROLIFIC_TOKEN}` } }, 30000);
+            const items = page.results || page.data || [];
+            all.push(...items);
+            url = page.next || page.links?.next || null;
+            if (url && url.startsWith('/')) url = `https://api.prolific.com${url}`;
+        }
+        return all;
+    }
+    
+    async function uploadNoCode({ pid, study, session, submission_id, status, when }) {
+        const payload = {
+            exportData: {
+                metadata: {
+                    mode: 'neutral',
+                    export_timestamp: new Date().toISOString(),
+                    study_context: { whether_share_original: 'Shared' },
+                    nocode_autosave: true,
+                    source: 'server_poller',
+                    submission_id, status, detected_at: when
+                },
+                conversation: [],
+            snapshot: { prolific: { pid, study, session, submission_id, status, when } }
+            },
+            pid, study, session, mode: 'neutral', sharedOriginal: 'Shared'
+        };
+        return httpJSON(`${BACKEND_BASE}/api/upload-to-s3`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }, 30000);
+    }
+    
+    async function tick() {
+        if (running) return;
+        running = true;
+        const label = STUDY_ID ? `study=${STUDY_ID}` : 'ALL studies';
+        console.log(`[poller] scanning (${label})…`);
+        try {
+            const subs = await listSubmissions();
+            const targets = subs.filter(isNoCode).filter(s => !processed.has(s.id));
+            if (!targets.length) {
+                console.log('[poller] no new NO-CODE items (pulled:', subs.length, ')');
+                return;
+            }
+            console.log(`[poller] found ${targets.length} NO-CODE submissions`);
+            for (const s of targets) {
+                const pid   = s.participant_id || s.participant || '';
+                const study = s.study_id || STUDY_ID || '';
+                const sess  = s.session_id || s.session || '';
+                const when  = s.submitted_at || s.updated_at || s.created_at || new Date().toISOString();
+                try {
+                    const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when });
+                    console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid})`);
+                    processed.add(s.id);
+                } catch (e) {
+                    console.error('[poller] upload failed:', e.message, e.body || '');
+                }
+            }
+        } catch (e) {
+            console.error('[poller] listSubmissions failed:', e.message, e.body || '');
+        } finally {
+            running = false;
+        }
+    }
+    
+    setTimeout(tick, 5000);                        // Run a round after 5s of service startup
+    setInterval(tick, INTERVAL_MS);                // Periodic polling
+    console.log(`✅ Prolific NO-CODE poller started (interval=${INTERVAL_MS/1000}s, study=${STUDY_ID || 'ALL'})`);
+})();
 
 
 
