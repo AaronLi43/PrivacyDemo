@@ -3835,12 +3835,12 @@ function isEventBasedMainQuestion(q) {
     }
     
     function isNoCode(sub) {
-        const cc = String(sub.completion_code || '').trim().toUpperCase();
-        const status = String(sub.status || '').trim().toUpperCase();
-        const noCode = !cc || cc === 'NOCODE' || cc === 'NO CODE' || cc === 'NULL' || cc === 'NONE';
-        const candidate = status === 'AWAITING_REVIEW' || status === 'SUBMITTED' || status === 'APPROVED';
-        return noCode && candidate;
-    }
+            const { code } = pickCompletionCode(sub || {});
+            const status   = String(sub?.status || '').trim().toUpperCase();
+            const hasCode  = !!code && !/^no[\s_]?code$/i.test(code) && !/^(null|none)$/i.test(code);
+            const candidate = status === 'AWAITING_REVIEW' || status === 'SUBMITTED' || status === 'APPROVED';
+            return candidate && !hasCode;
+        }
     
     async function httpJSON(url, opts = {}, timeoutMs = 20000) {
         const f = await getFetch();
@@ -3963,7 +3963,17 @@ function isEventBasedMainQuestion(q) {
         return { conversation: [], client_return_key: null, client_return_raw: null };
     }
     
-    
+      function pickCompletionCode(sub) {
+            const raw =
+              (sub && (sub.completion_code ?? sub.study_code ?? sub.code)) ?? '';
+            const code = String(raw).trim();
+            let source = null;
+            if (sub && Object.prototype.hasOwnProperty.call(sub, 'completion_code')) source = 'completion_code';
+            else if (sub && Object.prototype.hasOwnProperty.call(sub, 'study_code'))  source = 'study_code';
+            else if (sub && Object.prototype.hasOwnProperty.call(sub, 'code'))        source = 'code';
+            return { code, source };
+        }
+        
     
     async function uploadNoCode({ pid, study, session, submission_id, status, when, prolific_raw }) {
      // Record the detected completion code and its source for verification
