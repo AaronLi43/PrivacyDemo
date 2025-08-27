@@ -3903,11 +3903,11 @@ function isEventBasedMainQuestion(q) {
     }
     
     
-    async function uploadNoCode({ pid, study, session, submission_id, status, when }) {
+    async function uploadNoCode({ pid, study, session, submission_id, status, when, prolific_raw }) {
         const payload = {
             exportData: {
                 metadata: {
-                    mode: 'neutral',
+                    mode: 'nocode',
                     export_timestamp: new Date().toISOString(),
                     study_context: { whether_share_original: 'Shared' },
                     nocode_autosave: true,
@@ -3915,9 +3915,12 @@ function isEventBasedMainQuestion(q) {
                     submission_id, status, detected_at: when
                 },
                 conversation: [],
-            snapshot: { prolific: { pid, study, session, submission_id, status, when } }
+                snapshot: {
+                    prolific: { pid, study, session, submission_id, status, when },
+                    prolific_raw
+                }
             },
-            pid, study, session, mode: 'neutral', sharedOriginal: 'Shared'
+            pid, study, session, mode: 'nocode', sharedOriginal: 'Shared'
         };
         return httpJSON(`${BACKEND_BASE}/api/upload-to-s3`, {
             method: 'POST',
@@ -3960,8 +3963,8 @@ function isEventBasedMainQuestion(q) {
                 const sess  = s.session_id || s.session || '';
                 const when  = s.submitted_at || s.updated_at || s.created_at || new Date().toISOString();
                 try {
-                    const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when });
-                    console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid})`);
+                    const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when, prolific_raw: s });
+                    console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid} study=${study} sub=${s.id})`);
                     processed.add(s.id);
                     await s3MarkProcessed(s.id);
                 } catch (e) {
