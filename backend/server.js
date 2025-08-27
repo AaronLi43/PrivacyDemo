@@ -3595,34 +3595,70 @@ app.post('/api/upload-to-s3', async (req, res) => {
         await s3Client.send(command);
         
         console.log(`✅ Uploaded ${uploadKey} (Mode: ${Mode}, PID: ${safePID})`);
-        // Optional: write another "by_pid" alias file (by participant_id)
-        const BY_PID_COPY = String(process.env.AUTOSAVE_BY_PID_COPY || 'false').toLowerCase() === 'true';
-        if (BY_PID_COPY) {
+// === Legacy copy: only write when no-code and has conversation ===
+        const LEGACY_ENABLED   = String(process.env.LEGACY_COPY_ON_NOCODE || 'true').toLowerCase() === 'true';
+        const convoArr         = (exportData?.conversation) || [];
+        const isNoCodeMode     = String(meta.mode || '').toLowerCase() === 'nocode';
+        const hasConversation  = Array.isArray(convoArr) && convoArr.length > 0;
+        if (LEGACY_ENABLED && isNoCodeMode && hasConversation) {
+// —— Use participant_id as the main key; fallback to multiple paths —— 
           const aliasPid =
-            (req.body?.pid) ||
-            (exportPayload?.pid) ||
-            (exportPayload?.exportData?.snapshot?.prolific?.pid) ||
-            (exportPayload?.exportData?.metadata?.prolific?.pid) ||
-            (exportPayload?.exportData?.metadata?.pid) ||
+            (exportData?.participant_id) ||
+            (exportData?.pid) ||
+            (exportData?.exportData?.snapshot?.prolific?.participant_id) ||
+            (exportData?.exportData?.snapshot?.prolific?.pid) ||
+            (exportData?.exportData?.metadata?.participant_id) ||
+            (exportData?.exportData?.metadata?.prolific?.pid) ||
             '';
-          if (aliasPid) {
-            const safe = s => (s||'NA').toString().replace(/[^a-zA-Z0-9_-]/g,'');
-            const byStudy = String(process.env.BY_PID_LAYOUT || 'flat').toLowerCase() === 'by_study';
-            const studyId = (exportPayload?.exportData?.snapshot?.prolific?.study) || (req.body?.study) || 'NA';
-            const aliasKey = byStudy
-              ? `exports/by_pid/${safe(aliasPid)}/${safe(studyId)}.json`
-              : `exports/by_pid/${safe(aliasPid)}.json`;
-            await s3Client.send(new PutObjectCommand({
-              Bucket: bucket,
-              Key: aliasKey,
-              Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
-              ContentType: 'application/json'
-            }));
-            console.log(`↪︎ Alias by_pid written → ${aliasKey}`);
-          } else {
-            console.warn('by_pid alias skipped: PID not found in payload');
+          const safe = s => (s||'NA').toString().replace(/[^a-zA-Z0-9_-]/g,'');
+
+          // —— Timestamp: prioritize completed_at -> when -> detected/export_timestamp -> now —— 
+          const completedAt =
+            (exportData?.exportData?.snapshot?.prolific_raw?.completed_at) ||
+            (exportData?.exportData?.snapshot?.prolific?.when) ||
+            meta.detected_at || meta.export_timestamp || new Date().toISOString();
+          const tsFmt = String(completedAt).replace(/[:.]/g, '-'); // 例：2025-08-26T19-14-53-291Z
+
+          // —— Mode (display mode): prioritize study_context.mode_readable -> top-level req/body —— 
+          function titleCase(x) {
+            if (!x) return 'Neutral';
+            const s = String(x).trim();
+            if (!s) return 'Neutral';
+            return s.slice(0,1).toUpperCase() + s.slice(1).toLowerCase();
           }
+          const legacyMode =
+            (exportData?.exportData?.metadata?.study_context?.mode_readable) ||
+            (exportData?.mode) || (exportData?.exportData?.mode) ||
+            (exportData?.exportData?.metadata?.mode) ||
+            'Neutral';
+          const legacyModeTC = titleCase(legacyMode);
+
+          // —— AdditionalConsentGivenOrNot: prioritize study_context.whether_share_original -> top-level sharedOriginal —— 
+          const legacyConsent =
+            (exportData?.exportData?.metadata?.study_context?.whether_share_original) ||
+            (exportData?.sharedOriginal) ||
+            'Ignored';
+          const legacyConsentTC = titleCase(legacyConsent);
+
+          // —— Final legacy format Key: {ts}_{ProlificID}_{Mode}_{AdditionalConsentGivenOrNot}.json —— 
+          const legacyKey   = `exports/${tsFmt}_${safe(aliasPid)}_${safe(legacyModeTC)}_${safe(legacyConsentTC)}.json`;
+
+          await s3Client.send(new PutObjectCommand({
+            Bucket: bucket,
+            Key: legacyKey,
+            Body: Buffer.from(JSON.stringify(exportData, null, 2), 'utf-8'),
+            ContentType: 'application/json'
+          }));
+          
+          console.log(`↪︎ Legacy copy written → ${legacyKey}`);
+        } else {
+          const why = !LEGACY_ENABLED ? 'disabled'
+                  : !isNoCodeMode     ? 'not-nocode'
+                  : !hasConversation  ? 'no-conversation'
+                  : 'skipped';
+          console.log(`↪︎ Legacy copy skipped (${why})`);
         }
+
         return res.json({
           success: true,
           message: 'File uploaded to S3 successfully',
