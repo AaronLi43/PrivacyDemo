@@ -43,7 +43,7 @@ import {
 // OpenAI API
 import OpenAI from 'openai';
 
-import { S3Client, PutObjectCommand, HeadBucketCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, HeadObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 
 // Initialize OpenAI
 let openaiClient;
@@ -3817,7 +3817,7 @@ function isEventBasedMainQuestion(q) {
     const SINCE_DAYS     = Number(process.env.POLL_SINCE_DAYS || 180); // Only process the last N days (default 180 days; set 0 = no limit)
     const PERSIST_PROCESSED = String(process.env.PERSIST_PROCESSED_ON_S3 || 'true').toLowerCase() === 'true';
     const PROCESSED_PREFIX  = process.env.POLLER_S3_PREFIX || 'poller/processed/'; // S3 prefix: one submission one mark
- 
+    const RETURNS_PREFIX    = process.env.RETURNS_PREFIX || 'returns/';
 
     if (!PROLIFIC_TOKEN || !BACKEND_BASE) {
         console.log('ℹ️  NO-CODE poller disabled (missing PROLIFIC_TOKEN or BACKEND_BASE).');
@@ -3901,27 +3901,97 @@ function isEventBasedMainQuestion(q) {
             console.warn('[poller] marker PUT error:', e.message);
         }
     }
+
+      // ---- S3 utils for reading last client "return" snapshot ----
+    async function streamToString(stream) {
+        const chunks = [];
+        for await (const c of stream) chunks.push(Buffer.from(c));
+        return Buffer.concat(chunks).toString('utf-8');
+    }
+    async function s3ListReturnsForPid(pid) {
+        if (!s3Client || !S3_BUCKET) return [];
+        const out = [];
+        let ContinuationToken = undefined;
+        const pidRe = new RegExp(pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // 安全转义
+        let guard = 0;
+        while (guard++ < 50) {
+            const resp = await s3Client.send(new ListObjectsV2Command({
+                Bucket: S3_BUCKET,
+                Prefix: RETURNS_PREFIX,
+                ContinuationToken
+            }));
+            const contents = resp.Contents || [];
+            for (const obj of contents) {
+                if (obj.Key && pidRe.test(obj.Key)) out.push(obj);
+            }
+            if (!resp.IsTruncated) break;
+            ContinuationToken = resp.NextContinuationToken;
+        }
+            // 最近的在前
+            out.sort((a, b) => new Date(b.LastModified||0) - new Date(a.LastModified||0));
+            return out;
+    }
+    async function s3GetJSON(Key) {
+        const resp = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key }));
+        const txt = await streamToString(resp.Body);
+        return JSON.parse(txt);
+    }
+    function extractConversation(payload) {
+        if (!payload) return [];
+        if (Array.isArray(payload.conversation)) return payload.conversation;
+        if (payload.exportData && Array.isArray(payload.exportData.conversation)) return payload.exportData.conversation;
+        // 常见结构兜底：answers: [{q, a}] → 转 conversation
+        if (Array.isArray(payload.answers)) {
+            return payload.answers.map(x => ({ role: 'user', q: x.q, a: x.a }));
+        }
+        return [];
+    }
+    async function gatherSnapshotWithConversation({ pid, study, session }) {
+        // 优先 S3 returns 下该 PID 最近一次上传
+        try {
+            const cand = await s3ListReturnsForPid(pid);
+            if (cand.length > 0) {
+                const key = cand[0].Key;
+                const raw = await s3GetJSON(key).catch(() => null);
+                const conv = extractConversation(raw);
+                return { conversation: conv, client_return_key: key, client_return_raw: raw };
+            }
+        } catch (e) {
+            console.warn('[poller] gatherSnapshot error:', e.message);
+        }
+        // 没取到就返回空
+        return { conversation: [], client_return_key: null, client_return_raw: null };
+    }
+    
     
     
     async function uploadNoCode({ pid, study, session, submission_id, status, when, prolific_raw }) {
-        const payload = {
-            exportData: {
-                metadata: {
-                    mode: 'nocode',
-                    export_timestamp: new Date().toISOString(),
-                    study_context: { whether_share_original: 'Shared' },
-                    nocode_autosave: true,
-                    source: 'server_poller',
-                    submission_id, status, detected_at: when
-                },
-                conversation: [],
-                snapshot: {
-                    prolific: { pid, study, session, submission_id, status, when },
-                    prolific_raw
-                }
-            },
-            pid, study, session, mode: 'nocode', sharedOriginal: 'Shared'
-        };
+     // Record the detected completion code and its source for verification
+     const { code: detected_code, source: detected_code_source } = pickCompletionCode(prolific_raw || {});
+    // Try to attach the actual responses if available
+    const snap = await gatherSnapshotWithConversation({ pid, study, session });
+     const payload = {
+       exportData: {
+         metadata: {
+           mode: 'nocode',
+           export_timestamp: new Date().toISOString(),
+           study_context: { whether_share_original: 'Shared' },
+           nocode_autosave: true,
+           source: 'server_poller',
+           submission_id, status, detected_at: when,
+           detected_code: detected_code || null,
+           detected_code_source: detected_code_source || null
+         },
+        conversation: snap.conversation || [],
+         snapshot: {
+           prolific: { pid, study, session, submission_id, status, when },
+          prolific_raw,
+          client_return_key: snap.client_return_key || null,
+          client_return_raw: snap.client_return_raw || null
+         }
+       },
+       pid, study, session, mode: 'nocode', sharedOriginal: 'Shared'
+     };
         return httpJSON(`${BACKEND_BASE}/api/upload-to-s3`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3983,6 +4053,19 @@ function isEventBasedMainQuestion(q) {
     console.log(`✅ Prolific NO-CODE poller started (interval=${INTERVAL_MS/1000}s, study=${STUDY_ID || 'ALL'})`);
 })();
 
-
+// ---- Optional: Local read-only endpoint for manual retrieval of "session snapshot" ----
+app.get('/api/session-snapshot', async (req, res) => {
+        try {
+        const pid = String(req.query.pid || '').trim();
+        const study = String(req.query.study || '').trim();
+        const session = String(req.query.session || '').trim();
+        if (!pid) return res.status(400).json({ error: 'missing pid' });
+        const snap = await gatherSnapshotWithConversation({ pid, study, session });
+        return res.json({ ok: true, pid, study, session, ...snap });
+        } catch (e) {
+        console.error('session-snapshot error:', e);
+        return res.status(500).json({ error: 'internal' });
+        }
+    });
 
       
