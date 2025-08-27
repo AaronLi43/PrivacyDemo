@@ -3568,7 +3568,8 @@ app.post('/api/upload-to-s3', async (req, res) => {
         let uploadKey = s3Key;
         if (meta && meta.submission_id) {
           const sid = String(meta.submission_id).replace(/[^a-zA-Z0-9_-]/g, '');
-          uploadKey = `exports/nocode/${sid}.json`;
+          const subdir = (String(meta.mode||'').toLowerCase() === 'coded') ? 'complete' : 'nocode';
+          uploadKey = `exports/${subdir}/${sid}.json`;
         }
 
         // --- Upload ---
@@ -3818,6 +3819,8 @@ function isEventBasedMainQuestion(q) {
     const PERSIST_PROCESSED = String(process.env.PERSIST_PROCESSED_ON_S3 || 'true').toLowerCase() === 'true';
     const PROCESSED_PREFIX  = process.env.POLLER_S3_PREFIX || 'poller/processed/'; // S3 prefix: one submission one mark
     const RETURNS_PREFIX    = process.env.RETURNS_PREFIX || 'returns/';
+    const AUTOSAVE_FOR_CODED = String(process.env.AUTOSAVE_FOR_CODED || 'false').toLowerCase() === 'true';
+    const AUTOSAVE_FORCE_ALL = String(process.env.AUTOSAVE_FORCE_ALL || 'false').toLowerCase() === 'true';
 
     if (!PROLIFIC_TOKEN || !BACKEND_BASE) {
         console.log('ℹ️  NO-CODE poller disabled (missing PROLIFIC_TOKEN or BACKEND_BASE).');
@@ -3827,6 +3830,8 @@ function isEventBasedMainQuestion(q) {
     const PROLIFIC_BASE = 'https://api.prolific.com/api/v1';
     const processed = new Set(); // Deduplication (in-process, will rescan after restart)
     let running = false;
+    const CANDIDATE = new Set((process.env.POLL_STATUSES || 'AWAITING_REVIEW,SUBMITTED,APPROVED')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
 
     async function getFetch() {
         if (typeof global.fetch === 'function') return global.fetch;
@@ -3838,8 +3843,16 @@ function isEventBasedMainQuestion(q) {
             const { code } = pickCompletionCode(sub || {});
             const status   = String(sub?.status || '').trim().toUpperCase();
             const hasCode  = !!code && !/^no[\s_]?code$/i.test(code) && !/^(null|none)$/i.test(code);
-            const candidate = status === 'AWAITING_REVIEW' || status === 'SUBMITTED' || status === 'APPROVED';
+            const candidate = CANDIDATE.has(status);
             return candidate && !hasCode;
+        }
+
+        function isCoded(sub) {
+            const { code } = pickCompletionCode(sub || {});
+            const status   = String(sub?.status || '').trim().toUpperCase();
+            const hasCode  = !!code && !/^no[\s_]?code$/i.test(code) && !/^(null|none)$/i.test(code);
+            const candidate = CANDIDATE.has(status);
+            return candidate && hasCode;
         }
     
     async function httpJSON(url, opts = {}, timeoutMs = 20000) {
@@ -3859,9 +3872,10 @@ function isEventBasedMainQuestion(q) {
         } finally { clearTimeout(t); }
     }
     
-    async function listSubmissions() {
+    async function listSubmissions(studyOverride) {
         let url = `${PROLIFIC_BASE}/submissions/`;
-        if (STUDY_ID) url += `?study=${encodeURIComponent(STUDY_ID)}`;
+        const studyQ = studyOverride || STUDY_ID;
+        if (studyQ) url += `?study=${encodeURIComponent(studyQ)}`;
         const all = [];
         let guard = 0;
         while (url && guard++ < 50) {
@@ -3875,11 +3889,13 @@ function isEventBasedMainQuestion(q) {
     }
 
     // ---- S3 deduplication: check if processed / write processed mark ----
-    async function s3HasProcessed(id) {
+    async function s3HasProcessed(id, kind='nocode') {
         if (!PERSIST_PROCESSED || !s3Client || !S3_BUCKET) return false;
-        const Key = `${PROCESSED_PREFIX}${id}`;
+        // New version: distinguish between nocode/coded; also compatible with old key (no subdirectory)
+        const KeyNew = `${PROCESSED_PREFIX}${kind}/${id}`;
+
         try {
-            await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key }));
+            await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: KeyNew }));
             return true;
         } catch (e) {
             if (e?.$metadata?.httpStatusCode === 404 || e?.name === 'NotFound') return false;
@@ -3887,13 +3903,14 @@ function isEventBasedMainQuestion(q) {
             return false;
         }
     }
-    async function s3MarkProcessed(id) {
+    async function s3MarkProcessed(id, kind='nocode') {
         if (!PERSIST_PROCESSED || !s3Client || !S3_BUCKET) return;
-        const Key = `${PROCESSED_PREFIX}${id}`;
+        // New version: distinguish between nocode/coded; also compatible with old key (no subdirectory)
+        const KeyNew = `${PROCESSED_PREFIX}${kind}/${id}`;
         try {
             await s3Client.send(new PutObjectCommand({
                 Bucket: S3_BUCKET,
-                Key,
+                Key: KeyNew,
                 Body: Buffer.from(String(Date.now())),
                 ContentType: 'text/plain'
             }));
@@ -3980,10 +3997,11 @@ function isEventBasedMainQuestion(q) {
      const { code: detected_code, source: detected_code_source } = pickCompletionCode(prolific_raw || {});
     // Try to attach the actual responses if available
     const snap = await gatherSnapshotWithConversation({ pid, study, session });
+    const modeTag = isNoCode(prolific_raw || {}) ? 'nocode' : 'coded';
      const payload = {
        exportData: {
          metadata: {
-           mode: 'nocode',
+           mode: modeTag,
            export_timestamp: new Date().toISOString(),
            study_context: { whether_share_original: 'Shared' },
            nocode_autosave: true,
@@ -4000,7 +4018,7 @@ function isEventBasedMainQuestion(q) {
           client_return_raw: snap.client_return_raw || null
          }
        },
-       pid, study, session, mode: 'nocode', sharedOriginal: 'Shared'
+       pid, study, session, mode: modeTag, sharedOriginal: 'Shared'
      };
         return httpJSON(`${BACKEND_BASE}/api/upload-to-s3`, {
             method: 'POST',
@@ -4018,35 +4036,38 @@ function isEventBasedMainQuestion(q) {
             const subs = await listSubmissions();
             const now = Date.now();
             const cutoff = isFinite(SINCE_DAYS) && SINCE_DAYS > 0 ? now - SINCE_DAYS*24*60*60*1000 : 0;
-            const raw = subs.filter(isNoCode);
+            const listNoCode = subs.filter(isNoCode);
+            const listCoded  = subs.filter(isCoded);
+            let pool = listNoCode;
+            if (AUTOSAVE_FORCE_ALL) pool = subs;
+            else if (AUTOSAVE_FOR_CODED) pool = listNoCode.concat(listCoded);
             const targets = [];
-            for (const s of raw) {
-                if (processed.has(s.id)) continue;
-                // time window (optional)
-                const tsStr = s.submitted_at || s.updated_at || s.created_at;
-                if (cutoff && tsStr) {
-                    const t = Date.parse(tsStr);
-                    if (!Number.isNaN(t) && t < cutoff) continue;
-                }
-                // S3 deduplication
-                if (await s3HasProcessed(s.id)) { processed.add(s.id); continue; }
-                targets.push(s);
+            for (const s of pool) {
+            if (processed.has(s.id)) continue;
+            const tsStr = s.submitted_at || s.updated_at || s.created_at;
+            if (cutoff && tsStr) {
+            const t = Date.parse(tsStr);
+            if (!Number.isNaN(t) && t < cutoff) continue;
+            }
+            const kind = isNoCode(s) ? 'nocode' : 'coded';
+            if (await s3HasProcessed(s.id, kind)) { processed.add(s.id); continue; }
+            targets.push({ rec: s, kind });
             }
             if (!targets.length) {
                 console.log('[poller] no new NO-CODE items (pulled:', subs.length, ')');
                 return;
             }
-            console.log(`[poller] found ${targets.length} NO-CODE submissions`);
-            for (const s of targets) {
-                const pid   = s.participant_id || s.participant || '';
-                const study = s.study_id || STUDY_ID || '';
-                const sess  = s.session_id || s.session || '';
-                const when  = s.submitted_at || s.updated_at || s.created_at || new Date().toISOString();
-                try {
-                    const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when, prolific_raw: s });
-                    console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid} study=${study} sub=${s.id})`);
-                    processed.add(s.id);
-                    await s3MarkProcessed(s.id);
+            console.log(`[poller] found ${targets.length} items to autosave (nocode=${listNoCode.length}, coded=${listCoded.length}, mode=${AUTOSAVE_FORCE_ALL?'force-all':AUTOSAVE_FOR_CODED?'no+yes-code':'no-code-only'})`);
+            for (const { rec: s, kind } of targets) {
+            const pid   = s.participant_id || s.participant || '';
+            const study = s.study_id || STUDY_ID || '';
+            const sess  = s.session_id || s.session || '';
+            const when  = s.submitted_at || s.updated_at || s.created_at || new Date().toISOString();
+            try {
+                const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when, prolific_raw: s });
+                console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (${kind}) (PID=${pid} study=${study} sub=${s.id})`);
+                processed.add(s.id);
+                await s3MarkProcessed(s.id, kind);
                 } catch (e) {
                     console.error('[poller] upload failed:', e.message, e.body || '');
                 }
@@ -4062,6 +4083,62 @@ function isEventBasedMainQuestion(q) {
     setInterval(tick, INTERVAL_MS);                // Periodic polling
     console.log(`✅ Prolific NO-CODE poller started (interval=${INTERVAL_MS/1000}s, study=${STUDY_ID || 'ALL'})`);
 })();
+
+// ---- Read-only self-check: check if each item would be processed, and why ----
+app.get('/api/poller-dryrun', async (req, res) => {
+    try {
+        const study = (req.query.study || '').toString().trim() || process.env.STUDY_ID || '';
+        const sinceDays = Number(process.env.POLL_SINCE_DAYS || 180);
+        const now = Date.now();
+       const cutoff = isFinite(sinceDays) && sinceDays > 0 ? now - sinceDays*24*60*60*1000 : 0;
+        const limit = Math.min(200, Math.max(1, Number(req.query.limit || 200)));
+
+        const subs = await (async () => {
+        // Reuse poller's function (defined in IIFE)
+        const fnList = (global.__poller_listSubmissions || null);
+        if (fnList) return fnList(study);
+        // If not exposed to global, implement the minimum call
+        const url = study ? `${'https://api.prolific.com/api/v1'}/submissions/?study=${encodeURIComponent(study)}`
+                        : `${'https://api.prolific.com/api/v1'}/submissions/`;
+        const hdr = { Authorization: `Token ${process.env.PROLIFIC_TOKEN}` };
+        const page = await (await fetch(url, { headers: hdr })).json();
+        return page.results || page.data || [];
+        })();
+
+        const out = [];
+        for (const s of subs.slice(0, limit)) {
+        const { code, source } = (typeof pickCompletionCode === 'function') ? pickCompletionCode(s) : {code:'', source:null};
+        const status = String(s.status || '').toUpperCase();
+        const tsStr  = s.submitted_at || s.updated_at || s.created_at;
+        const t      = tsStr ? Date.parse(tsStr) : NaN;
+        const inWindow = !cutoff || (tsStr && !Number.isNaN(t) && t >= cutoff);
+        const kind  = (!code || /^no[\s_]?code$/i.test(code) || /^(null|none)$/i.test(code)) ? 'nocode' : 'coded';
+        let hasMarker = false;
+        try {
+        if (typeof s3HasProcessed === 'function') {
+        hasMarker = await s3HasProcessed(s.id, kind);
+        }
+        } catch {}
+        const eligible = CANDIDATE.has(status) && inWindow && !hasMarker;
+        out.push({
+        id: s.id,
+        pid: s.participant_id || s.participant || null,
+        study_id: s.study_id || null,
+        status,
+            code,
+        code_source: source,
+        kind,
+        in_window: inWindow,
+        has_marker: hasMarker,
+        would_process: eligible && (kind === 'nocode' || process.env.AUTOSAVE_FOR_CODED === 'true' || process.env.AUTOSAVE_FORCE_ALL === 'true'),
+        submitted_at: s.submitted_at, updated_at: s.updated_at, created_at: s.created_at
+          });
+        }
+        res.json({ study, count: out.length, statuses: Array.from(new Set(out.map(x=>x.status))), items: out });
+        } catch (e) {
+        res.status(500).json({ error: e.message || 'internal' });
+        }
+    });
 
 // ---- Optional: Local read-only endpoint for manual retrieval of "session snapshot" ----
 app.get('/api/session-snapshot', async (req, res) => {
