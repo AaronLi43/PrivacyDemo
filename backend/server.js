@@ -3595,30 +3595,31 @@ app.post('/api/upload-to-s3', async (req, res) => {
         await s3Client.send(command);
         
         console.log(`✅ Uploaded ${uploadKey} (Mode: ${Mode}, PID: ${safePID})`);
-// === Legacy copy: only write when no-code and has conversation ===
+        // === Legacy copy: only write when no-code and has conversation ===
         const LEGACY_ENABLED   = String(process.env.LEGACY_COPY_ON_NOCODE || 'true').toLowerCase() === 'true';
-        const convoArr         = (exportPayload?.conversation) || [];
+        // Use merged as the payload for legacy copy logic
+        const convoArr         = (merged?.conversation) || [];
         const isNoCodeMode     = String(meta.mode || '').toLowerCase() === 'nocode';
         const hasConversation  = Array.isArray(convoArr) && convoArr.length > 0;
         if (LEGACY_ENABLED && isNoCodeMode && hasConversation) {
-// —— Use participant_id as the main key; fallback to multiple paths —— 
+          // —— Use participant_id as the main key; fallback to multiple paths —— 
           const aliasPid =
-            (exportPayload?.participant_id) ||
-            (exportPayload?.pid) ||
-            (exportPayload?.exportData?.snapshot?.prolific?.participant_id) ||
-            (exportPayload?.exportData?.snapshot?.prolific?.pid) ||
-            (exportPayload?.exportData?.metadata?.participant_id) ||
-            (exportPayload?.exportData?.metadata?.prolific?.pid) ||
+            (merged?.participant_id) ||
+            (merged?.pid) ||
+            (merged?.exportData?.snapshot?.prolific?.participant_id) ||
+            (merged?.exportData?.snapshot?.prolific?.pid) ||
+            (merged?.exportData?.metadata?.participant_id) ||
+            (merged?.exportData?.metadata?.prolific?.pid) ||
             '';
           const safe = s => (s||'NA').toString().replace(/[^a-zA-Z0-9_-]/g,'');
-
+  
           // —— Timestamp: prioritize completed_at -> when -> detected/export_timestamp -> now —— 
           const completedAt =
-            (exportPayload?.exportData?.snapshot?.prolific_raw?.completed_at) ||
-            (exportPayload?.exportData?.snapshot?.prolific?.when) ||
+            (merged?.exportData?.snapshot?.prolific_raw?.completed_at) ||
+            (merged?.exportData?.snapshot?.prolific?.when) ||
             meta.detected_at || meta.export_timestamp || new Date().toISOString();
           const tsFmt = String(completedAt).replace(/[:.]/g, '-'); // 例：2025-08-26T19-14-53-291Z
-
+  
           // —— Mode (display mode): prioritize study_context.mode_readable -> top-level req/body —— 
           function titleCase(x) {
             if (!x) return 'Neutral';
@@ -3627,26 +3628,26 @@ app.post('/api/upload-to-s3', async (req, res) => {
             return s.slice(0,1).toUpperCase() + s.slice(1).toLowerCase();
           }
           const legacyMode =
-            (exportPayload?.exportData?.metadata?.study_context?.mode_readable) ||
-            (exportPayload?.mode) || (exportPayload?.exportData?.mode) ||
-            (exportPayload?.exportData?.metadata?.mode) ||
+            (merged?.metadata?.study_context?.mode_readable) ||
+            (merged?.mode) || (merged?.exportData?.mode) ||
+            (merged?.metadata?.mode) ||
             'Neutral';
           const legacyModeTC = titleCase(legacyMode);
-
+  
           // —— AdditionalConsentGivenOrNot: prioritize study_context.whether_share_original -> top-level sharedOriginal —— 
           const legacyConsent =
-            (exportPayload?.exportData?.metadata?.study_context?.whether_share_original) ||
-            (exportPayload?.sharedOriginal) ||
+            (merged?.metadata?.study_context?.whether_share_original) ||
+            (merged?.sharedOriginal) ||
             'Ignored';
           const legacyConsentTC = titleCase(legacyConsent);
-
+  
           // —— Final legacy format Key: {ts}_{ProlificID}_{Mode}_{AdditionalConsentGivenOrNot}.json —— 
           const legacyKey   = `exports/${tsFmt}_${safe(aliasPid)}_${safe(legacyModeTC)}_${safe(legacyConsentTC)}.json`;
-
+  
           await s3Client.send(new PutObjectCommand({
             Bucket: bucket,
             Key: legacyKey,
-            Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
+            Body: Buffer.from(JSON.stringify(merged, null, 2), 'utf-8'),
             ContentType: 'application/json'
           }));
           
@@ -3658,7 +3659,7 @@ app.post('/api/upload-to-s3', async (req, res) => {
                   : 'skipped';
           console.log(`↪︎ Legacy copy skipped (${why})`);
         }
-
+  
         return res.json({
           success: true,
           message: 'File uploaded to S3 successfully',
