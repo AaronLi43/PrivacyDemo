@@ -3595,6 +3595,34 @@ app.post('/api/upload-to-s3', async (req, res) => {
         await s3Client.send(command);
         
         console.log(`✅ Uploaded ${uploadKey} (Mode: ${Mode}, PID: ${safePID})`);
+        // Optional: write another "by_pid" alias file (by participant_id)
+        const BY_PID_COPY = String(process.env.AUTOSAVE_BY_PID_COPY || 'false').toLowerCase() === 'true';
+        if (BY_PID_COPY) {
+          const aliasPid =
+            (req.body?.pid) ||
+            (exportPayload?.pid) ||
+            (exportPayload?.exportData?.snapshot?.prolific?.pid) ||
+            (exportPayload?.exportData?.metadata?.prolific?.pid) ||
+            (exportPayload?.exportData?.metadata?.pid) ||
+            '';
+          if (aliasPid) {
+            const safe = s => (s||'NA').toString().replace(/[^a-zA-Z0-9_-]/g,'');
+            const byStudy = String(process.env.BY_PID_LAYOUT || 'flat').toLowerCase() === 'by_study';
+            const studyId = (exportPayload?.exportData?.snapshot?.prolific?.study) || (req.body?.study) || 'NA';
+            const aliasKey = byStudy
+              ? `exports/by_pid/${safe(aliasPid)}/${safe(studyId)}.json`
+              : `exports/by_pid/${safe(aliasPid)}.json`;
+            await s3Client.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: aliasKey,
+              Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
+              ContentType: 'application/json'
+            }));
+            console.log(`↪︎ Alias by_pid written → ${aliasKey}`);
+          } else {
+            console.warn('by_pid alias skipped: PID not found in payload');
+          }
+        }
         return res.json({
           success: true,
           message: 'File uploaded to S3 successfully',
