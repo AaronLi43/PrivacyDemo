@@ -107,8 +107,20 @@ class PrivacyDemoApp {
             userAgentResponding: false,
             // Privacy choices for analysis mode
             privacyChoices: {},
-            // Sidebar state
-            sidebarHidden: this.config.sidebarHiddenByDefault
+                    // Sidebar state
+        sidebarHidden: this.config.sidebarHiddenByDefault,
+        
+        // Add partial completion detection properties
+        partialCompletionDetected: false,
+        partialCompletionTimer: null,
+        partialCompletionCheckInterval: 30000, // Check every 30 seconds
+        lastActivityTime: Date.now(),
+        inactivityThreshold: 300000, // 5 minutes of inactivity
+        questionModeStartTime: null,
+        
+        // Add completion status tracking
+        completionStatus: null,
+        completionCode: null
         };
 
         // Removed turn counting constants - letting LLM decide when to move to next question
@@ -123,6 +135,13 @@ class PrivacyDemoApp {
         // Listen for page reload to ensure fresh start
         window.addEventListener('beforeunload', () => {
             console.log('🔄 Page unloading - clearing state for fresh start');
+            
+            // Clean up partial completion detection
+            if (this.state.partialCompletionTimer) {
+                clearInterval(this.state.partialCompletionTimer);
+                console.log('✅ Partial completion timer cleared');
+            }
+            
             // Clear localStorage before page reloads
             try {
                 localStorage.removeItem('privacyDemoState');
@@ -315,6 +334,9 @@ class PrivacyDemoApp {
         // Load questions for the default mode (naive) to ensure they're available
         console.log('🔄 Initializing with default mode questions...');
         await this.loadPredefinedQuestions(this.state.mode);
+        
+        // Start partial completion detection
+        this.startPartialCompletionDetection();
     }
 
     // Clear all state to ensure fresh start every time
@@ -379,6 +401,310 @@ class PrivacyDemoApp {
         }
         
         console.log('🎉 Complete state reset completed - fresh start ready!');
+    }
+
+    // Start partial completion detection
+    startPartialCompletionDetection() {
+        console.log('🔍 Starting partial completion detection...');
+        
+        // Set up periodic checks for stuck users
+        this.state.partialCompletionTimer = setInterval(() => {
+            this.checkForPartialCompletion();
+        }, this.state.partialCompletionCheckInterval);
+        
+        // Track user activity
+        this.trackUserActivity();
+        
+        console.log('✅ Partial completion detection started');
+    }
+
+    // Track user activity to detect inactivity
+    trackUserActivity() {
+        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        
+        activityEvents.forEach(event => {
+            document.addEventListener(event, () => {
+                this.state.lastActivityTime = Date.now();
+            }, { passive: true });
+        });
+        
+        console.log('✅ User activity tracking enabled');
+    }
+
+    // Check for partial completion scenarios
+    checkForPartialCompletion() {
+        try {
+            // Check if user is stuck in question mode
+            if (this.state.questionMode && !this.state.questionsCompleted) {
+                const timeSinceLastActivity = Date.now() - this.state.lastActivityTime;
+                const totalQuestions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
+                const completedQuestions = this.state.completedQuestionIndices.length;
+                
+                // Detect stuck scenarios
+                const isStuck = this.detectStuckScenario(timeSinceLastActivity, completedQuestions, totalQuestions);
+                
+                if (isStuck && !this.state.partialCompletionDetected) {
+                    console.log('🚨 Partial completion detected - user appears to be stuck');
+                    this.handlePartialCompletion();
+                }
+            }
+            
+            // Check for completion status
+            this.checkCompletionStatus();
+        } catch (error) {
+            console.error('Error in partial completion check:', error);
+        }
+    }
+
+    // Detect if user is stuck
+    detectStuckScenario(timeSinceLastActivity, completedQuestions, totalQuestions) {
+        // Scenario 1: User inactive for too long
+        if (timeSinceLastActivity > this.state.inactivityThreshold) {
+            console.log('🔍 Stuck scenario: User inactive for', Math.round(timeSinceLastActivity / 1000), 'seconds');
+            return true;
+        }
+        
+        // Scenario 2: User completed most questions but not all
+        if (completedQuestions > 0 && completedQuestions < totalQuestions) {
+            const progress = (completedQuestions / totalQuestions) * 100;
+            
+            // If user made significant progress (>50%) but hasn't completed, they might be stuck
+            if (progress > 50) {
+                console.log('🔍 Stuck scenario: User completed', completedQuestions, 'of', totalQuestions, 'questions (', progress.toFixed(1), '%)');
+                return true;
+            }
+        }
+        
+        // Scenario 3: User has been in question mode for a very long time
+        const timeInQuestionMode = Date.now() - this.state.questionModeStartTime;
+        if (this.state.questionModeStartTime && timeInQuestionMode > 1800000) { // 30 minutes
+            console.log('🔍 Stuck scenario: User in question mode for', Math.round(timeInQuestionMode / 1000 / 60), 'minutes');
+            return true;
+        }
+        
+        return false;
+    }
+
+    // Handle partial completion by uploading current conversation
+    async handlePartialCompletion() {
+        try {
+            console.log('📤 Handling partial completion - uploading current conversation to S3');
+            
+            this.state.partialCompletionDetected = true;
+            
+            // Create partial completion data
+            const partialData = this.createPartialCompletionData();
+            
+            // Upload to S3
+            const response = await API.uploadToS3(
+                partialData, 
+                this.state.prolificId,
+                this.state.prolificStudyId,
+                this.state.prolificSessionId,
+                this.state.mode,
+                this.state.consentGiven ? 'Shared' : 'Ignored'
+            );
+            
+            if (response.success) {
+                console.log('✅ Partial completion data uploaded successfully:', response.filename);
+                this.showNotification('📤 Partial completion data saved - thank you for participating!', 'success');
+                
+                // Try to redirect to thanks page
+                setTimeout(() => {
+                    this.redirectToThanksPage();
+                }, 2000);
+            } else {
+                console.error('❌ Failed to upload partial completion data:', response.error);
+                this.showNotification('⚠️ Could not save partial completion data, but your participation is still valuable', 'warning');
+            }
+        } catch (error) {
+            console.error('Error handling partial completion:', error);
+            this.showNotification('⚠️ Error saving partial completion data', 'error');
+        }
+    }
+
+    // Create partial completion data with placeholders for incomplete questions
+    createPartialCompletionData() {
+        const totalQuestions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
+        const completedQuestions = this.state.completedQuestionIndices.length;
+        const currentQuestionIndex = this.state.currentQuestionIndex || 0;
+        
+        // Create conversation log with placeholders for incomplete questions
+        const conversationWithPlaceholders = this.createConversationWithPlaceholders();
+        
+        const partialData = {
+            metadata: {
+                mode: this.state.mode,
+                export_timestamp: new Date().toISOString(),
+                export_type: 'partial_completion',
+                completion_status: 'PARTIAL',
+                completion_code: null,
+                total_questions: totalQuestions,
+                completed_questions: completedQuestions,
+                current_question_index: currentQuestionIndex,
+                progress_percentage: Math.round((completedQuestions / totalQuestions) * 100),
+                partial_completion_reason: 'user_stuck_or_inactive',
+                consent_given: this.state.consentGiven,
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
+                survey_completed: this.state.surveyCompleted,
+                prolific_id: this.state.prolificId,
+                prolific_study_id: this.state.prolificStudyId,
+                prolific_session_id: this.state.prolificSessionId
+            },
+            conversation: conversationWithPlaceholders,
+            survey_data: {
+                ...(this.state.surveyData || {}),
+                questions: this.state.predefinedQuestions[this.state.mode] || []
+            },
+            partial_completion_details: {
+                last_activity_time: new Date(this.state.lastActivityTime).toISOString(),
+                time_in_question_mode: this.state.questionModeStartTime ? 
+                    Date.now() - this.state.questionModeStartTime : null,
+                stuck_detection_timestamp: new Date().toISOString()
+            }
+        };
+        
+        return partialData;
+    }
+
+    // Create conversation log with placeholders for incomplete questions
+    createConversationWithPlaceholders() {
+        const totalQuestions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
+        const completedQuestions = this.state.completedQuestionIndices.length;
+        const currentQuestionIndex = this.state.currentQuestionIndex || 0;
+        
+        // Start with existing conversation
+        const conversationWithPlaceholders = [...this.state.conversationLog];
+        
+        // Add placeholders for incomplete questions
+        for (let i = completedQuestions; i < totalQuestions; i++) {
+            const questionNumber = i + 1;
+            const questionText = this.state.predefinedQuestions[this.state.mode]?.[i] || `Question ${questionNumber}`;
+            
+            // Add placeholder for user response
+            conversationWithPlaceholders.push({
+                user: `The user have complete Q${questionNumber}_m`,
+                bot: `Q${questionNumber}_m`,
+                timestamp: new Date().toISOString(),
+                is_placeholder: true,
+                question_index: i,
+                question_text: questionText
+            });
+        }
+        
+        return conversationWithPlaceholders;
+    }
+
+    // Check for specific completion status and handle accordingly
+    checkCompletionStatus() {
+        try {
+            // Check if we have the specific completion status you mentioned
+            if (this.state.completionStatus === "COMPLETE" && this.state.completionCode === null) {
+                console.log('🔍 Detected completion status: COMPLETE with null completion_code');
+                this.handleCompletionStatusComplete();
+            }
+        } catch (error) {
+            console.error('Error checking completion status:', error);
+        }
+    }
+
+    // Handle completion status "COMPLETE" with null completion_code
+    async handleCompletionStatusComplete() {
+        try {
+            console.log('📤 Handling completion status COMPLETE - uploading current content to S3');
+            
+            // Create completion data
+            const completionData = this.createCompletionStatusData();
+            
+            // Upload to S3
+            const response = await API.uploadToS3(
+                completionData, 
+                this.state.prolificId,
+                this.state.prolificStudyId,
+                this.state.prolificSessionId,
+                this.state.mode,
+                this.state.consentGiven ? 'Shared' : 'Ignored'
+            );
+            
+            if (response.success) {
+                console.log('✅ Completion status data uploaded successfully:', response.filename);
+                this.showNotification('📤 Completion data saved successfully!', 'success');
+                
+                // Redirect to thanks page
+                setTimeout(() => {
+                    this.redirectToThanksPage();
+                }, 2000);
+            } else {
+                console.error('❌ Failed to upload completion status data:', response.error);
+                this.showNotification('⚠️ Could not save completion data', 'error');
+            }
+        } catch (error) {
+            console.error('Error handling completion status:', error);
+            this.showNotification('⚠️ Error saving completion data', 'error');
+        }
+    }
+
+    // Create completion status data
+    createCompletionStatusData() {
+        const totalQuestions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
+        const completedQuestions = this.state.completedQuestionIndices.length;
+        const currentQuestionIndex = this.state.currentQuestionIndex || 0;
+        
+        // Create conversation log with placeholders for incomplete questions
+        const conversationWithPlaceholders = this.createConversationWithPlaceholders();
+        
+        const completionData = {
+            metadata: {
+                mode: this.state.mode,
+                export_timestamp: new Date().toISOString(),
+                export_type: 'completion_status_complete',
+                completion_status: 'COMPLETE',
+                completion_code: null,
+                total_questions: totalQuestions,
+                completed_questions: completedQuestions,
+                current_question_index: currentQuestionIndex,
+                progress_percentage: Math.round((completedQuestions / totalQuestions) * 100),
+                consent_given: this.state.consentGiven,
+                consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
+                survey_completed: this.state.surveyCompleted,
+                prolific_id: this.state.prolificId,
+                prolific_study_id: this.state.prolificStudyId,
+                prolific_session_id: this.state.prolificSessionId
+            },
+            conversation: conversationWithPlaceholders,
+            survey_data: {
+                ...(this.state.surveyData || {}),
+                questions: this.state.predefinedQuestions[this.state.mode] || []
+            },
+            completion_details: {
+                completion_status: 'COMPLETE',
+                completion_code: null,
+                detection_timestamp: new Date().toISOString(),
+                question_mode_start_time: this.state.questionModeStartTime ? 
+                    new Date(this.state.questionModeStartTime).toISOString() : null
+            }
+        };
+        
+        return completionData;
+    }
+
+    // Set completion status (can be called from external sources or backend responses)
+    setCompletionStatus(status, code = null) {
+        console.log('🔍 Setting completion status:', { status, code });
+        
+        this.state.completionStatus = status;
+        this.state.completionCode = code;
+        
+        // If status is COMPLETE and code is null, trigger immediate check
+        if (status === "COMPLETE" && code === null) {
+            console.log('🚨 Immediate completion status check triggered');
+            setTimeout(() => {
+                this.checkCompletionStatus();
+            }, 1000);
+        }
+        
+        // Save to localStorage
+        this.saveToLocalStorage();
     }
 
     // Ensure fresh start when returning to the page
@@ -844,6 +1170,9 @@ class PrivacyDemoApp {
         this.state.completedQuestionIndices = [];
         this.state.justCompletedQuestion = false;
         
+        // Track when question mode starts for partial completion detection
+        this.state.questionModeStartTime = Date.now();
+        
         // Start conversation directly
         console.log('Starting conversation directly...');
         this.startConversationDirectly();
@@ -1287,6 +1616,24 @@ class PrivacyDemoApp {
                 console.log('Test survey submission triggered');
                 this.state.pendingExportAction = 'exportDirect';
                 this.handleSurveySubmit();
+            }
+        });
+
+        // Debug: Test partial completion detection (Ctrl+P)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                console.log('Test partial completion detection triggered');
+                this.handlePartialCompletion();
+            }
+        });
+
+        // Debug: Test completion status (Ctrl+S)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                console.log('Test completion status COMPLETE triggered');
+                this.setCompletionStatus("COMPLETE", null);
             }
         });
 
@@ -3009,6 +3356,12 @@ class PrivacyDemoApp {
                         }
                     }
                     
+                    // Check for completion status in backend response
+                    if (response && response.completion_status) {
+                        console.log('Backend completion status received:', response.completion_status);
+                        this.setCompletionStatus(response.completion_status, response.completion_code);
+                    }
+                    
                     return;
                 } catch (apiError) {
                     const lastMessage = this.state.conversationLog[this.state.conversationLog.length - 1];
@@ -3128,7 +3481,14 @@ class PrivacyDemoApp {
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(safeExport, this.state.prolificId);
+                const response = await API.uploadToS3(
+                    safeExport, 
+                    this.state.prolificId,
+                    this.state.prolificStudyId,
+                    this.state.prolificSessionId,
+                    this.state.mode,
+                    this.state.consentGiven ? 'Shared' : 'Ignored'
+                );
                 if (response.success) {
                     console.log('Successfully uploaded to S3:', response.filename);
                     this.showNotification('📤 Data uploaded to S3 successfully', 'success');
@@ -3198,7 +3558,14 @@ class PrivacyDemoApp {
             
             // Upload to S3 instead of downloading locally
             try {
-                const response = await API.uploadToS3(safeExport, this.state.prolificId);
+                const response = await API.uploadToS3(
+                    safeExport, 
+                    this.state.prolificId,
+                    this.state.prolificStudyId,
+                    this.state.prolificSessionId,
+                    this.state.mode,
+                    this.state.consentGiven ? 'Shared' : 'Ignored'
+                );
                 if (response.success) {
                     console.log('Successfully uploaded to S3:', response.filename);
                     this.showNotification('📤 Data uploaded to S3 successfully!', 'success');
@@ -3409,7 +3776,14 @@ class PrivacyDemoApp {
             // Upload to S3 instead of downloading locally
             try {
                 const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
-                const response = await API.uploadToS3(safeExport, this.state.prolificId);
+                const response = await API.uploadToS3(
+                    safeExport, 
+                    this.state.prolificId,
+                    this.state.prolificStudyId,
+                    this.state.prolificSessionId,
+                    this.state.mode,
+                    this.state.consentGiven ? 'Shared' : 'Ignored'
+                );
                 if (response.success) {
                     console.log('Successfully uploaded analysis to S3:', response.filename);
                     this.showNotification(`📤 Analysis data uploaded to S3 successfully! Found ${totalIssues} privacy issues.`, 'success');
@@ -3482,7 +3856,14 @@ class PrivacyDemoApp {
             // Upload to S3 instead of downloading locally
             try {
                 const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
-                const response = await API.uploadToS3(safeExport, this.state.prolificId);
+                const response = await API.uploadToS3(
+                    safeExport, 
+                    this.state.prolificId,
+                    this.state.prolificStudyId,
+                    this.state.prolificSessionId,
+                    this.state.mode,
+                    this.state.consentGiven ? 'Shared' : 'Ignored'
+                );
 
                 if (response.success) {
                     console.log('Successfully uploaded comprehensive data to S3:', response.filename);
@@ -3991,6 +4372,9 @@ class PrivacyDemoApp {
         
         // Update multi-step interface state
         this.updateMultiStepInterface();
+        
+        // Check for completion status on each UI update
+        this.checkCompletionStatus();
     }
 
     // Update chat header with background mode indicator
@@ -5726,7 +6110,7 @@ class PrivacyDemoApp {
         if (__vals.includes('accept') || __vals.includes('accepted')) {
             consentTagFromSurvey = 'accept';
         } else if (__vals.includes('ignore') || __vals.includes('ignored') || __vals.includes('igored')) {
-            // Compatibility with historical spelling errors “igored”, corrected to 'ignored'
+            // Compatibility with historical spelling errors "igored", corrected to 'ignored'
             consentTagFromSurvey = 'ignored';
         }
         // If the survey provides a clear choice, use the survey; otherwise, keep the existing boolean value and derive the tag

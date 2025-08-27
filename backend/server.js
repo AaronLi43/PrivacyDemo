@@ -80,6 +80,43 @@ try {
     console.log('⚠️  Failed to initialize AWS S3 client:', error.message);
 }
 
+async function persistSessionSnapshot(sessionId, reason = 'nocode_autosave') {
+    const s = sessions.get(sessionId);
+    if (!s) throw new Error('session_not_found');
+    const payload = {
+        sessionId,
+        reason,
+        ts_iso: new Date().toISOString(),
+        status: s.status,
+        prolific: s.prolific,
+        lastProgressPct: s.lastProgressPct || 0,
+        conversationHistory: s.conversationHistory || [],
+        qStatus: s.qStatus || {},
+        followupStatus: s.followupStatus || {},
+        globalPiiCounters: s.globalPiiCounters || {},
+        detectedEntities: s.detectedEntities || {}
+    };
+    const fname = `nocode_snapshot_${sessionId}_${Date.now()}.json`;
+    const buf = Buffer.from(JSON.stringify(payload, null, 2), 'utf-8');
+    // 1) Try S3
+    if (s3Client && process.env.S3_BUCKET) {
+        const key = `snapshots/${fname}`;
+        await s3Client.send(new PutObjectCommand({
+            Bucket: process.env.S3_BUCKET,
+            Key: key,
+            Body: buf,
+            ContentType: 'application/json'
+        }));
+       return { stored: 's3', key };
+    }
+    // 2) Fallback local
+    const dir = path.resolve(process.cwd(), 'snapshots');
+    await fs.ensureDir(dir);
+    const localPath = path.join(dir, fname);
+    await fs.writeFile(localPath, buf);
+    return { stored: 'local', path: localPath };
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -511,6 +548,9 @@ function getSession(sessionId) {
             uploadedQuestions: [],
             uploadedReturnLog: [],
             activeChatSession: null,
+            status: 'IN_PROGRESS',        // IN_PROGRESS | URL_COMPLETED | NOCODE_SUBMITTED | RETURNED | TIMED_OUT
+            prolific: { pid: null, study: null, session: null },
+            lastProgressPct: 0,
                     globalPiiCounters: {
             ADDRESS: 0,
             IP_ADDRESS: 0,
@@ -3256,6 +3296,34 @@ app.post('/api/upload_return', upload.single('file'), async (req, res) => {
     try { if (req.file?.path) fs.removeSync(req.file.path); } catch (_) {}
   }
 });
+
+// POST /api/mark-submission
+// body: { sessionId: string, status: 'URL_COMPLETED' | 'NOCODE_SUBMITTED' | 'RETURNED' | 'TIMED_OUT',
+//         prolific?: { pid, study, session }, progressPct?: number }
+app.post('/api/mark-submission', async (req, res) => {
+    try {
+        const { sessionId, status, prolific, progressPct } = req.body || {};
+        if (!sessionId || !status) return res.status(400).json({ error: 'missing sessionId or status' });
+        const s = getSession(sessionId);
+        s.status = status;
+        if (prolific && typeof prolific === 'object') {
+            s.prolific = { ...s.prolific, ...prolific };
+        }
+        if (typeof progressPct === 'number' && !Number.isNaN(progressPct)) {
+            s.lastProgressPct = Math.max(s.lastProgressPct || 0, Math.max(0, Math.min(100, progressPct)));
+        }
+        let autosave = null;
+        if (status === 'NOCODE_SUBMITTED') {
+            // 触发自动保存（no-code 场景）
+            autosave = await persistSessionSnapshot(sessionId, 'nocode_autosave');
+        }
+        return res.json({ ok: true, status: s.status, autosave });
+    } catch (e) {
+        console.error('mark-submission error', e);
+        return res.status(500).json({ error: 'internal' });
+    }
+});
+
 // Set Mode API
 app.post('/api/set_mode', (req, res) => {
     try {
@@ -3450,6 +3518,39 @@ app.post('/api/upload-to-s3', async (req, res) => {
           ...(exportData || {}),
           metadata: { ...(exportData?.metadata || {}), ...baseMetadata }
         };
+        
+        // --- Apply privacy protection if consent not given ---
+        if (WhetherShareOriginal === 'Ignored' && merged.conversation && Array.isArray(merged.conversation)) {
+          console.log('🔒 Consent not given - replacing conversation logs with placeholders');
+          merged.conversation = merged.conversation.map((entry, index) => {
+            // If entry already has placeholder format, keep it
+            if (entry.is_placeholder && entry.user && entry.user.includes('The user have complete Q') && entry.bot && entry.bot.includes('Q')) {
+              return entry;
+            }
+            
+            // Replace actual conversation with placeholders
+            const questionNumber = index + 1;
+            return {
+              user: `The user have complete Q${questionNumber}_m`,
+              bot: `Q${questionNumber}_m`,
+              timestamp: entry.timestamp || new Date().toISOString(),
+              is_placeholder: true,
+              question_index: entry.question_index || index,
+              question_text: entry.question_text || `Question ${questionNumber}`,
+              original_length: entry.user ? entry.user.length : 0,
+              privacy_protected: true
+            };
+          });
+          
+          // Add privacy protection metadata
+          merged.privacy_protection = {
+            applied: true,
+            reason: 'consent_not_given',
+            timestamp: new Date().toISOString(),
+            original_conversation_length: merged.conversation.length,
+            placeholder_format: 'The user have complete Qn_m'
+          };
+        }
         
         // --- Filename: {TimeStamp_ProlificID_Mode_WhetherShareOriginal}.json ---
         const ts = now.toISOString().replace(/[:.]/g, '-');       // safe for filenames

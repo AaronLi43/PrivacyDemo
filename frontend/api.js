@@ -226,12 +226,16 @@ class API {
     }
 
     // Upload to S3
-    static async uploadToS3(exportData, prolificId) {
+    static async uploadToS3(exportData, prolificId, studyId = null, sessionId = null, mode = null, sharedOriginal = null) {
         return this.request(API_ENDPOINTS.UPLOAD_TO_S3, {
             method: 'POST',
             body: JSON.stringify({
                 exportData: exportData,
-                prolificId: prolificId
+                pid: prolificId,           // Backend expects 'pid'
+                study: studyId,            // Backend expects 'study'
+                session: sessionId,        // Backend expects 'session'
+                mode: mode,                // Backend expects 'mode'
+                sharedOriginal: sharedOriginal // Backend expects 'sharedOriginal'
             })
         });
     }
