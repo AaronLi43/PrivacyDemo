@@ -3953,30 +3953,39 @@ function isEventBasedMainQuestion(q) {
         const txt = await streamToString(resp.Body);
         return JSON.parse(txt);
     }
-    function extractConversation(payload) {
-        if (!payload) return [];
-        if (Array.isArray(payload.conversation)) return payload.conversation;
-        if (payload.exportData && Array.isArray(payload.exportData.conversation)) return payload.exportData.conversation;
-        // 常见结构兜底：answers: [{q, a}] → 转 conversation
-        if (Array.isArray(payload.answers)) {
-            return payload.answers.map(x => ({ role: 'user', q: x.q, a: x.a }));
-        }
-        return [];
+    function extractPidFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        // Cover more common paths:
+        // Top level: pid
+        // exportData.*: exportData.pid / exportData.metadata.pid / exportData.metadata.prolific.pid
+        // Top level object: prolific.pid / metadata.pid / metadata.prolific.pid
+        // Other snapshot positions: snapshot.prolific.pid
+        return (
+        payload.pid ||
+        payload?.exportData?.pid ||
+        payload?.exportData?.metadata?.pid ||
+        payload?.exportData?.metadata?.prolific?.pid ||
+        payload?.prolific?.pid ||
+        payload?.metadata?.pid ||
+        payload?.metadata?.prolific?.pid ||
+        payload?.snapshot?.prolific?.pid ||
+        null
+        );
     }
     async function gatherSnapshotWithConversation({ pid, study, session }) {
-        // 优先 S3 returns 下该 PID 最近一次上传
+        // Prefer the most recent upload for this PID under S3 "returns"
         try {
             const cand = await s3ListReturnsForPid(pid);
             if (cand.length > 0) {
                 const key = cand[0].Key;
                 const raw = await s3GetJSON(key).catch(() => null);
-                const conv = extractConversation(raw);
+                const conv = extractPidFromPayload(raw);
                 return { conversation: conv, client_return_key: key, client_return_raw: raw };
             }
         } catch (e) {
             console.warn('[poller] gatherSnapshot error:', e.message);
         }
-        // 没取到就返回空
+        // If no recent upload, return empty
         return { conversation: [], client_return_key: null, client_return_raw: null };
     }
     
