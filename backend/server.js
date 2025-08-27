@@ -43,8 +43,7 @@ import {
 // OpenAI API
 import OpenAI from 'openai';
 
-// AWS SDK
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 
 // Initialize OpenAI
 let openaiClient;
@@ -3559,15 +3558,24 @@ app.post('/api/upload-to-s3', async (req, res) => {
         // Add "Partial" prefix for partial completion files
         const isPartialCompletion = merged.metadata?.export_type === 'partial_completion';
         const partialPrefix = isPartialCompletion ? 'Partial_' : '';
-        const filename = `${partialPrefix}${ts}_${safePID}_${Mode}_${WhetherShareOriginal}.json`;
         const bucket = process.env.S3_BUCKET || 'prolificjson';   // fallback to old bucket if env missing
+        const filename = `${partialPrefix}${ts}_${safePID}_${Mode}_${WhetherShareOriginal}.json`;
+        
         const s3Key = `exports/${filename}`;                      // keep a distinct prefix
         
+        // Idempotent key: if Prolific submission_id exists, overwrite to a fixed path
+        const meta = (req.body && req.body.exportData && req.body.exportData.metadata) || {};
+        let uploadKey = s3Key;
+        if (meta && meta.submission_id) {
+          const sid = String(meta.submission_id).replace(/[^a-zA-Z0-9_-]/g, '');
+          uploadKey = `exports/nocode/${sid}.json`;
+        }
+
         // --- Upload ---
         const jsonData = JSON.stringify(merged, null, 2);
         const uploadParams = {
           Bucket: bucket,
-          Key: s3Key,
+          Key: uploadKey,
           Body: jsonData,
           ContentType: 'application/json',
           Metadata: {
@@ -3585,12 +3593,12 @@ app.post('/api/upload-to-s3', async (req, res) => {
         const command = new PutObjectCommand(uploadParams);
         await s3Client.send(command);
         
-        console.log(`✅ Uploaded ${s3Key} (Mode: ${Mode}, PID: ${safePID})`);
+        console.log(`✅ Uploaded ${uploadKey} (Mode: ${Mode}, PID: ${safePID})`);
         return res.json({
           success: true,
           message: 'File uploaded to S3 successfully',
           filename,
-          s3_key: s3Key,
+          s3_key: uploadKey,
           bucket
         });
     } catch (error) {
@@ -3806,6 +3814,10 @@ function isEventBasedMainQuestion(q) {
     const BACKEND_BASE   = process.env.BACKEND_BASE; // Example: https://privacydemo.onrender.com
     const STUDY_ID       = process.env.STUDY_ID || ''; // Optional: only poll a specific study
     const INTERVAL_MS    = Math.max(60, Number(process.env.POLL_INTERVAL_SEC || 300)) * 1000; // Default 5 minutes
+    const SINCE_DAYS     = Number(process.env.POLL_SINCE_DAYS || 180); // Only process the last N days (default 180 days; set 0 = no limit)
+    const PERSIST_PROCESSED = String(process.env.PERSIST_PROCESSED_ON_S3 || 'true').toLowerCase() === 'true';
+    const PROCESSED_PREFIX  = process.env.POLLER_S3_PREFIX || 'poller/processed/'; // S3 prefix: one submission one mark
+ 
 
     if (!PROLIFIC_TOKEN || !BACKEND_BASE) {
         console.log('ℹ️  NO-CODE poller disabled (missing PROLIFIC_TOKEN or BACKEND_BASE).');
@@ -3861,6 +3873,35 @@ function isEventBasedMainQuestion(q) {
         }
         return all;
     }
+
+    // ---- S3 deduplication: check if processed / write processed mark ----
+    async function s3HasProcessed(id) {
+        if (!PERSIST_PROCESSED || !s3Client || !S3_BUCKET) return false;
+        const Key = `${PROCESSED_PREFIX}${id}`;
+        try {
+            await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key }));
+            return true;
+        } catch (e) {
+            if (e?.$metadata?.httpStatusCode === 404 || e?.name === 'NotFound') return false;
+            console.warn('[poller] marker HEAD error:', e.message);
+            return false;
+        }
+    }
+    async function s3MarkProcessed(id) {
+        if (!PERSIST_PROCESSED || !s3Client || !S3_BUCKET) return;
+        const Key = `${PROCESSED_PREFIX}${id}`;
+        try {
+            await s3Client.send(new PutObjectCommand({
+                Bucket: S3_BUCKET,
+                Key,
+                Body: Buffer.from(String(Date.now())),
+                ContentType: 'text/plain'
+            }));
+        } catch (e) {
+            console.warn('[poller] marker PUT error:', e.message);
+        }
+    }
+    
     
     async function uploadNoCode({ pid, study, session, submission_id, status, when }) {
         const payload = {
@@ -3886,13 +3927,28 @@ function isEventBasedMainQuestion(q) {
     }
     
     async function tick() {
-        if (running) return;
+        if (running) return;    
         running = true;
         const label = STUDY_ID ? `study=${STUDY_ID}` : 'ALL studies';
         console.log(`[poller] scanning (${label})…`);
-        try {
+        try {   
             const subs = await listSubmissions();
-            const targets = subs.filter(isNoCode).filter(s => !processed.has(s.id));
+            const now = Date.now();
+            const cutoff = isFinite(SINCE_DAYS) && SINCE_DAYS > 0 ? now - SINCE_DAYS*24*60*60*1000 : 0;
+            const raw = subs.filter(isNoCode);
+            const targets = [];
+            for (const s of raw) {
+                if (processed.has(s.id)) continue;
+                // time window (optional)
+                const tsStr = s.submitted_at || s.updated_at || s.created_at;
+                if (cutoff && tsStr) {
+                    const t = Date.parse(tsStr);
+                    if (!Number.isNaN(t) && t < cutoff) continue;
+                }
+                // S3 deduplication
+                if (await s3HasProcessed(s.id)) { processed.add(s.id); continue; }
+                targets.push(s);
+            }
             if (!targets.length) {
                 console.log('[poller] no new NO-CODE items (pulled:', subs.length, ')');
                 return;
@@ -3907,6 +3963,7 @@ function isEventBasedMainQuestion(q) {
                     const out = await uploadNoCode({ pid, study, session: sess, submission_id: s.id, status: s.status, when });
                     console.log(`[poller] uploaded → ${out.s3_key || out.key || '[no key]'} (PID=${pid})`);
                     processed.add(s.id);
+                    await s3MarkProcessed(s.id);
                 } catch (e) {
                     console.error('[poller] upload failed:', e.message, e.body || '');
                 }
