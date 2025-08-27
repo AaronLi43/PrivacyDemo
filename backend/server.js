@@ -3853,7 +3853,7 @@ function isEventBasedMainQuestion(q) {
         const all = [];
         let guard = 0;
         while (url && guard++ < 50) {
-            const page = await httpJSON(url, { headers: { Authorization: `Bearer ${PROLIFIC_TOKEN}` } }, 30000);
+            const page = await httpJSON(url, { headers: { Authorization: `Token ${PROLIFIC_TOKEN}` } }, 30000);
             const items = page.results || page.data || [];
             all.push(...items);
             url = page.next || page.links?.next || null;
