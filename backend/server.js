@@ -3313,7 +3313,7 @@ app.post('/api/mark-submission', async (req, res) => {
         }
         let autosave = null;
         if (status === 'NOCODE_SUBMITTED') {
-            // 触发自动保存（no-code 场景）
+            // Trigger autosave (no-code scenario)
             autosave = await persistSessionSnapshot(sessionId, 'nocode_autosave');
         }
         return res.json({ ok: true, status: s.status, autosave });
@@ -3597,25 +3597,25 @@ app.post('/api/upload-to-s3', async (req, res) => {
         console.log(`✅ Uploaded ${uploadKey} (Mode: ${Mode}, PID: ${safePID})`);
 // === Legacy copy: only write when no-code and has conversation ===
         const LEGACY_ENABLED   = String(process.env.LEGACY_COPY_ON_NOCODE || 'true').toLowerCase() === 'true';
-        const convoArr         = (exportData?.conversation) || [];
+        const convoArr         = (exportPayload?.conversation) || [];
         const isNoCodeMode     = String(meta.mode || '').toLowerCase() === 'nocode';
         const hasConversation  = Array.isArray(convoArr) && convoArr.length > 0;
         if (LEGACY_ENABLED && isNoCodeMode && hasConversation) {
 // —— Use participant_id as the main key; fallback to multiple paths —— 
           const aliasPid =
-            (exportData?.participant_id) ||
-            (exportData?.pid) ||
-            (exportData?.exportData?.snapshot?.prolific?.participant_id) ||
-            (exportData?.exportData?.snapshot?.prolific?.pid) ||
-            (exportData?.exportData?.metadata?.participant_id) ||
-            (exportData?.exportData?.metadata?.prolific?.pid) ||
+            (exportPayload?.participant_id) ||
+            (exportPayload?.pid) ||
+            (exportPayload?.exportData?.snapshot?.prolific?.participant_id) ||
+            (exportPayload?.exportData?.snapshot?.prolific?.pid) ||
+            (exportPayload?.exportData?.metadata?.participant_id) ||
+            (exportPayload?.exportData?.metadata?.prolific?.pid) ||
             '';
           const safe = s => (s||'NA').toString().replace(/[^a-zA-Z0-9_-]/g,'');
 
           // —— Timestamp: prioritize completed_at -> when -> detected/export_timestamp -> now —— 
           const completedAt =
-            (exportData?.exportData?.snapshot?.prolific_raw?.completed_at) ||
-            (exportData?.exportData?.snapshot?.prolific?.when) ||
+            (exportPayload?.exportData?.snapshot?.prolific_raw?.completed_at) ||
+            (exportPayload?.exportData?.snapshot?.prolific?.when) ||
             meta.detected_at || meta.export_timestamp || new Date().toISOString();
           const tsFmt = String(completedAt).replace(/[:.]/g, '-'); // 例：2025-08-26T19-14-53-291Z
 
@@ -3627,16 +3627,16 @@ app.post('/api/upload-to-s3', async (req, res) => {
             return s.slice(0,1).toUpperCase() + s.slice(1).toLowerCase();
           }
           const legacyMode =
-            (exportData?.exportData?.metadata?.study_context?.mode_readable) ||
-            (exportData?.mode) || (exportData?.exportData?.mode) ||
-            (exportData?.exportData?.metadata?.mode) ||
+            (exportPayload?.exportData?.metadata?.study_context?.mode_readable) ||
+            (exportPayload?.mode) || (exportPayload?.exportData?.mode) ||
+            (exportPayload?.exportData?.metadata?.mode) ||
             'Neutral';
           const legacyModeTC = titleCase(legacyMode);
 
           // —— AdditionalConsentGivenOrNot: prioritize study_context.whether_share_original -> top-level sharedOriginal —— 
           const legacyConsent =
-            (exportData?.exportData?.metadata?.study_context?.whether_share_original) ||
-            (exportData?.sharedOriginal) ||
+            (exportPayload?.exportData?.metadata?.study_context?.whether_share_original) ||
+            (exportPayload?.sharedOriginal) ||
             'Ignored';
           const legacyConsentTC = titleCase(legacyConsent);
 
@@ -3646,7 +3646,7 @@ app.post('/api/upload-to-s3', async (req, res) => {
           await s3Client.send(new PutObjectCommand({
             Bucket: bucket,
             Key: legacyKey,
-            Body: Buffer.from(JSON.stringify(exportData, null, 2), 'utf-8'),
+            Body: Buffer.from(JSON.stringify(exportPayload, null, 2), 'utf-8'),
             ContentType: 'application/json'
           }));
           
