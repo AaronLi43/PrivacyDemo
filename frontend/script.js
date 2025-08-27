@@ -1119,12 +1119,13 @@ class PrivacyDemoApp {
         return answers.qual1 && answers.qual2 && answers.qual3;
     }
 
-    // Check if user qualifies (all answers are "yes")
+    // Check if user qualifies (qual1 and qual2 are 'yes', qual3 is 'during' or 'both')
     isQualified() {
         const answers = this.state.qualificationAnswers;
+        const qual3Qualifies = answers.qual3 === 'during' || answers.qual3 === 'both';
         return answers.qual1 === 'yes' && 
                answers.qual2 === 'yes' && 
-               answers.qual3 === 'yes';
+               qual3Qualifies;
     }
 
     // Update qualification button state
@@ -1146,10 +1147,19 @@ class PrivacyDemoApp {
             if (selectElement) {
                 selectElement.classList.remove('valid', 'invalid');
                 
-                if (answer === 'yes') {
-                    selectElement.classList.add('valid');
-                } else if (answer === 'no') {
-                    selectElement.classList.add('invalid');
+                if (i < 3) {
+                    if (answer === 'yes') {
+                        selectElement.classList.add('valid');
+                    } else if (answer === 'no') {
+                        selectElement.classList.add('invalid');
+                    }
+                } else {
+                    // For qual-3, mark valid if 'during' or 'both', invalid if other explicit options
+                    if (answer === 'during' || answer === 'both') {
+                        selectElement.classList.add('valid');
+                    } else if (answer === 'prepare' || answer === 'none' || answer === 'other') {
+                        selectElement.classList.add('invalid');
+                    }
                 }
             }
         }
