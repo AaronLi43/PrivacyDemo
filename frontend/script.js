@@ -1140,27 +1140,11 @@ class PrivacyDemoApp {
 
     // Update visual feedback for qualification questions
     updateQualificationVisualFeedback() {
+        // Remove any previous visual classes and avoid adding new ones
         for (let i = 1; i <= 3; i++) {
             const selectElement = document.getElementById(`qual-${i}`);
-            const answer = this.state.qualificationAnswers[`qual${i}`];
-            
             if (selectElement) {
                 selectElement.classList.remove('valid', 'invalid');
-                
-                if (i < 3) {
-                    if (answer === 'yes') {
-                        selectElement.classList.add('valid');
-                    } else if (answer === 'no') {
-                        selectElement.classList.add('invalid');
-                    }
-                } else {
-                    // For qual-3, mark valid if 'during' or 'both', invalid if other explicit options
-                    if (answer === 'during' || answer === 'both') {
-                        selectElement.classList.add('valid');
-                    } else if (answer === 'prepare' || answer === 'none' || answer === 'other') {
-                        selectElement.classList.add('invalid');
-                    }
-                }
             }
         }
     }
