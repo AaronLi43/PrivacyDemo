@@ -3520,7 +3520,9 @@ app.post('/api/upload-to-s3', async (req, res) => {
         };
         
         // --- Apply privacy protection if consent not given ---
-        if (WhetherShareOriginal === 'Ignored' && merged.conversation && Array.isArray(merged.conversation)) {
+        // Skip masking for partial completion exports to allow raw data collection
+        const isPartialCompletion = merged.metadata?.export_type === 'partial_completion';
+        if (WhetherShareOriginal === 'Ignored' && !isPartialCompletion && merged.conversation && Array.isArray(merged.conversation)) {
           console.log('🔒 Consent not given - replacing conversation logs with placeholders');
           merged.conversation = merged.conversation.map((entry, index) => {
             // If entry already has placeholder format, keep it
@@ -3557,7 +3559,7 @@ app.post('/api/upload-to-s3', async (req, res) => {
         const safePID = String(effectivePID).replace(/[^A-Za-z0-9_-]/g, '') || 'UnknownPID';
         
         // Add "Partial" prefix for partial completion files
-        const isPartialCompletion = merged.metadata?.export_type === 'partial_completion';
+        // (variable declared above for privacy handling)
         const partialPrefix = isPartialCompletion ? 'Partial_' : '';
         const bucket = process.env.S3_BUCKET || 'prolificjson';   // fallback to old bucket if env missing
         const filename = `${partialPrefix}${ts}_${safePID}_${Mode}_${WhetherShareOriginal}.json`;
