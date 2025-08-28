@@ -2077,6 +2077,11 @@ class PrivacyDemoApp {
     stopConversationAndShowCongratulation() {
         console.log('🛑 Stopping conversation and user agent before showing congratulation popup...');
         
+        // Set completion states to stop all monitoring
+        this.state.questionsCompleted = true;
+        this.state.questionMode = false;
+        console.log('✅ Set questionsCompleted=true, questionMode=false');
+        
         // Stop partial completion detection
         if (this.state.partialCompletionTimer) {
             clearInterval(this.state.partialCompletionTimer);
@@ -3028,6 +3033,10 @@ class PrivacyDemoApp {
                             this.state.inFollowUpMode = false;
                             this.state.followUpQuestions = [];
                             this.state.currentFollowUpQuestionIndex = 0;
+                            
+                            // Set flag to move to next question
+                            this.state.justCompletedQuestion = true;
+                            console.log('🔄 Set justCompletedQuestion=true to move to next question');
                             
                             // Update progress bar immediately
                             console.log('🔄 Calling updateProgressBar() from follow-up completion');
