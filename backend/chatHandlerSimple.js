@@ -161,8 +161,14 @@ export async function handleChatSimple(req, res) {
             });
         }
 
-        // 处理用户回答
-        const processResult = processAnswer(session, message, currentQuestion);
+        // 处理用户回答 - 检查是否在回答followup
+        const questionToProcess = session.currentFollowup || currentQuestion;
+        const processResult = processAnswer(session, message, questionToProcess);
+        
+        // 如果刚刚回答了followup，清除当前followup状态
+        if (session.currentFollowup) {
+            session.currentFollowup = null;
+        }
         log.info('answer processed', {
             resultStatus: processResult.status,
             answersCount: session.currentQuestionAnswers.length
@@ -219,6 +225,8 @@ export async function handleChatSimple(req, res) {
                 const nextFollowup = await getNextIntelligentFollowup(session);
                 
                 if (nextFollowup) {
+                    // 存储当前正在问的followup，以便处理用户回答时使用
+                    session.currentFollowup = nextFollowup;
                     botResponse = nextFollowup.question;
                     followUpQuestions = [nextFollowup.question];
                     

@@ -299,7 +299,7 @@ export function shouldAdvanceToNext(state, llmCheckResult) {
 }
 
 /**
- * 智能决策 - 使用LLM判断下一步行动
+ * 简单决策逻辑 - 不使用LLM，基于简单规则
  * @param {Object} state - 会话状态
  * @returns {Promise<Object>} 决策结果
  */
@@ -311,117 +311,96 @@ export async function makeIntelligentDecision(state) {
         };
     }
     
+    // 获取用户的第一个回答（对主问题的回答）
+    const firstAnswer = state.currentQuestionAnswers[0];
+    if (!firstAnswer) {
+        return {
+            decision: 'NEED_MAIN_ANSWER',
+            reasoning: 'Need main question answer'
+        };
+    }
+    
+    const answer = firstAnswer.answer.toLowerCase();
     const mainQuestion = state.mainQuestions[state.currentMainIdx];
     const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
     
-    try {
-        const decision = await makeSmartDecision(
-            state.currentQuestionAnswers,
-            mainQuestion,
-            followups
-        );
-        
-        // 更新状态基于决策结果
-        if (decision.decision === 'ADVANCE_TO_NEXT') {
-            markMainQuestionComplete(state);
-        }
-        
-        return decision;
-    } catch (error) {
-        console.error('❌ Intelligent decision making failed:', error);
-        // 降级策略
+    // 检查用户是否表示没有相关经历
+    const noExperience = 
+        answer.includes('no') && (answer.includes('never') || answer.includes('not') || answer.includes("n't") || answer.includes("don't")) ||
+        answer.includes('never') ||
+        answer.includes("haven't") ||
+        answer.includes("didn't") ||
+        answer.includes("don't have") ||
+        answer.includes("no experience") ||
+        answer.includes("not applicable") ||
+        answer.includes("n/a") ||
+        (answer.length < 20 && (answer.includes('no') || answer.includes('none')));
+    
+    if (noExperience) {
+        // 用户没有相关经历，跳到下一个主问题
+        console.log('📝 User indicated no relevant experience, skipping to next topic');
         return {
-            decision: state.currentQuestionAnswers.length >= 2 ? 'ADVANCE_TO_NEXT' : 'ASK_FOLLOWUPS',
-            reasoning: 'Fallback decision based on answer count',
-            error: error.message
+            decision: 'ADVANCE_TO_NEXT',
+            reasoning: 'User indicated no relevant experience, moving to next topic'
+        };
+    }
+    
+    // 用户有相关经历，检查是否已问完所有followup
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    let allFollowupsAsked = true;
+    
+    for (let i = 0; i < followups.length; i++) {
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        if (!state.completedFollowups.has(followupId)) {
+            allFollowupsAsked = false;
+            break;
+        }
+    }
+    
+    if (allFollowupsAsked || followups.length === 0) {
+        // 所有followup都已问完，进入下一个主问题
+        console.log('✅ All follow-ups completed for this topic');
+        return {
+            decision: 'ADVANCE_TO_NEXT',
+            reasoning: 'All follow-ups completed'
+        };
+    } else {
+        // 还有followup需要询问
+        return {
+            decision: 'ASK_FOLLOWUPS',
+            reasoning: 'Continue with follow-up questions'
         };
     }
 }
 
 /**
- * 获取下一个需要询问的followup（智能版本）
+ * 获取下一个需要询问的followup（简单版本）
  * @param {Object} state - 会话状态
- * @returns {Promise<Object>} followup问题信息
+ * @returns {Object} followup问题信息
  */
-export async function getNextIntelligentFollowup(state) {
+export function getNextIntelligentFollowup(state) {
     const mainQuestion = state.mainQuestions[state.currentMainIdx];
     const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
     const mainQuestionId = `main_${state.currentMainIdx}`;
     
-    // 找到还未完成的followup
+    // 简单地找到下一个未完成的followup
     for (let i = 0; i < followups.length; i++) {
         const followup = followups[i];
         const followupId = `${mainQuestionId}_followup_${i}`;
         
         if (!state.completedFollowups.has(followupId)) {
-            try {
-                // 检查重复问题限制（最多问2次）
-                const attemptCount = state.followupAttempts.get(followupId) || 0;
-                if (attemptCount >= 2) {
-                    console.log(`⏭️  Skipping ${followupId} - already asked ${attemptCount} times`);
-                    state.completedFollowups.add(followupId);
-                    continue;
-                }
-                
-                // 检查用户是否表示拒绝回答（优先级最高）
-                const latestAnswer = state.currentQuestionAnswers[state.currentQuestionAnswers.length - 1];
-                if (latestAnswer) {
-                    const lowerAnswer = latestAnswer.answer.toLowerCase();
-                    if (lowerAnswer.includes('cannot remember') || lowerAnswer.includes('dont remember') || 
-                        lowerAnswer.includes("don't remember") || lowerAnswer.includes('not sure') ||
-                        lowerAnswer.includes('forget') || lowerAnswer.includes('no idea')) {
-                        // 用户明确表示不记得，停止追问这类问题
-                        state.completedFollowups.add(followupId);
-                        console.log(`🚫 ${followupId} skipped - user indicated they don't remember`);
-                        continue;
-                    }
-                }
-                
-                // 检查是否已被覆盖
-                const coverageResult = await checkCoverage(state.currentQuestionAnswers, followup);
-                
-                if (coverageResult.verdict === 'ALREADY_ANSWERED') {
-                    // 标记为完成并继续查找
-                    state.completedFollowups.add(followupId);
-                    console.log(`✅ ${followupId} marked as covered: ${coverageResult.reasoning}`);
-                    continue;
-                }
-                
-                // 记录这次询问
-                state.followupAttempts.set(followupId, attemptCount + 1);
-                
-                // 生成智能的followup问题
-                const regeneratedQuestion = await regenerateFollowup(followup, state.currentQuestionAnswers);
-                
-                console.log(`❓ Asking ${followupId} (attempt ${attemptCount + 1}/2): ${followup.prompt.substring(0, 50)}...`);
-                
-                return {
-                    type: 'followup',
-                    id: followupId,
-                    question: regeneratedQuestion,
-                    originalQuestion: followup.prompt,
-                    keywords: followup.keywords,
-                    mainQuestionIdx: state.currentMainIdx,
-                    followupIdx: i,
-                    intelligentlyGenerated: true,
-                    coverageCheck: coverageResult,
-                    attemptNumber: attemptCount + 1
-                };
-                
-            } catch (error) {
-                console.error('❌ Failed to process intelligent followup:', error);
-                // 降级到原始问题
-                return {
-                    type: 'followup',
-                    id: followupId,
-                    question: followup.prompt,
-                    keywords: followup.keywords,
-                    mainQuestionIdx: state.currentMainIdx,
-                    followupIdx: i,
-                    intelligentlyGenerated: false,
-                    error: error.message
-                };
-            }
+            console.log(`❓ Asking ${followupId}: ${followup.prompt.substring(0, 50)}...`);
+            
+            return {
+                type: 'followup',
+                id: followupId,
+                question: followup.prompt,
+                originalQuestion: followup.prompt,
+                keywords: followup.keywords,
+                mainQuestionIdx: state.currentMainIdx,
+                followupIdx: i,
+                intelligentlyGenerated: false
+            };
         }
     }
     
