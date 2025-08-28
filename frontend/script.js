@@ -4137,15 +4137,15 @@ class PrivacyDemoApp {
             return;
         }
 
-        // Correct flow: If consent is given, proceed to the Post-Task Survey; after submitting the survey, then export and redirect
+        // Both consent choices proceed to Post-Task Survey, only affecting exported data content
+        // Continue using the same pendingAction regardless of consent choice
+        this.state.pendingExportAction = pendingAction;
+        this.showSurveyPopup(pendingAction);
+        
         if (consentGiven) {
-            // Continue using the same pendingAction (exportDirect/exportComprehensive/analyzeAndExport)
-            this.state.pendingExportAction = pendingAction;
-            this.showSurveyPopup(pendingAction);
+            this.showNotification('📋 Data sharing agreed - proceeding to survey', 'info');
         } else {
-            // If consent is not given, you can choose to end the session or still allow export but mark consent=false
-            // Here we show a warning and end the session
-            this.showNotification('You declined data collection. The session will end.', 'warning');
+            this.showNotification('📋 Data sharing declined - proceeding to survey', 'info');
         }
     }
 
