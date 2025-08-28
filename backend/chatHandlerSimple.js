@@ -227,7 +227,21 @@ export async function handleChatSimple(req, res) {
                 if (nextFollowup) {
                     // 存储当前正在问的followup，以便处理用户回答时使用
                     session.currentFollowup = nextFollowup;
-                    botResponse = nextFollowup.question;
+                    
+                    // 为follow-up添加自然的连接语
+                    const transitions = [
+                        "Thanks for that. ",
+                        "That's helpful to know. ",
+                        "I'd love to know more about that. ",
+                        "That gives me good context. ",
+                        "I appreciate you sharing that. "
+                    ];
+                    
+                    // 根据follow-up索引选择不同的过渡语，使对话更自然
+                    const transitionIndex = nextFollowup.followupIdx % transitions.length;
+                    const transition = transitions[transitionIndex];
+                    
+                    botResponse = `${transition}${nextFollowup.question}`;
                     followUpQuestions = [nextFollowup.question];
                     
                     log.info('next followup generated', {
