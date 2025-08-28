@@ -190,8 +190,20 @@ export async function handleChatSimple(req, res) {
             };
 
             if (decision.decision === 'ADVANCE_TO_NEXT') {
-                // 进入下一个主问题
+                // 标记当前问题为完成并进入下一个主问题
                 questionCompleted = true;
+                
+                // 更新session状态：标记当前主问题为完成
+                const currentMainQuestionId = `main_${session.currentMainIdx}`;
+                session.completedMainQuestions.add(currentMainQuestionId);
+                session.completedQuestions++;
+                
+                // 移动到下一个问题
+                session.currentMainIdx++;
+                session.currentQuestionAnswers = []; // 清空当前问题答案
+                session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
+                
+                // 获取下一个问题
                 const nextQuestion = getCurrentQuestion(session);
                 
                 if (nextQuestion.type === 'completed') {
@@ -217,12 +229,26 @@ export async function handleChatSimple(req, res) {
                 } else {
                     // 没有更多followup，进入下一个主问题
                     questionCompleted = true;
+                    
+                    // 更新session状态：标记当前主问题为完成
+                    const currentMainQuestionId = `main_${session.currentMainIdx}`;
+                    session.completedMainQuestions.add(currentMainQuestionId);
+                    session.completedQuestions++;
+                    
+                    // 移动到下一个问题
+                    session.currentMainIdx++;
+                    session.currentQuestionAnswers = []; // 清空当前问题答案
+                    session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
+                    
+                    // 获取下一个问题
                     const nextQuestion = getCurrentQuestion(session);
                     
                     if (nextQuestion.type === 'completed') {
                         botResponse = "Thanks so much—that's all we need for now.";
-                    } else {
+                    } else if (nextQuestion.type === 'main') {
                         botResponse = `Thank you. ${nextQuestion.question}`;
+                    } else {
+                        botResponse = "Let me ask you another question.";
                     }
                 }
             } else {
