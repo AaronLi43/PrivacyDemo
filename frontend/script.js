@@ -2074,6 +2074,13 @@ class PrivacyDemoApp {
     stopConversationAndShowCongratulation() {
         console.log('🛑 Stopping conversation and user agent before showing congratulation popup...');
         
+        // Stop partial completion detection
+        if (this.state.partialCompletionTimer) {
+            clearInterval(this.state.partialCompletionTimer);
+            this.state.partialCompletionTimer = null;
+            console.log('✅ Partial completion detection stopped');
+        }
+        
         // Stop user agent monitoring
         this.stopPeriodicMonitoring();
         this.state.userAgentEnabled = false;
@@ -2106,6 +2113,13 @@ class PrivacyDemoApp {
 
     // Show congratulation popup when all questions are completed
     showCongratulationPopup() {
+        // Stop partial completion detection when showing congratulation
+        if (this.state.partialCompletionTimer) {
+            clearInterval(this.state.partialCompletionTimer);
+            this.state.partialCompletionTimer = null;
+            console.log('✅ Partial completion detection stopped at congratulation');
+        }
+        
         const popup = document.getElementById('congratulation-popup');
         const popupTitle = document.getElementById('congratulation-title');
         const popupMessage = document.getElementById('congratulation-message');
@@ -2991,9 +3005,19 @@ class PrivacyDemoApp {
                         
                         // Check if follow-up questions are completed
                         if (response.question_completed) {
+                            // Mark the current question as completed and update progress
+                            if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
+                                this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
+                                console.log(`✅ Question ${this.state.currentQuestionIndex + 1} completed! Progress: ${this.state.completedQuestionIndices.length}/${this.state.predefinedQuestions[this.state.mode].length}`);
+                            }
+                            
                             this.state.inFollowUpMode = false;
                             this.state.followUpQuestions = [];
                             this.state.currentFollowUpQuestionIndex = 0;
+                            
+                            // Update progress bar immediately
+                            this.updateProgressBar();
+                            
                             console.log('Follow-up questions completed, returning to main question flow');
                         } else {
                             // Move to next follow-up question if available
