@@ -147,6 +147,23 @@ export async function handleChatSimple(req, res) {
         
         if (currentQuestion.type === 'completed') {
             log.info('interview completed');
+            
+            // 根据模式设置不同的路由
+            let allowedActions = [];
+            switch(session.mode) {
+                case 'neutral':
+                    allowedActions = ["POST_TASK_SURVEY"];
+                    break;
+                case 'naive':
+                    allowedActions = ["FREE_EDITING"];
+                    break;
+                case 'featured':
+                    allowedActions = ["PRIVACY_ANALYSIS"];
+                    break;
+                default:
+                    allowedActions = ["POST_TASK_SURVEY"];
+            }
+            
             return res.json({
                 success: true,
                 bot_response: "Thanks so much—that's all we need for now.",
@@ -154,7 +171,7 @@ export async function handleChatSimple(req, res) {
                 step,
                 question_completed: true,
                 pending_followup_exists: false,
-                allowed_actions: [],
+                allowed_actions: allowedActions,
                 interview_finished: true,
                 session_id: currentSessionId,
                 timings_ms: { total: Date.now() - t0 }
@@ -309,6 +326,24 @@ export async function handleChatSimple(req, res) {
         // 检查面试是否完成
         const nextQuestionCheck = getCurrentQuestion(session);
         const interviewFinished = nextQuestionCheck.type === 'completed';
+        
+        // 根据面试状态和模式设置allowed_actions
+        let allowedActions = ["ASK_FOLLOWUP", "REQUEST_CLARIFY", "NEXT_QUESTION"];
+        if (interviewFinished) {
+            switch(session.mode) {
+                case 'neutral':
+                    allowedActions = ["POST_TASK_SURVEY"];
+                    break;
+                case 'naive':
+                    allowedActions = ["FREE_EDITING"];
+                    break;
+                case 'featured':
+                    allowedActions = ["PRIVACY_ANALYSIS"];
+                    break;
+                default:
+                    allowedActions = ["POST_TASK_SURVEY"];
+            }
+        }
 
         // 构建兼容的API响应
         const response = {
@@ -328,7 +363,7 @@ export async function handleChatSimple(req, res) {
             follow_up_questions: followUpQuestions,
             question_presence_audit: null, // 将在后续版本添加
             interview_finished: interviewFinished,
-            allowed_actions: ["ASK_FOLLOWUP", "REQUEST_CLARIFY", "NEXT_QUESTION"],
+            allowed_actions: allowedActions,
             session_id: currentSessionId,
             
             // 简化orchestrator的内部状态（用于调试和恢复）

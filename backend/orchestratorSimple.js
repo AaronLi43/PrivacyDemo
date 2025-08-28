@@ -27,7 +27,7 @@ const unifiedQuestions = [
     "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
 ];
 
-// Follow-ups映射
+// Follow-ups映射 - 与server.js保持一致
 const FOLLOWUPS_BY_QUESTION = {
     [unifiedQuestions[0]]: [
         { id: "Q1_F1", prompt: "When did you start your degree and when did you finish?", keywords: [
@@ -44,53 +44,102 @@ const FOLLOWUPS_BY_QUESTION = {
         ] },
         { id: "Q1_F3", prompt: "Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.", keywords: [
             "supervisor","advisor","adviser","mentor","thesis advisor","capstone advisor","co-advisor",
-            "professor","instructor","teacher","faculty","staff",
-            "Dr.","Ph.D","PhD","Professor","prof"
+            "professor","lecturer","pi","principal investigator","dr","prof","supervised by"
         ] }
     ],
     [unifiedQuestions[1]]: [
-        { id: "Q2_F1", prompt: "What is your current job title?", keywords: [
-            "job","position","role","title","work","career","occupation",
-            "analyst","engineer","manager","director","specialist","coordinator",
-            "developer","designer","consultant","administrator","executive"
+        { id: "Q2_F1", prompt: "When did you start your current job and when did you do the interview?", keywords: [
+            "when","start","started","join","joined","since","until","between",
+            "interview","phone screen","screen","assessment","take-home","onsite","on-site","loop",
+            "offer","offer date","start date","hire date","hired","accepted",
+            "month","year","week","201","202"
         ] },
-        { id: "Q2_F2", prompt: "When did you start your current job and when did you do the interview?", keywords: [
-            "when","start","started","begin","began","hired","joined",
-            "interview","interviewed","apply","applied","application",
-            "month","year","ago","recent","recently","last","this"
+        { id: "Q2_F2", prompt: "What is your current job title?", keywords: [
+            "title","job title","position","role","level",
+            "senior","junior","lead","manager","intern","contractor","staff","principal",
+            "swe","engineer","developer","scientist","analyst","designer","researcher",
+            "qa","qe","pm","product manager","data scientist","ml engineer"
+        ] },
+        { id: "Q2_F3", prompt: "What is your current employer or company?", keywords: [
+            "employer","company","organization","org","firm","startup",
+            "corp","corporation","inc","llc","ltd","co","company name","employed at","work at","at"
         ] }
     ],
     [unifiedQuestions[2]]: [
-        { id: "Q3_F1", prompt: "Which AI tools did you use and for what tasks?", keywords: [
-            "ChatGPT","GPT","Claude","Bard","Gemini","Copilot",
-            "AI","artificial intelligence","tool","platform","application",
-            "resume","cover letter","answers","questions","research","practice"
+        { id: "Q3_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: [
+            "when","exactly","interview","timeline","around","before","after","during",
+            "date","time","month","year","201","202","preparation","prep","application",
+            "offer","assessment","screen","onsite","on-site","loop","process"
         ] },
-        { id: "Q3_F2", prompt: "How did you use AI and what difference did it make?", keywords: [
-            "how","method","way","process","approach",
-            "help","helped","improve","improved","better","confidence","confident",
-            "difference","impact","effect","result","outcome"
+        { id: "Q3_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+            "which","ai","tools","did you use","use","used","what","tasks","purpose",
+            "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+            "bing ai","perplexity","notion ai","quillbot","grammarly","prompt","prompts",
+            "generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+            "mock interview","practice q&a","script","answer bank","cheatsheet"
+        ] },
+        { id: "Q3_F3", prompt: "How did you use AI and what difference did it make?", keywords: [
+            "how","did you use","use","used","ai","difference","impact","effect","result",
+            "help","assist","improve","change","outcome","benefit","advantage","disadvantage",
+            "influence","process","performance","success","failure","resulted in"
         ] }
     ],
     [unifiedQuestions[3]]: [
-        { id: "Q4_F1", prompt: "What specifically made you nervous about using AI?", keywords: [
-            "nervous","worried","concerned","anxious","afraid","fear",
-            "caught","discovered","found out","detected","flagged",
-            "cheating","unfair","inappropriate","wrong","ethical"
+        { id: "Q4_F1", prompt: "Do you remember at what time that happened?", keywords: [
+            "when","incident","close call","almost caught","nearly","time","date","month","year","201","202"
+        ] },
+        { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+            "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+            "bing ai","perplexity","notion ai","quillbot","grammarly",
+            "prompt","prompts","generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+            "star","bullet points","mock interview","practice q&a","script","answer bank","cheatsheet",
+            "cover letter","resume","cv","email","thank-you note"
+        ] },
+        { id: "Q4_F3", prompt: "Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?", keywords: [
+            "trouble","caught","flagged","plagiarism","cheating","ban","banned","policy","violation",
+            "integrity","academic integrity","code of conduct","warning","revoke","rescinded","revoke offer",
+            "disqualify","disqualified","penalty","strike","concern","red flag","hr","recruiter",
+            "investigation","reported","suspension","blacklist"
         ] }
     ],
     [unifiedQuestions[4]]: [
-        { id: "Q5_F1", prompt: "What made you question whether your AI use was appropriate?", keywords: [
-            "appropriate","right","wrong","fair","unfair","ethical","unethical",
-            "should","shouldn't","allowed","not allowed","acceptable",
-            "question","questioned","doubt","doubted","wonder","wondered"
+        { id: "Q5_F1", prompt: "could you walk me through what made you reach for AI in that situation?", keywords: [
+            "trigger","reason","because","due to","pressure","deadline","time pressure",
+            "hard question","difficult","competition","anxiety","stress","desperate","temptation",
+            "incentive","recommendation","friend suggested","saw others","reddit","forum","example",
+            "shortcut","cheat","hack"
+        ] },
+        { id: "Q5_F2", prompt: "when you thought about the possibility of going too far with AI, what concerns were on your mind?", keywords: [
+            "concern","worry","afraid","fear","risk","getting caught","detect","detection",
+            "policy","violation","ethics","integrity","honesty","privacy","security",
+            "consequence","ban","penalty","expelled","fired","background check","nda","legal","guidelines"
+        ] },
+        { id: "Q5_F3", prompt: "what additional ethics reflection did you have during using AI for job interviews?", keywords: [
+            "ethics","ethical","reflection","in hindsight","looking back","regret","lesson","learned",
+            "shouldn't have","boundary","line","values","responsibility","fairness","transparency",
+            "accountability","harm","trust","reputation","principle","moral","self-reflection"
         ] }
     ],
     [unifiedQuestions[5]]: [
-        { id: "Q6_F1", prompt: "What specific AI uses do you prefer to keep private?", keywords: [
-            "private","secret","hidden","confidential","personal",
-            "share","tell","mention","discuss","reveal","disclose",
-            "employer","boss","family","friends","colleagues","coworkers"
+        { id: "Q6_F1", prompt: "When was the incident of you using AI to hide from someone?", keywords: [
+            "when","incident","time","date","month","year","201","202","hide","hidden","keeping secret"
+        ] },
+        { id: "Q6_F2", prompt: "Who were you hiding from?", keywords: [
+            "who","from","employer","manager","boss","hr","recruiter","interviewer",
+            "coworker","colleague","team","professor","ta","teacher","advisor","supervisor",
+            "client","customer","family","parents","partner","girlfriend","boyfriend","spouse",
+            "friend","roommate"
+        ] },
+        { id: "Q6_F3", prompt: "What AI uses did you try to hide from them?", keywords: [
+            "hide","conceal","secret","ai use","used chatgpt","copilot","generate","autocompletion","auto-complete",
+            "rewrite","translate","summarize","grammar","proofread","code","solution","answers","essay","report",
+            "homework","assignment","take-home","test","automation","voice to text","image generator",
+            "dall-e","midjourney","stable diffusion","quillbot","grammarly"
+        ] },
+        { id: "Q6_F4", prompt: "Why do you feel that's something you wouldn't want to share openly?", keywords: [
+            "why","feel","share","openly","private","confidential","sensitive","sensitive information",
+            "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
+            "reputation","principle","moral","self-reflection"
         ] }
     ]
 };
@@ -325,16 +374,21 @@ export async function makeIntelligentDecision(state) {
     const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
     
     // 检查用户是否表示没有相关经历
-    const noExperience = 
-        answer.includes('no') && (answer.includes('never') || answer.includes('not') || answer.includes("n't") || answer.includes("don't")) ||
-        answer.includes('never') ||
+    // 优先检查明确的否定词汇，即使有记忆相关词汇
+    const hasStrongNegatives = answer.includes('never') ||
         answer.includes("haven't") ||
         answer.includes("didn't") ||
         answer.includes("don't have") ||
         answer.includes("no experience") ||
         answer.includes("not applicable") ||
-        answer.includes("n/a") ||
-        (answer.length < 20 && (answer.includes('no') || answer.includes('none')));
+        answer.includes("n/a");
+    
+    const memoryIssueOnly = (answer.includes('remember') || answer.includes('recall') || answer.includes('forget')) && !hasStrongNegatives;
+    
+    const noExperience = hasStrongNegatives || (!memoryIssueOnly && (
+        (answer.includes('no') && (answer.includes('never') || answer.includes('not') || answer.includes("n't") || answer.includes("don't"))) ||
+        (answer.length < 20 && (answer.includes('no') || answer.includes('none')))
+    ));
     
     if (noExperience) {
         // 用户没有相关经历，跳到下一个主问题
