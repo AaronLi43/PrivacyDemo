@@ -3536,8 +3536,12 @@ class PrivacyDemoApp {
                 
                 // Include privacy analysis and suggestions if available
                 if (this.state.analyzedLog && this.state.analyzedLog.length > 0) {
-                    exportData.privacy_analysis = this.state.analyzedLog;
-                    exportData.privacy_suggestions = this.getPrivacySuggestions();
+                    exportData.privacy_analysis = this.generatePrivacyAnalysisForExport();
+                    
+                    // Only include privacy suggestions if consent was given
+                    if (this.state.consentGiven) {
+                        exportData.privacy_suggestions = this.getPrivacySuggestions();
+                    }
                 }
             }
 
@@ -3614,8 +3618,12 @@ class PrivacyDemoApp {
                 
                 // Include privacy analysis and suggestions if available
                 if (this.state.analyzedLog && this.state.analyzedLog.length > 0) {
-                    exportData.privacy_analysis = this.state.analyzedLog;
-                    exportData.privacy_suggestions = this.getPrivacySuggestions();
+                    exportData.privacy_analysis = this.generatePrivacyAnalysisForExport();
+                    
+                    // Only include privacy suggestions if consent was given
+                    if (this.state.consentGiven) {
+                        exportData.privacy_suggestions = this.getPrivacySuggestions();
+                    }
                 }
             }
             const safeExport = stripRawIfNoConsent(exportData, this.state.consentGiven);
@@ -3831,8 +3839,12 @@ class PrivacyDemoApp {
             
             // Generate comprehensive export data with analysis
             const exportData = this.generateComprehensiveExportData();
-            exportData.privacy_analysis = analyzedLog;
-            exportData.privacy_suggestions = this.getPrivacySuggestions();
+            exportData.privacy_analysis = this.generatePrivacyAnalysisForExport();
+            
+            // Only include privacy suggestions if consent was given
+            if (this.state.consentGiven) {
+                exportData.privacy_suggestions = this.getPrivacySuggestions();
+            }
             
             // Count privacy issues found
             const totalIssues = analyzedLog.filter(entry => entry.hasPrivacyIssues).length;
@@ -4249,6 +4261,7 @@ class PrivacyDemoApp {
     // Generate analysis export data (includes edited messages with privacy analysis)
     generateAnalysisExportData() {
         const exportLog = [];
+        const userActionStats = this.generateUserActionStatistics();
         
         // Use current conversation data (including edits) for export
         const conversationToExport = this.state.conversationLog;
@@ -4290,10 +4303,11 @@ class PrivacyDemoApp {
                     // NEW: keep a mirrored tag inside details
                     original_data_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored')
                 },
-                survey_completed: this.state.surveyCompleted
+                survey_completed: this.state.surveyCompleted,
+                user_actions: userActionStats
             },
             conversation: exportLog,
-            privacy_analysis: this.state.analyzedLog,
+            privacy_analysis: this.generatePrivacyAnalysisForExport(),
             survey_data: {
                 ...(this.state.surveyData || {}),
                 questions: this.state.predefinedQuestions[this.state.mode]
@@ -4312,6 +4326,7 @@ class PrivacyDemoApp {
     generateComprehensiveExportData() {
         // Use current conversation data (including edits) for export
         const conversationToExport = this.state.conversationLog;
+        const userActionStats = this.generateUserActionStatistics();
         
         const exportData = {
             metadata: {
@@ -4329,28 +4344,95 @@ class PrivacyDemoApp {
                 },
                 survey_completed: this.state.surveyCompleted,
                 edited_messages_count: this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length,
-                privacy_features_used: this.getUsedPrivacyFeatures()
+                privacy_features_used: this.getUsedPrivacyFeatures(),
+                user_actions: userActionStats
             },
             conversation: conversationToExport,
             survey_data: {
                 ...(this.state.surveyData || {}),
-                questions: this.state.predefinedQuestions[this.state.mode]
-            },
-            privacy_choices: this.state.privacyChoices
+                questions: this.getSurveyQuestions()
+            }
         };
+        
+        // Only include privacy_choices if consent was given
+        if (this.state.consentGiven) {
+            exportData.privacy_choices = this.state.privacyChoices;
+        }
 
         // Include original conversation if consent was given
         if (this.state.consentGiven && this.state.originalLog.length > 0) {
             exportData.original_conversation = this.state.originalLog;
         }
 
-        // Include privacy analysis if available
+        // Include privacy analysis if available (with conversation content for privacy protection)
         if (this.state.analyzedLog.length > 0) {
-            exportData.privacy_analysis = this.state.analyzedLog;
-            exportData.privacy_suggestions = this.getPrivacySuggestions();
+            exportData.privacy_analysis = this.generatePrivacyAnalysisForExport();
+            
+            // Only include privacy suggestions if consent was given
+            if (this.state.consentGiven) {
+                exportData.privacy_suggestions = this.getPrivacySuggestions();
+            }
         }
 
         return exportData;
+    }
+
+    // Generate privacy analysis with conversation content (for privacy protection)
+    generatePrivacyAnalysisForExport() {
+        if (!this.state.analyzedLog || this.state.analyzedLog.length === 0) {
+            return [];
+        }
+        
+        const analysisForExport = [];
+        
+        for (let i = 0; i < this.state.analyzedLog.length; i++) {
+            const analyzed = this.state.analyzedLog[i];
+            const conversationTurn = this.state.conversationLog[i];
+            
+            if (analyzed && conversationTurn) {
+                // Use conversation content instead of original analyzed content
+                const exportEntry = {
+                    ...analyzed,
+                    // Replace user/bot content with current conversation content
+                    user: conversationTurn.user || '',
+                    bot: conversationTurn.bot || ''
+                };
+                
+                analysisForExport.push(exportEntry);
+            }
+        }
+        
+        return analysisForExport;
+    }
+    
+    // Generate user action statistics
+    generateUserActionStatistics() {
+        const stats = {
+            keep_original: 0,
+            accept_placeholder: 0,
+            accept_blurred_data: 0,
+            manual_edits: 0
+        };
+        
+        // Count privacy choices
+        Object.values(this.state.privacyChoices).forEach(messageChoices => {
+            Object.values(messageChoices).forEach(choice => {
+                if (choice === 'keep') {
+                    stats.keep_original++;
+                } else if (choice === 'accept') {
+                    stats.accept_placeholder++;
+                } else if (choice === 'accept_fake') {
+                    stats.accept_blurred_data++;
+                }
+            });
+        });
+        
+        // Count manual edits
+        stats.manual_edits = this.state.conversationLog.filter(turn => 
+            turn.user_edited || turn.bot_edited
+        ).length;
+        
+        return stats;
     }
 
     // Generate privacy choices summary
