@@ -1288,8 +1288,24 @@ app.get('/api/config', (req, res) => {
 
 
 
-// Chat API (full, with rich logs)
+// 导入简化的Chat处理器
+import { handleChatSimple, handleChatLegacy } from './chatHandlerSimple.js';
+
+// 功能开关配置
+const USE_SIMPLE_ORCHESTRATOR = process.env.USE_SIMPLE_ORCHESTRATOR === 'true';
+
+console.log(`🔧 Orchestrator Mode: ${USE_SIMPLE_ORCHESTRATOR ? 'SIMPLIFIED' : 'LEGACY'}`);
+
+// Chat API with orchestrator switching
 app.post('/api/chat', async (req, res) => {
+    if (USE_SIMPLE_ORCHESTRATOR) {
+        return handleChatSimple(req, res);
+    }
+    return handleChatLegacy_Original(req, res);
+});
+
+// 保留原始的复杂处理器（重命名避免冲突）
+async function handleChatLegacy_Original(req, res) {
     const t0 = Date.now();
     const requestId = Math.random().toString(36).slice(2,10);
     const log = makeLogger({ route: '/api/chat', requestId });
@@ -1864,7 +1880,41 @@ const pending = allFUs.filter(
         timings_ms: { total: t1 - t0 }
       });
     }
-  });
+  }
+
+// 添加orchestrator状态检查端点
+app.get('/api/orchestrator/status', (req, res) => {
+    res.json({
+        mode: USE_SIMPLE_ORCHESTRATOR ? 'simplified' : 'legacy',
+        timestamp: new Date().toISOString(),
+        version: '2.0.0-simple'
+    });
+});
+
+// 添加会话统计端点（仅在简化模式下工作）
+app.get('/api/orchestrator/stats', async (req, res) => {
+    if (!USE_SIMPLE_ORCHESTRATOR) {
+        return res.json({
+            error: 'Stats only available in simplified mode',
+            mode: 'legacy'
+        });
+    }
+    
+    try {
+        const { getSessionStats } = await import('./chatHandlerSimple.js');
+        const stats = getSessionStats();
+        res.json({
+            ...stats,
+            mode: 'simplified',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Failed to get stats',
+            details: error.message
+        });
+    }
+});
   
 // Privacy Detection API
 app.post('/api/privacy_detection', async (req, res) => {

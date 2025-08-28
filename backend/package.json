@@ -13,7 +13,7 @@
     "test-partial": "node run_partial_completion_test.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.859.0",
+    "@aws-sdk/client-s3": "^3.876.0",
     "@aws-sdk/s3-request-presigner": "^3.859.0",
     "axios": "^1.11.0",
     "body-parser": "^1.20.2",
