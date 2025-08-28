@@ -17,6 +17,9 @@ import {
     getExportData
 } from './orchestratorSimple.js';
 
+// 导入FOLLOWUPS_BY_QUESTION - 需要从orchestratorSimple.js中导出
+import orchestratorSimple from './orchestratorSimple.js';
+
 // 会话存储 - 与现有系统兼容
 const sessions = new Map();
 
@@ -198,10 +201,26 @@ export async function handleChatSimple(req, res) {
             answersCount: session.currentQuestionAnswers.length
         });
 
+        // 检查当前主问题是否刚刚完成（所有followup都已回答）
+        const checkIfMainQuestionJustCompleted = () => {
+            const mainQuestion = session.mainQuestions[session.currentMainIdx];
+            // 这是一个简化版本，我们假设有followup需要完成才能显示完成状态
+            // 实际的followup检查逻辑在makeIntelligentDecision中处理
+            const mainQuestionId = `main_${session.currentMainIdx}`;
+            
+            // 只有当主问题还没有被标记为完成，并且当前有followup被标记为完成时才返回true
+            if (session.completedMainQuestions.has(mainQuestionId)) {
+                return false; // 已经标记为完成了
+            }
+            
+            // 检查是否刚刚完成了一个followup
+            return session.completedFollowups.size > 0;
+        };
+
         // 进行智能决策
         let decision;
         let botResponse = '';
-        let questionCompleted = false;
+        let questionCompleted = checkIfMainQuestionJustCompleted(); // 检查是否刚完成
         let followUpQuestions = [];
         let auditResult = null;
 
@@ -225,13 +244,17 @@ export async function handleChatSimple(req, res) {
                 
                 // 更新session状态：标记当前主问题为完成
                 const currentMainQuestionId = `main_${session.currentMainIdx}`;
-                session.completedMainQuestions.add(currentMainQuestionId);
-                session.completedQuestions++;
+                if (!session.completedMainQuestions.has(currentMainQuestionId)) {
+                    session.completedMainQuestions.add(currentMainQuestionId);
+                    session.completedQuestions++;
+                    session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
+                    
+                    log.info(`✅ Question ${session.currentMainIdx + 1}/6 completed! Progress: ${session.progressPercentage}%`);
+                }
                 
                 // 移动到下一个问题
                 session.currentMainIdx++;
                 session.currentQuestionAnswers = []; // 清空当前问题答案
-                session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
                 
                 // 获取下一个问题
                 const nextQuestion = getCurrentQuestion(session);
@@ -273,18 +296,22 @@ export async function handleChatSimple(req, res) {
                         intelligentlyGenerated: nextFollowup.intelligentlyGenerated
                     });
                 } else {
-                    // 没有更多followup，进入下一个主问题
+                    // 没有更多followup，当前主问题完成！
                     questionCompleted = true;
                     
                     // 更新session状态：标记当前主问题为完成
                     const currentMainQuestionId = `main_${session.currentMainIdx}`;
-                    session.completedMainQuestions.add(currentMainQuestionId);
-                    session.completedQuestions++;
+                    if (!session.completedMainQuestions.has(currentMainQuestionId)) {
+                        session.completedMainQuestions.add(currentMainQuestionId);
+                        session.completedQuestions++;
+                        session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
+                        
+                        log.info(`✅ Question ${session.currentMainIdx + 1}/6 completed! Progress: ${session.progressPercentage}%`);
+                    }
                     
                     // 移动到下一个问题
                     session.currentMainIdx++;
                     session.currentQuestionAnswers = []; // 清空当前问题答案
-                    session.progressPercentage = Math.round((session.completedQuestions / session.totalQuestions) * 100);
                     
                     // 获取下一个问题
                     const nextQuestion = getCurrentQuestion(session);
@@ -292,7 +319,7 @@ export async function handleChatSimple(req, res) {
                     if (nextQuestion.type === 'completed') {
                         botResponse = "Thanks so much—that's all we need for now.";
                     } else if (nextQuestion.type === 'main') {
-                        botResponse = `Thank you. ${nextQuestion.question}`;
+                        botResponse = `Thank you for sharing that information. ${nextQuestion.question}`;
                     } else {
                         botResponse = "Let me ask you another question.";
                     }
