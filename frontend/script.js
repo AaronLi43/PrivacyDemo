@@ -1394,8 +1394,10 @@ class PrivacyDemoApp {
         const exportDirectBtnMain = document.getElementById('export-direct-btn-main');
         if (exportDirectBtnMain) {
             exportDirectBtnMain.addEventListener('click', () => {
-                // For neutral mode: Export button → Data Collection consent → Post task survey
-                this.showConsentPopup('exportDirect');
+                // For neutral mode: Skip consent and go directly to survey
+                this.state.consentGiven = true; // Auto-consent for neutral mode
+                this.state.pendingExportAction = 'exportDirect';
+                this.showSurveyPopup('exportDirect');
             });
         }
 
@@ -1422,8 +1424,10 @@ class PrivacyDemoApp {
         const exportDirectBtn = document.getElementById('export-direct-btn');
         if (exportDirectBtn) {
             exportDirectBtn.addEventListener('click', () => {
-                // For neutral mode: Export button → Data Collection consent → Post task survey
-                this.showConsentPopup('exportDirect');
+                // For neutral mode: Skip consent and go directly to survey
+                this.state.consentGiven = true; // Auto-consent for neutral mode
+                this.state.pendingExportAction = 'exportDirect';
+                this.showSurveyPopup('exportDirect');
             });
         }
 
@@ -2197,9 +2201,12 @@ class PrivacyDemoApp {
         }
         
         if (this.state.mode === 'neutral') {
-            // For neutral mode: Congratulations → Data Collection consent → Post task survey
-            this.showNotification('📋 Starting data collection consent...', 'info');
-            this.showConsentPopup('survey');
+            // For neutral mode: Skip consent and go directly to post-task survey
+            // Data is automatically marked as shared
+            this.showNotification('📋 Moving to post-task survey...', 'info');
+            this.state.consentGiven = true; // Auto-consent for neutral mode
+            this.state.pendingExportAction = 'exportDirect';
+            this.showSurveyPopup('exportDirect');
         } else if (this.state.mode === 'naive') {
             // For naive mode: Congratulations → Free editing stage
             this.enterEditMode();
@@ -4213,6 +4220,8 @@ class PrivacyDemoApp {
                 export_timestamp: new Date().toISOString(),
                 total_messages: conversationToExport.length,
                 consent_given: this.state.consentGiven,
+                // Auto-share data for neutral mode
+                shared: true,
                 // NEW: explicit text tag to avoid server defaulting to wrong value
                 consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
                 consent_details: {
