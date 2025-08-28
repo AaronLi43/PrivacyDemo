@@ -2994,17 +2994,12 @@ class PrivacyDemoApp {
         try {
             API.validateMessage(message);
             
-            // Add user message to log (with duplicate prevention)
-            const lastEntry = this.state.conversationLog[this.state.conversationLog.length - 1];
-            if (!lastEntry || lastEntry.user !== message) {
-                this.state.conversationLog.push({
-                    user: message,
-                    bot: '',
-                    timestamp: new Date().toISOString()
-                });
-            } else {
-                console.log('Prevented duplicate user message entry');
-            }
+            // Add user message to log (allowing consecutive identical responses)
+            this.state.conversationLog.push({
+                user: message,
+                bot: '',
+                timestamp: new Date().toISOString()
+            });
 
             this.state.currentStep++;
             input.value = '';
