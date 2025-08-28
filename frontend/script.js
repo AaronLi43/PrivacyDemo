@@ -434,17 +434,41 @@ class PrivacyDemoApp {
     // Check for partial completion scenarios
     checkForPartialCompletion() {
         try {
+            // REDUNDANT SAFEGUARDS: Stop immediately if interview is complete
+            if (!this.state.questionMode || this.state.questionsCompleted) {
+                console.log('🛑 Partial completion check skipped - interview complete or not in question mode');
+                return;
+            }
+            
+            // Additional safeguard: Check if timer should be stopped
+            if (!this.state.partialCompletionTimer) {
+                console.log('🛑 Partial completion timer is null, stopping checks');
+                return;
+            }
+            
             // Check if user is stuck in question mode
             if (this.state.questionMode && !this.state.questionsCompleted) {
                 const timeSinceLastActivity = Date.now() - this.state.lastActivityTime;
                 const totalQuestions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
                 const completedQuestions = this.state.completedQuestionIndices.length;
                 
+                // SAFEGUARD: If all questions are completed, don't trigger partial completion
+                if (completedQuestions >= totalQuestions) {
+                    console.log('🛑 All questions completed, skipping partial completion detection');
+                    return;
+                }
+                
                 // Detect stuck scenarios
                 const isStuck = this.detectStuckScenario(timeSinceLastActivity, completedQuestions, totalQuestions);
                 
                 if (isStuck && !this.state.partialCompletionDetected) {
                     console.log('🚨 Partial completion detected - user appears to be stuck');
+                    console.log('🔍 State check:', {
+                        questionMode: this.state.questionMode,
+                        questionsCompleted: this.state.questionsCompleted,
+                        completedQuestions,
+                        totalQuestions
+                    });
                     this.handlePartialCompletion();
                 }
             }
@@ -458,24 +482,18 @@ class PrivacyDemoApp {
 
     // Detect if user is stuck
     detectStuckScenario(timeSinceLastActivity, completedQuestions, totalQuestions) {
-        // Scenario 1: User inactive for too long
+        // Scenario 1: User inactive for too long (5+ minutes of no activity)
         if (timeSinceLastActivity > this.state.inactivityThreshold) {
             console.log('🔍 Stuck scenario: User inactive for', Math.round(timeSinceLastActivity / 1000), 'seconds');
             return true;
         }
         
-        // Scenario 2: User completed most questions but not all
-        if (completedQuestions > 0 && completedQuestions < totalQuestions) {
-            const progress = (completedQuestions / totalQuestions) * 100;
-            
-            // If user made significant progress (>50%) but hasn't completed, they might be stuck
-            if (progress > 50) {
-                console.log('🔍 Stuck scenario: User completed', completedQuestions, 'of', totalQuestions, 'questions (', progress.toFixed(1), '%)');
-                return true;
-            }
-        }
+        // REMOVED Scenario 2: Progress-based detection was causing false positives
+        // Partial completion should NOT trigger just because user completed >50% questions
+        // Users should be able to complete interviews at their own pace
         
-        // Scenario 3: User has been in question mode for a very long time
+        // Scenario 3: User has been in question mode for an extremely long time (30+ minutes)
+        // This catches cases where user might have abandoned the session
         const timeInQuestionMode = Date.now() - this.state.questionModeStartTime;
         if (this.state.questionModeStartTime && timeInQuestionMode > 1800000) { // 30 minutes
             console.log('🔍 Stuck scenario: User in question mode for', Math.round(timeInQuestionMode / 1000 / 60), 'minutes');
