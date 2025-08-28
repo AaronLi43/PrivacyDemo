@@ -1076,7 +1076,10 @@ class PrivacyDemoApp {
         if (proceedToChatBtn) {
             proceedToChatBtn.addEventListener('click', () => {
                 if (this.isQualified()) {
-                    this.showFreeEditPopup();
+                    // Show free edit popup for naive and featured modes, skip for neutral
+                    if (this.state.mode !== 'neutral') {
+                        this.showFreeEditPopup();
+                    }
                     this.showStepPage('chat');
                     this.startChatInterface();
                     this.saveToLocalStorage();
