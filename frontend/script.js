@@ -4185,6 +4185,11 @@ class PrivacyDemoApp {
         // Count edited messages
         const editedMessages = this.state.conversationLog.filter(turn => turn.user_edited || turn.bot_edited).length;
         
+        // Generate user action statistics for naive mode (only manual edits)
+        const userActionStats = {
+            manual_edits: editedMessages
+        };
+        
         const exportData = {
             metadata: {
                 mode: 'naive',
@@ -4192,6 +4197,7 @@ class PrivacyDemoApp {
                 total_messages: conversationToExport.length,
                 has_edits: this.state.editMode,
                 edited_messages_count: editedMessages,
+                user_actions: userActionStats,
                 export_type: 'naive_with_edits',
                 consent_given: this.state.consentGiven,
                 // NEW: explicit text tag to avoid server defaulting to wrong value
