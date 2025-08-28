@@ -201,26 +201,12 @@ export async function handleChatSimple(req, res) {
             answersCount: session.currentQuestionAnswers.length
         });
 
-        // 检查当前主问题是否刚刚完成（所有followup都已回答）
-        const checkIfMainQuestionJustCompleted = () => {
-            const mainQuestion = session.mainQuestions[session.currentMainIdx];
-            // 这是一个简化版本，我们假设有followup需要完成才能显示完成状态
-            // 实际的followup检查逻辑在makeIntelligentDecision中处理
-            const mainQuestionId = `main_${session.currentMainIdx}`;
-            
-            // 只有当主问题还没有被标记为完成，并且当前有followup被标记为完成时才返回true
-            if (session.completedMainQuestions.has(mainQuestionId)) {
-                return false; // 已经标记为完成了
-            }
-            
-            // 检查是否刚刚完成了一个followup
-            return session.completedFollowups.size > 0;
-        };
+        // 初始状态下问题未完成，只有在决策逻辑中确认完成时才设置为true
 
         // 进行智能决策
         let decision;
         let botResponse = '';
-        let questionCompleted = checkIfMainQuestionJustCompleted(); // 检查是否刚完成
+        let questionCompleted = false; // 初始状态下问题未完成
         let followUpQuestions = [];
         let auditResult = null;
 
