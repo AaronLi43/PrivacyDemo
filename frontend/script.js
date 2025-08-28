@@ -572,7 +572,7 @@ class PrivacyDemoApp {
             conversation: conversationWithPlaceholders,
             survey_data: {
                 ...(this.state.surveyData || {}),
-                questions: this.state.predefinedQuestions[this.state.mode] || []
+                questions: this.getSurveyQuestions()
             },
             partial_completion_details: {
                 last_activity_time: new Date(this.state.lastActivityTime).toISOString(),
@@ -692,7 +692,7 @@ class PrivacyDemoApp {
             conversation: conversationWithPlaceholders,
             survey_data: {
                 ...(this.state.surveyData || {}),
-                questions: this.state.predefinedQuestions[this.state.mode] || []
+                questions: this.getSurveyQuestions()
             },
             completion_details: {
                 completion_status: 'COMPLETE',
@@ -3525,7 +3525,7 @@ class PrivacyDemoApp {
                     conversation: conversationToExport,
                     survey_data: {
                         ...(this.state.surveyData || {}),
-                        questions: this.state.predefinedQuestions[this.state.mode]
+                        questions: this.getSurveyQuestions()
                     }
                 };
 
@@ -3603,7 +3603,7 @@ class PrivacyDemoApp {
                     conversation: conversationToExport,
                     survey_data: {
                         ...(this.state.surveyData || {}),
-                        questions: this.state.predefinedQuestions[this.state.mode]
+                        questions: this.getSurveyQuestions()
                     }
                 };
 
@@ -6166,6 +6166,9 @@ class PrivacyDemoApp {
         
         console.log('Collected survey data:', surveyData);
         
+        // Add survey questions text for reference
+        surveyData.questions = this.getSurveyQuestions();
+        
         // Save survey data to state
         this.state.surveyData = surveyData;
         this.state.surveyCompleted = true;
@@ -6324,6 +6327,40 @@ class PrivacyDemoApp {
         const submitBtn = document.getElementById('survey-submit-btn');
         if (!submitBtn) return;
         submitBtn.disabled = !this.isSurveyComplete();
+    }
+
+    // Get survey questions text for export
+    getSurveyQuestions() {
+        const questions = {};
+        
+        // Common questions (for all modes)
+        questions.q1 = "Did you have any concerns about your privacy during or after the interview? If yes, please elaborate.";
+        questions.q2 = "Were there any points during the conversation where you hesitated to answer due to privacy concerns? If so, please elaborate.";
+        questions.q3 = "Did you ever feel the chatbot was collecting too much or irrelevant information? Why or why not?";
+        questions.q4 = "I felt comfortable sharing personal information with the chatbot.";
+        questions.q5 = "I would use this system again for discussing sensitive topics.";
+        
+        // Mode-specific questions
+        if (this.state.mode === 'naive') {
+            questions.q6 = "Did you remove or change any parts of the conversation for privacy reasons? If yes, please describe what changes you made and why.";
+            questions.q7 = "Do you feel your final edited version better reflects what you were comfortable sharing? Please explain.";
+            questions.q8 = "The editing features improved my sense of privacy control.";
+            questions.q9 = "I was able to clearly understand how to use the editing features to protect my privacy.";
+        } else if (this.state.mode === 'featured') {
+            questions.q10 = "Were there any AI-suggested edits that made you feel more exposed or more protected? Please explain.";
+            questions.q11 = "Did you accept or reject any AI-suggested edits because of privacy concerns? Please describe how those suggestions influenced your final version.";
+            questions.q12 = "The AI-assisted editing improved my sense of privacy control.";
+            questions.q13 = "I was able to clearly understand how the AI suggestions helped me protect my privacy.";
+            questions.q14 = "The AI-assisted editing made me more confident about what I shared.";
+        }
+        
+        // Demographic questions (for all modes)
+        questions.q15 = "What is your age group?";
+        questions.q16 = "What is your gender?";
+        questions.q17 = "What is your race and ethnicity?";
+        questions.q18 = "What is your educational level?";
+        
+        return questions;
     }
 
     // Check if the survey is complete (only required for questions that are actually visible)
