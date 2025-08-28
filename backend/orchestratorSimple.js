@@ -249,6 +249,15 @@ export function getCurrentQuestion(state) {
     state.currentQuestionAnswers = [];
     state.completedFollowups.clear(); // 清空followup记录，为下一个主问题准备
     
+    // 检查是否已完成所有主问题
+    if (state.currentMainIdx >= state.mainQuestions.length) {
+        return {
+            type: 'completed',
+            message: "Thanks so much—that's all we need for now.",
+            isComplete: true
+        };
+    }
+    
     // 递归调用获取下一个问题
     return getCurrentQuestion(state);
 }
