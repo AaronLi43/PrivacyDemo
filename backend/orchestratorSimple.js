@@ -134,7 +134,10 @@ export function initSession(sessionId, mode = 'neutral') {
         // 调试和恢复信息
         lastAction: null,
         lastError: null,
-        retryCount: 0
+        retryCount: 0,
+        
+        // 防止重复问题的追踪
+        followupAttempts: new Map() // 记录每个followup被问的次数
     };
 }
 
@@ -352,17 +355,45 @@ export async function getNextIntelligentFollowup(state) {
         
         if (!state.completedFollowups.has(followupId)) {
             try {
+                // 检查重复问题限制（最多问2次）
+                const attemptCount = state.followupAttempts.get(followupId) || 0;
+                if (attemptCount >= 2) {
+                    console.log(`⏭️  Skipping ${followupId} - already asked ${attemptCount} times`);
+                    state.completedFollowups.add(followupId);
+                    continue;
+                }
+                
+                // 检查用户是否表示拒绝回答（优先级最高）
+                const latestAnswer = state.currentQuestionAnswers[state.currentQuestionAnswers.length - 1];
+                if (latestAnswer) {
+                    const lowerAnswer = latestAnswer.answer.toLowerCase();
+                    if (lowerAnswer.includes('cannot remember') || lowerAnswer.includes('dont remember') || 
+                        lowerAnswer.includes("don't remember") || lowerAnswer.includes('not sure') ||
+                        lowerAnswer.includes('forget') || lowerAnswer.includes('no idea')) {
+                        // 用户明确表示不记得，停止追问这类问题
+                        state.completedFollowups.add(followupId);
+                        console.log(`🚫 ${followupId} skipped - user indicated they don't remember`);
+                        continue;
+                    }
+                }
+                
                 // 检查是否已被覆盖
                 const coverageResult = await checkCoverage(state.currentQuestionAnswers, followup);
                 
                 if (coverageResult.verdict === 'ALREADY_ANSWERED') {
                     // 标记为完成并继续查找
                     state.completedFollowups.add(followupId);
+                    console.log(`✅ ${followupId} marked as covered: ${coverageResult.reasoning}`);
                     continue;
                 }
                 
+                // 记录这次询问
+                state.followupAttempts.set(followupId, attemptCount + 1);
+                
                 // 生成智能的followup问题
                 const regeneratedQuestion = await regenerateFollowup(followup, state.currentQuestionAnswers);
+                
+                console.log(`❓ Asking ${followupId} (attempt ${attemptCount + 1}/2): ${followup.prompt.substring(0, 50)}...`);
                 
                 return {
                     type: 'followup',
@@ -373,7 +404,8 @@ export async function getNextIntelligentFollowup(state) {
                     mainQuestionIdx: state.currentMainIdx,
                     followupIdx: i,
                     intelligentlyGenerated: true,
-                    coverageCheck: coverageResult
+                    coverageCheck: coverageResult,
+                    attemptNumber: attemptCount + 1
                 };
                 
             } catch (error) {

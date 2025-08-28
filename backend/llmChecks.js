@@ -63,29 +63,63 @@ async function callLLM(systemPrompt, userPrompt, options = {}) {
  * @returns {string} 模拟响应
  */
 function simulateLLMResponse(prompt, options = {}) {
-    // 基于关键词的简单模拟逻辑
+    // 基于关键词的简单模拟逻辑，更加宽松和友善
     const lowerPrompt = prompt.toLowerCase();
     
     if (options.checkType === 'relevance') {
-        // 相关性检查模拟
-        if (lowerPrompt.includes('education') && lowerPrompt.includes('degree')) {
-            return 'NEXT_MAIN_QUESTION'; // 教育背景信息足够
-        } else if (lowerPrompt.includes('work') && lowerPrompt.includes('job')) {
-            return 'NEXT_MAIN_QUESTION'; // 工作信息足够
-        } else if (lowerPrompt.includes('ai') && lowerPrompt.includes('interview')) {
-            return 'NEED_FOLLOWUPS'; // AI使用需要更多细节
+        // 检查用户是否表示拒绝或不记得
+        if (lowerPrompt.includes('cannot remember') || lowerPrompt.includes('dont remember') || 
+            lowerPrompt.includes("don't remember") || lowerPrompt.includes('not sure') ||
+            lowerPrompt.includes('forget') || lowerPrompt.includes('no idea')) {
+            return 'NEXT_MAIN_QUESTION'; // 用户不记得，不要继续追问
         }
-        return 'NEED_FOLLOWUPS'; // 默认需要更多信息
+        
+        // 平衡的相关性判断：需要更多细节但不过度追问
+        if (lowerPrompt.includes('education') || lowerPrompt.includes('study') || lowerPrompt.includes('degree') || lowerPrompt.includes('university') || lowerPrompt.includes('college')) {
+            // 教育话题：如果回答很详细（包含多个要素）则足够，否则需要followup
+            const hasTimeInfo = /20\d{2}|year|semester|started|graduated|finish/i.test(lowerPrompt);
+            const hasLocationInfo = /ucla|stanford|mit|harvard|at\s+\w+|university of/i.test(lowerPrompt);
+            const hasPeopleInfo = /professor|dr\.|teacher|mentor|advisor|supervisor/i.test(lowerPrompt);
+            const detailCount = [hasTimeInfo, hasLocationInfo, hasPeopleInfo].filter(Boolean).length;
+            
+            return detailCount >= 2 ? 'NEXT_MAIN_QUESTION' : 'NEED_FOLLOWUPS';
+        } else if (lowerPrompt.includes('work') || lowerPrompt.includes('job') || lowerPrompt.includes('interview') || lowerPrompt.includes('position')) {
+            // 工作话题：需要职位和时间信息
+            const hasJobTitle = /engineer|analyst|manager|developer|assistant|student|intern/i.test(lowerPrompt);
+            const hasTimeInfo = /20\d{2}|month|year|ago|recent|start|began|since/i.test(lowerPrompt);
+            
+            return hasJobTitle && hasTimeInfo ? 'NEXT_MAIN_QUESTION' : 'NEED_FOLLOWUPS';
+        } else if (lowerPrompt.includes('ai') || lowerPrompt.includes('chatgpt') || lowerPrompt.includes('tool')) {
+            // AI使用话题：通常需要更多具体细节
+            return 'NEED_FOLLOWUPS';
+        }
+        
+        // 对于其他情况，如果有实质内容但不够详细，需要followup
+        return lowerPrompt.length > 20 ? 'NEED_FOLLOWUPS' : 'NEED_FOLLOWUPS';
     }
     
     if (options.checkType === 'coverage') {
-        // 覆盖度检查模拟
-        if (lowerPrompt.includes('when') && (lowerPrompt.includes('start') || lowerPrompt.includes('finish'))) {
-            return lowerPrompt.includes('2019') || lowerPrompt.includes('2020') ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
-        } else if (lowerPrompt.includes('where') && lowerPrompt.includes('university')) {
-            return lowerPrompt.includes('university') || lowerPrompt.includes('college') ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
+        // 检查用户是否表示拒绝或不记得
+        if (lowerPrompt.includes('cannot remember') || lowerPrompt.includes('dont remember') || 
+            lowerPrompt.includes("don't remember") || lowerPrompt.includes('not sure') ||
+            lowerPrompt.includes('forget') || lowerPrompt.includes('no idea')) {
+            return 'ALREADY_ANSWERED'; // 用户不记得，标记为已回答，不再追问
         }
-        return 'NEEDS_ASKING'; // 默认需要询问
+        
+        // 更宽松的覆盖度检查
+        if (lowerPrompt.includes('when') && (lowerPrompt.includes('start') || lowerPrompt.includes('finish'))) {
+            // 只要提到任何年份、月份或时间词汇就认为已回答
+            return /20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|last|this|month|year|recently/i.test(lowerPrompt) ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
+        } else if (lowerPrompt.includes('where') && (lowerPrompt.includes('location') || lowerPrompt.includes('located'))) {
+            // 地点问题需要明确的地理位置词汇，不只是大学名称
+            return /in\s+\w+|city|state|province|country|located\s+in|california|new york|boston|los angeles|texas|florida|illinois/i.test(lowerPrompt) ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
+        } else if (lowerPrompt.includes('who') && lowerPrompt.includes('professor')) {
+            // 只要提到任何人名或称谓就认为已回答
+            return /professor|dr\.|teacher|mentor|advisor|supervisor|chen|johnson|smith|wang|li/i.test(lowerPrompt) ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
+        }
+        
+        // 默认更宽松：如果回答有实质内容就认为已回答
+        return lowerPrompt.length > 5 ? 'ALREADY_ANSWERED' : 'NEEDS_ASKING';
     }
     
     if (options.checkType === 'regenerate') {
