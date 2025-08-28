@@ -1222,12 +1222,15 @@ class PrivacyDemoApp {
         const currentQuestionIndex = this.state.currentQuestionIndex !== null ? this.state.currentQuestionIndex : 0;
         
         // Debug logging for progress calculation
+        console.log('📊 PROGRESS BAR UPDATE CALLED!');
         console.log('📊 Progress Bar Debug:', {
             totalQuestions,
             completedQuestions,
             currentQuestionIndex,
             completedIndices: this.state.completedQuestionIndices,
-            mode: this.state.mode
+            mode: this.state.mode,
+            questionMode: this.state.questionMode,
+            inFollowUpMode: this.state.inFollowUpMode
         });
         
         // Calculate progress based on completed questions only
@@ -3005,10 +3008,21 @@ class PrivacyDemoApp {
                         
                         // Check if follow-up questions are completed
                         if (response.question_completed) {
+                            console.log('🎯 FOLLOW-UP COMPLETION DETECTED!');
+                            console.log(`📊 Current state: questionIndex=${this.state.currentQuestionIndex}, completedIndices=[${this.state.completedQuestionIndices.join(', ')}]`);
+                            console.log('🔍 Response details:', { question_completed: response.question_completed, inFollowUpMode: this.state.inFollowUpMode });
+                            
                             // Mark the current question as completed and update progress
                             if (!this.state.completedQuestionIndices.includes(this.state.currentQuestionIndex)) {
                                 this.state.completedQuestionIndices.push(this.state.currentQuestionIndex);
-                                console.log(`✅ Question ${this.state.currentQuestionIndex + 1} completed! Progress: ${this.state.completedQuestionIndices.length}/${this.state.predefinedQuestions[this.state.mode].length}`);
+                                console.log(`✅ PROGRESS: Question ${this.state.currentQuestionIndex + 1} completed! Progress: ${this.state.completedQuestionIndices.length}/${this.state.predefinedQuestions[this.state.mode].length}`);
+                                
+                                // Show notification for main question completion
+                                const totalQuestions = this.state.predefinedQuestions[this.state.mode].length;
+                                const completedQuestionNumber = this.state.currentQuestionIndex + 1;
+                                this.showNotification(`✅ Question ${completedQuestionNumber}/${totalQuestions} completed!`, 'success');
+                            } else {
+                                console.log(`⚠️ Question ${this.state.currentQuestionIndex + 1} was already marked as completed`);
                             }
                             
                             this.state.inFollowUpMode = false;
@@ -3016,6 +3030,7 @@ class PrivacyDemoApp {
                             this.state.currentFollowUpQuestionIndex = 0;
                             
                             // Update progress bar immediately
+                            console.log('🔄 Calling updateProgressBar() from follow-up completion');
                             this.updateProgressBar();
                             
                             console.log('Follow-up questions completed, returning to main question flow');
