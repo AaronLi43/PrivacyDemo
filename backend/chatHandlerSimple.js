@@ -174,6 +174,13 @@ export async function handleChatSimple(req, res) {
                 allowed_actions: allowedActions,
                 interview_finished: true,
                 session_id: currentSessionId,
+                
+                // 进度信息 - 面试完成时应该是100%
+                progress_percentage: 100,
+                completed_questions: session.totalQuestions,
+                total_questions: session.totalQuestions,
+                current_question_index: session.currentMainIdx,
+                
                 timings_ms: { total: Date.now() - t0 }
             });
         }
@@ -365,6 +372,12 @@ export async function handleChatSimple(req, res) {
             interview_finished: interviewFinished,
             allowed_actions: allowedActions,
             session_id: currentSessionId,
+            
+            // 进度信息 - 添加到顶层以确保前端可以访问
+            progress_percentage: session.progressPercentage,
+            completed_questions: session.completedQuestions,
+            total_questions: session.totalQuestions,
+            current_question_index: session.currentMainIdx,
             
             // 简化orchestrator的内部状态（用于调试和恢复）
             orchestrator_state: {
