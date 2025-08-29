@@ -2,6 +2,26 @@
   "dependencies": {
     "axios": "^1.11.0",
     "dotenv": "^17.2.1",
+    "form-data": "^4.0.4",
+    "node-fetch": "^3.3.2",
     "openai": "^5.15.0"
-  }
+  },
+  "name": "privacydemo",
+  "version": "1.0.0",
+  "description": "A Node.js-based chatbot application with privacy detection capabilities for data collection and research purposes.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AaronLi43/PrivacyDemo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AaronLi43/PrivacyDemo/issues"
+  },
+  "homepage": "https://github.com/AaronLi43/PrivacyDemo#readme"
 }

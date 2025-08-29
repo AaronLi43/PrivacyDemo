@@ -1143,7 +1143,7 @@ class PrivacyDemoApp {
     // Check if user qualifies (qual1 and qual2 are 'yes', qual3 is 'during' or 'both')
     isQualified() {
         const answers = this.state.qualificationAnswers;
-        const qual3Qualifies = answers.qual3 === 'during' || answers.qual3 === 'both';
+        const qual3Qualifies = answers.qual3 === 'during' || answers.qual3 === 'both' || answers.qual3 === 'prepare';
         return answers.qual1 === 'yes' && 
                answers.qual2 === 'yes' && 
                qual3Qualifies;
@@ -4409,6 +4409,66 @@ class PrivacyDemoApp {
         }
         
         return analysisForExport;
+    }
+    
+    // Compare conversation with original to find actual content differences
+    compareConversationWithOriginal() {
+        const editedMessages = [];
+        const totalEditedCount = { count: 0 };
+        
+        if (!this.state.conversationLog || !this.state.originalLog) {
+            console.log('No conversation or original log available for comparison');
+            return { editedMessages: [], totalEditedCount: 0 };
+        }
+        
+        for (let i = 0; i < this.state.conversationLog.length; i++) {
+            const currentTurn = this.state.conversationLog[i];
+            const originalTurn = this.state.originalLog[i];
+            
+            const messageEditInfo = {
+                index: i,
+                user_edited: false,
+                bot_edited: false,
+                has_any_edit: false
+            };
+            
+            // Compare user messages
+            if (currentTurn && originalTurn) {
+                const currentUser = (currentTurn.user || '').trim();
+                const originalUser = (originalTurn.user || '').trim();
+                
+                if (currentUser !== originalUser) {
+                    messageEditInfo.user_edited = true;
+                    messageEditInfo.has_any_edit = true;
+                }
+                
+                // Compare bot messages
+                const currentBot = (currentTurn.bot || '').trim();
+                const originalBot = (originalTurn.bot || '').trim();
+                
+                if (currentBot !== originalBot) {
+                    messageEditInfo.bot_edited = true;
+                    messageEditInfo.has_any_edit = true;
+                }
+            } else if (currentTurn && !originalTurn) {
+                // New message added after original conversation
+                messageEditInfo.user_edited = !!(currentTurn.user && currentTurn.user.trim());
+                messageEditInfo.bot_edited = !!(currentTurn.bot && currentTurn.bot.trim());
+                messageEditInfo.has_any_edit = messageEditInfo.user_edited || messageEditInfo.bot_edited;
+            }
+            
+            editedMessages.push(messageEditInfo);
+            
+            // Count messages with any edits
+            if (messageEditInfo.has_any_edit) {
+                totalEditedCount.count++;
+            }
+        }
+        
+        return { 
+            editedMessages, 
+            totalEditedCount: totalEditedCount.count 
+        };
     }
     
     // Generate user action statistics

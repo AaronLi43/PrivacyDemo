@@ -180,6 +180,14 @@ export function initSession(sessionId, mode = 'neutral') {
         privacyAnalysis: [],
         privacySuggestions: [],
         
+        // 编辑统计
+        editStatistics: {
+            totalMessages: 0,
+            editedMessages: 0,
+            editPercentage: 0,
+            messageEditStatus: new Map() // 记录每条消息的编辑状态
+        },
+        
         // 调试和恢复信息
         lastAction: null,
         lastError: null,
@@ -280,10 +288,23 @@ export function processAnswer(state, userAnswer, currentQuestion) {
     });
     
     // 添加到对话记录
-    state.conversationLog.push({
+    const conversationEntry = {
         user: userAnswer,
         bot: currentQuestion.question,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        isEdited: false,
+        editCount: 0,
+        messageIndex: state.conversationLog.length
+    };
+    
+    state.conversationLog.push(conversationEntry);
+    
+    // 同时保存到原始对话（深拷贝，永不修改）
+    state.originalConversation.push({
+        user: userAnswer,
+        bot: currentQuestion.question,
+        timestamp: conversationEntry.timestamp,
+        messageIndex: conversationEntry.messageIndex
     });
     
     // 根据问题类型处理
@@ -618,6 +639,57 @@ export function handleError(state, error) {
 }
 
 /**
+ * 计算编辑统计
+ * @param {Object} state - 会话状态
+ * @returns {Object} 编辑统计数据
+ */
+export function calculateEditStatistics(state) {
+    const stats = {
+        totalMessages: 0,
+        editedMessages: 0,
+        editPercentage: 0,
+        editDetails: []
+    };
+    
+    // 只统计用户消息
+    state.conversationLog.forEach((msg, index) => {
+        if (msg.user) {
+            stats.totalMessages++;
+            
+            // 比较原始对话和当前对话
+            const original = state.originalConversation[index];
+            if (original && msg.user !== original.user) {
+                stats.editedMessages++;
+                msg.isEdited = true;
+                
+                // 记录编辑详情
+                stats.editDetails.push({
+                    messageIndex: index,
+                    original: original.user,
+                    edited: msg.user,
+                    editCount: msg.editCount || 1
+                });
+                
+                // 更新编辑状态Map
+                state.editStatistics.messageEditStatus.set(index, true);
+            }
+        }
+    });
+    
+    // 计算编辑百分比
+    stats.editPercentage = stats.totalMessages > 0 
+        ? Math.round((stats.editedMessages / stats.totalMessages) * 100) 
+        : 0;
+    
+    // 更新state中的统计信息
+    state.editStatistics.totalMessages = stats.totalMessages;
+    state.editStatistics.editedMessages = stats.editedMessages;
+    state.editStatistics.editPercentage = stats.editPercentage;
+    
+    return stats;
+}
+
+/**
  * 获取导出数据（符合示例JSON格式）
  * @param {Object} state - 会话状态
  * @param {Object} additionalData - 额外数据
@@ -625,6 +697,9 @@ export function handleError(state, error) {
  */
 export function getExportData(state, additionalData = {}) {
     const isComplete = state.currentMainIdx >= state.mainQuestions.length;
+    
+    // 计算最新的编辑统计
+    const editStats = calculateEditStatistics(state);
     
     return {
         metadata: {
@@ -636,13 +711,20 @@ export function getExportData(state, additionalData = {}) {
             completed_questions: state.completedQuestions,
             current_question_index: state.currentMainIdx,
             progress_percentage: state.progressPercentage,
+            edit_statistics: {
+                total_messages: editStats.totalMessages,
+                edited_messages: editStats.editedMessages,
+                edit_percentage: editStats.editPercentage,
+                has_edits: editStats.editedMessages > 0
+            },
             ...additionalData.metadata
         },
         conversation: state.conversationLog,
         original_conversation: state.originalConversation,
         privacy_analysis: state.privacyAnalysis,
         privacy_suggestions: state.privacySuggestions,
-        survey_data: additionalData.surveyData || {}
+        survey_data: additionalData.surveyData || {},
+        edit_details: editStats.editDetails // 包含具体的编辑详情
     };
 }
 
