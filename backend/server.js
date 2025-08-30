@@ -3373,6 +3373,90 @@ app.post('/api/mark-submission', async (req, res) => {
     }
 });
 
+// Completion Verification API
+app.post('/api/verify-completion', (req, res) => {
+    try {
+        const { sessionId, prolificPid } = req.body;
+        
+        if (!sessionId) {
+            return res.status(400).json({ 
+                error: 'Session ID is required',
+                status: 'ERROR'
+            });
+        }
+        
+        const session = getSession(sessionId);
+        
+        // Check if we have a chat session
+        if (!session.activeChatSession) {
+            return res.json({
+                status: 'PARTIAL',
+                completionCode: null,
+                message: 'No active study session found',
+                completedPercentage: 0
+            });
+        }
+        
+        // Get the orchestrator state
+        const chatState = session.activeChatSession;
+        const totalQuestions = chatState.totalQuestions || 7;
+        const completedQuestions = chatState.completedQuestions || 0;
+        const progressPercentage = chatState.progressPercentage || 0;
+        
+        // Check if all questions are completed (100% completion)
+        const isFullyCompleted = completedQuestions >= totalQuestions && progressPercentage >= 100;
+        
+        // Log the verification attempt
+        console.log(`🔍 Completion verification for session ${sessionId}:`, {
+            totalQuestions,
+            completedQuestions,
+            progressPercentage,
+            isFullyCompleted,
+            prolificPid
+        });
+        
+        if (isFullyCompleted) {
+            // Full completion - provide the completion code
+            const COMPLETION_CODE = 'C15VDGHG';
+            
+            // Mark session as fully completed
+            session.status = 'FULLY_COMPLETED';
+            session.completionTimestamp = new Date().toISOString();
+            
+            return res.json({
+                status: 'COMPLETE',
+                completionCode: COMPLETION_CODE,
+                redirectUrl: `https://app.prolific.com/submissions/complete?cc=${COMPLETION_CODE}`,
+                message: 'Thank you for completing the study!',
+                completedPercentage: 100,
+                totalQuestions,
+                completedQuestions
+            });
+        } else {
+            // Partial completion - no completion code
+            session.status = 'PARTIALLY_COMPLETED';
+            session.partialCompletionTimestamp = new Date().toISOString();
+            
+            return res.json({
+                status: 'PARTIAL',
+                completionCode: null,
+                redirectUrl: null,
+                message: `Study incomplete - ${completedQuestions} of ${totalQuestions} questions answered`,
+                completedPercentage: progressPercentage,
+                totalQuestions,
+                completedQuestions,
+                remainingQuestions: totalQuestions - completedQuestions
+            });
+        }
+    } catch (error) {
+        console.error('Completion verification error:', error);
+        return res.status(500).json({ 
+            error: 'Internal server error',
+            status: 'ERROR'
+        });
+    }
+});
+
 // Set Mode API
 app.post('/api/set_mode', (req, res) => {
     try {

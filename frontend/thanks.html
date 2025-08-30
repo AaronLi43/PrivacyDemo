@@ -191,33 +191,172 @@
 </head>
 <body>
     <div class="thanks-container">
-        <div class="thanks-header">
-            <div class="thanks-icon">
-                <i class="fas fa-check-circle"></i>
+        <div class="thanks-header" id="header-section">
+            <div class="thanks-icon" id="header-icon">
+                <i class="fas fa-spinner fa-spin" id="loading-icon"></i>
             </div>
             
-            <h1 class="thanks-title">Thank You!</h1>
-            <p class="thanks-subtitle">Study Participation Complete</p>
+            <h1 class="thanks-title" id="header-title">Verifying Completion...</h1>
+            <p class="thanks-subtitle" id="header-subtitle">Please wait while we check your study status</p>
         </div>
         
         <div class="thanks-content">
-            <div class="thanks-message">
-                <p>Thank you for your interest in participating in our privacy demonstration study.</p>
+            <div class="thanks-message" id="message-section">
+                <p>Checking your completion status...</p>
             </div>
 
-            <div class="prolific-link-container">
+            <div class="prolific-link-container" id="prolific-section" style="display: none;">
                 <h3><i class="fas fa-external-link-alt"></i> Return to Prolific</h3>
                 <a href="#" class="prolific-link" id="prolific-completion-link">
                     <i class="fas fa-check"></i> Return to Prolific
                 </a>
             </div>
+            
+            <div id="partial-completion-section" style="display: none;">
+                <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 20px; margin-top: 20px;">
+                    <h3 style="color: #856404; margin-bottom: 10px;">
+                        <i class="fas fa-exclamation-triangle"></i> Study Incomplete
+                    </h3>
+                    <p style="color: #666; line-height: 1.6;">
+                        <span id="partial-message">You have not completed all required questions.</span>
+                    </p>
+                    <p style="color: #666; margin-top: 10px;">
+                        <strong>Progress:</strong> <span id="progress-info">Loading...</span>
+                    </p>
+                    <p style="color: #856404; margin-top: 15px; font-weight: 600;">
+                        No completion code is available for partial completions.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Set the Prolific completion link
-        // Replace this URL with your actual Prolific task completion link
-        document.getElementById('prolific-completion-link').href = 'https://app.prolific.com/submissions/complete?cc=C15VDGHG';
+        // Function to get session ID from localStorage
+        function getSessionId() {
+            try {
+                const state = localStorage.getItem('privacyDemoState');
+                if (state) {
+                    const parsed = JSON.parse(state);
+                    return parsed.sessionId || null;
+                }
+            } catch (e) {
+                console.error('Error getting session ID:', e);
+            }
+            return null;
+        }
+        
+        // Function to get Prolific PID
+        function getProlificPid() {
+            return localStorage.getItem('prolific_pid') || null;
+        }
+        
+        // Function to verify completion status
+        async function verifyCompletion() {
+            const sessionId = getSessionId();
+            const prolificPid = getProlificPid();
+            
+            if (!sessionId) {
+                showError('No session found. Please ensure you accessed this page through the study.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('https://privacydemo.onrender.com/api/verify-completion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        prolificPid: prolificPid
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update UI based on completion status
+                if (data.status === 'COMPLETE') {
+                    showCompleteStatus(data);
+                } else if (data.status === 'PARTIAL') {
+                    showPartialStatus(data);
+                } else {
+                    showError('Unable to verify completion status.');
+                }
+                
+            } catch (error) {
+                console.error('Verification error:', error);
+                showError('Unable to connect to the server. Please try refreshing the page.');
+            }
+        }
+        
+        // Show complete status with completion code
+        function showCompleteStatus(data) {
+            // Update header
+            document.getElementById('loading-icon').className = 'fas fa-check-circle';
+            document.getElementById('header-title').textContent = 'Thank You!';
+            document.getElementById('header-subtitle').textContent = 'Study Participation Complete';
+            
+            // Update message
+            document.getElementById('message-section').innerHTML = `
+                <p>${data.message || 'Thank you for completing our privacy demonstration study.'}</p>
+                <p style="margin-top: 10px; color: #28a745; font-weight: 600;">
+                    <i class="fas fa-check"></i> All ${data.totalQuestions} questions completed successfully!
+                </p>
+            `;
+            
+            // Show Prolific link with completion code
+            if (data.completionCode && data.redirectUrl) {
+                document.getElementById('prolific-completion-link').href = data.redirectUrl;
+                document.getElementById('prolific-section').style.display = 'block';
+            }
+        }
+        
+        // Show partial completion status (no completion code)
+        function showPartialStatus(data) {
+            // Update header
+            document.getElementById('loading-icon').className = 'fas fa-exclamation-triangle';
+            document.getElementById('header-title').textContent = 'Study Incomplete';
+            document.getElementById('header-subtitle').textContent = 'Partial Completion Detected';
+            document.getElementById('header-section').style.background = 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)';
+            
+            // Update message
+            document.getElementById('message-section').innerHTML = `
+                <p>Thank you for your participation. However, the study is not yet complete.</p>
+            `;
+            
+            // Show partial completion details
+            document.getElementById('partial-message').textContent = data.message || 'You have not completed all required questions.';
+            document.getElementById('progress-info').textContent = 
+                `${data.completedQuestions || 0} of ${data.totalQuestions || 7} questions answered (${Math.round(data.completedPercentage || 0)}% complete)`;
+            document.getElementById('partial-completion-section').style.display = 'block';
+            
+            // Hide Prolific link - no completion code for partial completions
+            document.getElementById('prolific-section').style.display = 'none';
+        }
+        
+        // Show error message
+        function showError(message) {
+            document.getElementById('loading-icon').className = 'fas fa-times-circle';
+            document.getElementById('header-title').textContent = 'Error';
+            document.getElementById('header-subtitle').textContent = 'Unable to verify completion';
+            document.getElementById('header-section').style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+            
+            document.getElementById('message-section').innerHTML = `
+                <p style="color: #dc3545;">${message}</p>
+                <p style="margin-top: 10px;">Please contact the study administrator if this issue persists.</p>
+            `;
+        }
+        
+        // Verify completion on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Add a small delay to ensure smooth animation
+            setTimeout(verifyCompletion, 1000);
+        });
     </script>
 </body>
 </html> 
