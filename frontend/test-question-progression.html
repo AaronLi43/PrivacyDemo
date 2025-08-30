@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Progression Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-header {
+            background: #007bff;
+            color: white;
+            padding: 10px 15px;
+            margin: -20px -20px 15px -20px;
+            border-radius: 8px 8px 0 0;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #fd7e14; }
+        .info { color: #007bff; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #007bff;
+            transition: width 0.3s;
+        }
+        .question-status {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .question-status.completed {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        .question-status.current {
+            background: #fff3cd;
+            border-color: #ffc107;
+        }
+        .question-status.pending {
+            background: #f8f9fa;
+            border-color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Question Progression Test Suite</h1>
+    <p>Testing conversation flow based on actual conversation data that stopped early at Q6.</p>
+
+    <div class="test-container">
+        <div class="test-header">
+            <h2>Test 1: Complete Conversation Flow</h2>
+        </div>
+        <p>Simulates the full conversation from Q1 to Q7 with all follow-ups.</p>
+        <button onclick="runConversationFlowTest()">Run Conversation Flow Test</button>
+        <div class="progress-bar">
+            <div id="conversationProgress" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div id="conversationLog" class="log">Click "Run Conversation Flow Test" to start...</div>
+        <div id="questionStatus"></div>
+    </div>
+
+    <div class="test-container">
+        <div class="test-header">
+            <h2>Test 2: Follow-up Coverage Requirements</h2>
+        </div>
+        <p>Tests that questions cannot advance without all follow-ups covered.</p>
+        <button onclick="runFollowupCoverageTest()">Run Follow-up Coverage Test</button>
+        <div id="followupLog" class="log">Click "Run Follow-up Coverage Test" to start...</div>
+    </div>
+
+    <div class="test-container">
+        <div class="test-header">
+            <h2>Test 3: Q6 Consistency Check</h2>
+        </div>
+        <p>Verifies Q6 behaves the same as other questions (no special logic).</p>
+        <button onclick="runQ6ConsistencyTest()">Run Q6 Consistency Test</button>
+        <div id="q6Log" class="log">Click "Run Q6 Consistency Test" to start...</div>
+    </div>
+
+    <div class="test-container">
+        <div class="test-header">
+            <h2>Test 4: Frontend State Management</h2>
+        </div>
+        <p>Tests frontend question completion and advancement logic.</p>
+        <button onclick="runFrontendStateTest()">Run Frontend State Test</button>
+        <div id="frontendLog" class="log">Click "Run Frontend State Test" to start...</div>
+    </div>
+
+    <script>
+        // Test data based on the actual conversation
+        const TEST_QUESTIONS = [
+            {
+                question: "Could you tell me about your educational background - what did you study in college or university?",
+                followups: ["Q1_F1", "Q1_F2", "Q1_F3"],
+                userResponse: "Hi, I studied a mix of engineering and computer science, at the local university"
+            },
+            {
+                question: "I'd love to hear about your current work and how you got into it by job interviews?",
+                followups: ["Q2_F1", "Q2_F2", "Q2_F3"],
+                userResponse: "I am an IT manager, Some years ago I was interviewed briefly by my future boss"
+            },
+            {
+                question: "Can you walk me through a specific time when you used AI before and during job interviews?",
+                followups: ["Q3_F1", "Q3_F2", "Q3_F3"],
+                userResponse: "At present I use AI in order to check rapidly what applicant is saying"
+            },
+            {
+                question: "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+                followups: ["Q4_F1", "Q4_F2", "Q4_F3"],
+                userResponse: "Yes, in some cases the answer is incorrect or out of scope"
+            },
+            {
+                question: "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+                followups: ["Q5_F1", "Q5_F2", "Q5_F3"],
+                userResponse: "To me is fully appropriate"
+            },
+            {
+                question: "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+                followups: ["Q6_F1", "Q6_F2", "Q6_F3", "Q6_F4"],
+                userResponse: "Sometimes I use AI to help me write code and other materials which I do not want others know"
+            },
+            {
+                question: "How did you feel about the interview process?",
+                followups: ["Q7_F1"],
+                userResponse: null // This was never reached in original conversation
+            }
+        ];
+
+        // Mock frontend state similar to actual app
+        class MockFrontendState {
+            constructor() {
+                this.currentQuestionIndex = 0;
+                this.completedQuestionIndices = [];
+                this.questionsCompleted = false;
+                this.followupCoverage = new Map(); // question -> Set of covered followups
+            }
+
+            isQuestionCompleted(index) {
+                return this.completedQuestionIndices.includes(index);
+            }
+
+            markQuestionCompleted(index) {
+                if (!this.completedQuestionIndices.includes(index)) {
+                    this.completedQuestionIndices.push(index);
+                }
+            }
+
+            markFollowupCovered(questionIndex, followupId) {
+                const question = TEST_QUESTIONS[questionIndex].question;
+                if (!this.followupCoverage.has(question)) {
+                    this.followupCoverage.set(question, new Set());
+                }
+                this.followupCoverage.get(question).add(followupId);
+            }
+
+            areAllFollowupsCovered(questionIndex) {
+                const question = TEST_QUESTIONS[questionIndex];
+                const covered = this.followupCoverage.get(question.question) || new Set();
+                return question.followups.every(fid => covered.has(fid));
+            }
+
+            canAdvanceFromQuestion(questionIndex) {
+                // New logic: require all followups before advancing
+                return this.areAllFollowupsCovered(questionIndex);
+            }
+
+            reset() {
+                this.currentQuestionIndex = 0;
+                this.completedQuestionIndices = [];
+                this.questionsCompleted = false;
+                this.followupCoverage.clear();
+            }
+        }
+
+        let mockState = new MockFrontendState();
+
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            element.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function updateQuestionStatus() {
+            const statusDiv = document.getElementById('questionStatus');
+            statusDiv.innerHTML = '';
+            
+            TEST_QUESTIONS.forEach((q, index) => {
+                const div = document.createElement('div');
+                div.className = 'question-status';
+                
+                if (mockState.isQuestionCompleted(index)) {
+                    div.classList.add('completed');
+                    div.innerHTML = `✅ Q${index + 1}: ${q.question.substring(0, 60)}... (${q.followups.length} follow-ups completed)`;
+                } else if (index === mockState.currentQuestionIndex) {
+                    div.classList.add('current');
+                    const covered = mockState.followupCoverage.get(q.question) || new Set();
+                    div.innerHTML = `⏳ Q${index + 1}: ${q.question.substring(0, 60)}... (${covered.size}/${q.followups.length} follow-ups covered)`;
+                } else {
+                    div.classList.add('pending');
+                    div.innerHTML = `⏸️ Q${index + 1}: ${q.question.substring(0, 60)}... (pending)`;
+                }
+                
+                statusDiv.appendChild(div);
+            });
+        }
+
+        function updateProgress(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            document.getElementById('conversationProgress').style.width = `${percentage}%`;
+        }
+
+        async function simulateBackendCall(questionIndex, userResponse, followupsCovered = []) {
+            // Simulate backend response logic
+            const question = TEST_QUESTIONS[questionIndex];
+            
+            // Mock completion audit - passes if all followups are covered
+            const allFollowupsCovered = followupsCovered.length === question.followups.length;
+            
+            return {
+                question_completed: allFollowupsCovered,
+                bot_response: allFollowupsCovered ? 
+                    "Thanks—that helps. Next question:" : 
+                    "Could you tell me more about that?",
+                audit_result: {
+                    verdict: allFollowupsCovered ? "ALLOW_NEXT_QUESTION" : "REQUIRE_MORE",
+                    shouldProceed: allFollowupsCovered,
+                    confidence: 0.9
+                }
+            };
+        }
+
+        async function runConversationFlowTest() {
+            log('conversationLog', '🚀 Starting Conversation Flow Test', 'info');
+            log('conversationLog', `Testing progression through all ${TEST_QUESTIONS.length} questions`, 'info');
+            
+            mockState.reset();
+            updateQuestionStatus();
+            updateProgress(0, TEST_QUESTIONS.length);
+
+            let totalFollowupsAsked = 0;
+
+            for (let questionIndex = 0; questionIndex < TEST_QUESTIONS.length; questionIndex++) {
+                const question = TEST_QUESTIONS[questionIndex];
+                mockState.currentQuestionIndex = questionIndex;
+                
+                log('conversationLog', `\n📍 Question ${questionIndex + 1}/${TEST_QUESTIONS.length}:`, 'info');
+                log('conversationLog', `   "${question.question.substring(0, 80)}..."`, 'info');
+                
+                // Simulate asking all follow-ups
+                log('conversationLog', `📎 Asking ${question.followups.length} follow-ups:`, 'info');
+                for (const followupId of question.followups) {
+                    mockState.markFollowupCovered(questionIndex, followupId);
+                    totalFollowupsAsked++;
+                    log('conversationLog', `   ✅ ${followupId} covered`, 'success');
+                    
+                    updateQuestionStatus();
+                    await new Promise(resolve => setTimeout(resolve, 100)); // Visual delay
+                }
+
+                // Test advancement
+                const canAdvance = mockState.canAdvanceFromQuestion(questionIndex);
+                log('conversationLog', `🔍 Can advance? ${canAdvance}`, canAdvance ? 'success' : 'error');
+
+                if (canAdvance) {
+                    mockState.markQuestionCompleted(questionIndex);
+                    
+                    if (questionIndex === TEST_QUESTIONS.length - 1) {
+                        log('conversationLog', '🏁 Final question completed - Interview finished!', 'success');
+                        mockState.questionsCompleted = true;
+                    } else {
+                        log('conversationLog', '➡️ Advancing to next question', 'success');
+                    }
+                } else {
+                    log('conversationLog', '❌ ERROR: Cannot advance despite all follow-ups covered!', 'error');
+                    break;
+                }
+
+                updateProgress(questionIndex + 1, TEST_QUESTIONS.length);
+                updateQuestionStatus();
+                await new Promise(resolve => setTimeout(resolve, 200)); // Visual delay
+            }
+
+            // Results
+            log('conversationLog', '\n📊 Test Results:', 'info');
+            log('conversationLog', `Questions completed: ${mockState.completedQuestionIndices.length}/${TEST_QUESTIONS.length}`, 'info');
+            log('conversationLog', `Total follow-ups asked: ${totalFollowupsAsked}`, 'info');
+            log('conversationLog', `Conversation completed: ${mockState.questionsCompleted}`, 'info');
+
+            const success = mockState.questionsCompleted && 
+                           mockState.completedQuestionIndices.length === TEST_QUESTIONS.length;
+            
+            log('conversationLog', `\n${success ? '✅ SUCCESS' : '❌ FAILURE'}: ${success ? 'All questions and follow-ups completed' : 'Early stopping detected'}`, success ? 'success' : 'error');
+        }
+
+        async function runFollowupCoverageTest() {
+            log('followupLog', '🧪 Testing Follow-up Coverage Requirements', 'info');
+            
+            const testCases = [
+                {
+                    name: "Q1 with missing follow-ups",
+                    questionIndex: 0,
+                    coveredFollowups: ["Q1_F1"], // Missing Q1_F2, Q1_F3
+                    shouldAdvance: false
+                },
+                {
+                    name: "Q1 with all follow-ups",
+                    questionIndex: 0,
+                    coveredFollowups: ["Q1_F1", "Q1_F2", "Q1_F3"],
+                    shouldAdvance: true
+                },
+                {
+                    name: "Q6 with partial follow-ups",
+                    questionIndex: 5,
+                    coveredFollowups: ["Q6_F1", "Q6_F2"], // Missing Q6_F3, Q6_F4
+                    shouldAdvance: false
+                },
+                {
+                    name: "Q6 with all follow-ups",
+                    questionIndex: 5,
+                    coveredFollowups: ["Q6_F1", "Q6_F2", "Q6_F3", "Q6_F4"],
+                    shouldAdvance: true
+                }
+            ];
+
+            let passed = 0;
+            
+            for (const testCase of testCases) {
+                mockState.reset();
+                log('followupLog', `\n🔬 ${testCase.name}:`, 'info');
+                
+                // Cover specified follow-ups
+                for (const followupId of testCase.coveredFollowups) {
+                    mockState.markFollowupCovered(testCase.questionIndex, followupId);
+                }
+                
+                const canAdvance = mockState.canAdvanceFromQuestion(testCase.questionIndex);
+                const testPassed = canAdvance === testCase.shouldAdvance;
+                
+                log('followupLog', `   Expected: ${testCase.shouldAdvance}, Got: ${canAdvance} ${testPassed ? '✅' : '❌'}`, testPassed ? 'success' : 'error');
+                
+                if (testPassed) passed++;
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            log('followupLog', `\n📊 Results: ${passed}/${testCases.length} tests passed`, 'info');
+            log('followupLog', `${passed === testCases.length ? '✅ All follow-up coverage tests passed' : '❌ Some follow-up coverage tests failed'}`, passed === testCases.length ? 'success' : 'error');
+        }
+
+        async function runQ6ConsistencyTest() {
+            log('q6Log', '🧪 Testing Q6 Consistency (No Special Logic)', 'info');
+            mockState.reset();
+            
+            // Test Q6 behavior same as Q1
+            const q1Index = 0;
+            const q6Index = 5;
+            
+            log('q6Log', 'Testing Q1 vs Q6 behavior consistency...', 'info');
+            
+            // Test Q1 partial coverage
+            mockState.markFollowupCovered(q1Index, "Q1_F1");
+            const q1PartialAdvance = mockState.canAdvanceFromQuestion(q1Index);
+            
+            // Test Q6 partial coverage  
+            mockState.markFollowupCovered(q6Index, "Q6_F1");
+            const q6PartialAdvance = mockState.canAdvanceFromQuestion(q6Index);
+            
+            log('q6Log', `Q1 partial coverage can advance: ${q1PartialAdvance}`, 'info');
+            log('q6Log', `Q6 partial coverage can advance: ${q6PartialAdvance}`, 'info');
+            
+            const partialConsistent = q1PartialAdvance === q6PartialAdvance;
+            log('q6Log', `Partial coverage consistent: ${partialConsistent ? '✅' : '❌'}`, partialConsistent ? 'success' : 'error');
+            
+            // Test full coverage
+            TEST_QUESTIONS[q1Index].followups.forEach(fid => mockState.markFollowupCovered(q1Index, fid));
+            TEST_QUESTIONS[q6Index].followups.forEach(fid => mockState.markFollowupCovered(q6Index, fid));
+            
+            const q1FullAdvance = mockState.canAdvanceFromQuestion(q1Index);
+            const q6FullAdvance = mockState.canAdvanceFromQuestion(q6Index);
+            
+            log('q6Log', `Q1 full coverage can advance: ${q1FullAdvance}`, 'info');
+            log('q6Log', `Q6 full coverage can advance: ${q6FullAdvance}`, 'info');
+            
+            const fullConsistent = q1FullAdvance === q6FullAdvance;
+            log('q6Log', `Full coverage consistent: ${fullConsistent ? '✅' : '❌'}`, fullConsistent ? 'success' : 'error');
+            
+            const overallSuccess = partialConsistent && fullConsistent && q1PartialAdvance === false && q1FullAdvance === true;
+            log('q6Log', `\n${overallSuccess ? '✅ SUCCESS' : '❌ FAILURE'}: Q6 ${overallSuccess ? 'behaves consistently' : 'has special behavior'}`, overallSuccess ? 'success' : 'error');
+        }
+
+        async function runFrontendStateTest() {
+            log('frontendLog', '🧪 Testing Frontend State Management', 'info');
+            mockState.reset();
+            
+            // Simulate frontend logic flow
+            log('frontendLog', 'Simulating frontend question completion logic...', 'info');
+            
+            let stateErrors = [];
+            
+            // Test initial state
+            if (mockState.currentQuestionIndex !== 0) {
+                stateErrors.push('Initial question index should be 0');
+            }
+            if (mockState.completedQuestionIndices.length !== 0) {
+                stateErrors.push('Initial completed questions should be empty');
+            }
+            
+            // Simulate question progression
+            for (let i = 0; i < TEST_QUESTIONS.length; i++) {
+                const question = TEST_QUESTIONS[i];
+                mockState.currentQuestionIndex = i;
+                
+                log('frontendLog', `Processing Q${i + 1}...`, 'info');
+                
+                // Test: should not advance without follow-ups
+                if (mockState.canAdvanceFromQuestion(i)) {
+                    stateErrors.push(`Q${i + 1} can advance without follow-ups`);
+                }
+                
+                // Cover all follow-ups
+                question.followups.forEach(fid => mockState.markFollowupCovered(i, fid));
+                
+                // Test: should advance with all follow-ups
+                if (!mockState.canAdvanceFromQuestion(i)) {
+                    stateErrors.push(`Q${i + 1} cannot advance with all follow-ups`);
+                }
+                
+                // Mark as completed
+                mockState.markQuestionCompleted(i);
+                
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            // Final state checks
+            if (mockState.completedQuestionIndices.length !== TEST_QUESTIONS.length) {
+                stateErrors.push(`Expected ${TEST_QUESTIONS.length} completed questions, got ${mockState.completedQuestionIndices.length}`);
+            }
+            
+            // Report results
+            log('frontendLog', '\n📊 State Management Results:', 'info');
+            if (stateErrors.length === 0) {
+                log('frontendLog', '✅ All state management tests passed', 'success');
+                log('frontendLog', '✅ Question progression works correctly', 'success');
+                log('frontendLog', '✅ Follow-up requirements enforced', 'success');
+            } else {
+                log('frontendLog', `❌ ${stateErrors.length} state management errors:`, 'error');
+                stateErrors.forEach(error => log('frontendLog', `   - ${error}`, 'error'));
+            }
+        }
+
+        // Initialize
+        updateQuestionStatus();
+    </script>
+</body>
+</html>

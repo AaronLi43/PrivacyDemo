@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copy-Paste Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .enabled {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disabled {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔓 Copy-Paste Functionality Test</h1>
+    
+    <div class="test-section">
+        <h3>Test Instructions</h3>
+        <p>This page tests the copy-paste functionality in your Privacy Demo application.</p>
+        <ol>
+            <li>Try to copy text from the input fields below</li>
+            <li>Try to paste text into the input fields</li>
+            <li>Try to use right-click context menu</li>
+            <li>Use the toggle button to enable/disable copy-paste</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>Copy-Paste Toggle</h3>
+        <button id="copy-paste-toggle" class="btn btn-secondary">
+            <i class="fas fa-lock"></i> Disabled
+        </button>
+        <div id="status-display" class="status disabled">
+            Copy-paste is currently DISABLED
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Input Field Tests</h3>
+        <label for="test-input">Text Input:</label>
+        <input type="text" id="test-input" placeholder="Type or paste text here..." value="This is test text that you can try to copy">
+        
+        <label for="test-textarea">Textarea:</label>
+        <textarea id="test-textarea" rows="4" placeholder="Type or paste text here...">This is a longer test text in a textarea that you can try to copy and paste from.</textarea>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Results</h3>
+        <div id="test-results">
+            <p>No tests run yet. Try copying and pasting text to see results.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Manual Test Commands</h3>
+        <p>You can also test these keyboard shortcuts:</p>
+        <ul>
+            <li><strong>Ctrl+C</strong> - Copy</li>
+            <li><strong>Ctrl+V</strong> - Paste</li>
+            <li><strong>Ctrl+X</strong> - Cut</li>
+            <li><strong>Right-click</strong> - Context menu</li>
+        </ul>
+    </div>
+
+    <script>
+        class CopyPasteTest {
+            constructor() {
+                this.copyPasteEnabled = true; // Start enabled for testing
+                this.testResults = [];
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.updateUI();
+                this.applyCopyPasteSettings();
+            }
+
+            bindEvents() {
+                const toggleBtn = document.getElementById('copy-paste-toggle');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', () => {
+                        this.toggleCopyPaste();
+                    });
+                }
+
+                // Test input events
+                const testInput = document.getElementById('test-input');
+                const testTextarea = document.getElementById('test-textarea');
+                
+                if (testInput) {
+                    testInput.addEventListener('copy', (e) => this.logTest('copy', 'input', e));
+                    testInput.addEventListener('paste', (e) => this.logTest('paste', 'input', e));
+                    testInput.addEventListener('cut', (e) => this.logTest('cut', 'input', e));
+                    testInput.addEventListener('contextmenu', (e) => this.logTest('contextmenu', 'input', e));
+                }
+                
+                if (testTextarea) {
+                    testTextarea.addEventListener('copy', (e) => this.logTest('copy', 'textarea', e));
+                    testTextarea.addEventListener('paste', (e) => this.logTest('paste', 'textarea', e));
+                    testTextarea.addEventListener('cut', (e) => this.logTest('cut', 'textarea', e));
+                    testTextarea.addEventListener('contextmenu', (e) => this.logTest('contextmenu', 'textarea', e));
+                }
+            }
+
+            toggleCopyPaste() {
+                this.copyPasteEnabled = !this.copyPasteEnabled;
+                this.updateUI();
+                this.applyCopyPasteSettings();
+                
+                const status = this.copyPasteEnabled ? 'enabled' : 'disabled';
+                this.addTestResult(`Copy-paste toggled to ${status}`);
+            }
+
+            updateUI() {
+                const toggleBtn = document.getElementById('copy-paste-toggle');
+                const statusDisplay = document.getElementById('status-display');
+                
+                if (toggleBtn) {
+                    if (this.copyPasteEnabled) {
+                        toggleBtn.innerHTML = '<i class="fas fa-unlock"></i> Enabled';
+                        toggleBtn.className = 'btn btn-secondary';
+                        toggleBtn.style.backgroundColor = '#28a745';
+                    } else {
+                        toggleBtn.innerHTML = '<i class="fas fa-lock"></i> Disabled';
+                        toggleBtn.className = 'btn btn-secondary';
+                        toggleBtn.style.backgroundColor = '#dc3545';
+                    }
+                }
+                
+                if (statusDisplay) {
+                    if (this.copyPasteEnabled) {
+                        statusDisplay.textContent = 'Copy-paste is currently ENABLED';
+                        statusDisplay.className = 'status enabled';
+                    } else {
+                        statusDisplay.textContent = 'Copy-paste is currently DISABLED';
+                        statusDisplay.className = 'status disabled';
+                    }
+                }
+            }
+
+            applyCopyPasteSettings() {
+                const testInput = document.getElementById('test-input');
+                const testTextarea = document.getElementById('test-textarea');
+                
+                if (testInput) {
+                    if (this.copyPasteEnabled) {
+                        this.enableCopyPaste(testInput);
+                    } else {
+                        this.disableCopyPaste(testInput);
+                    }
+                }
+                
+                if (testTextarea) {
+                    if (this.copyPasteEnabled) {
+                        this.enableCopyPaste(testTextarea);
+                    } else {
+                        this.disableCopyPaste(testTextarea);
+                    }
+                }
+            }
+
+            enableCopyPaste(element) {
+                if (!element) return;
+                element.classList.remove('copy-paste-disabled');
+                
+                // Remove event listeners if they exist
+                if (this._copyHandler) {
+                    element.removeEventListener('copy', this._copyHandler);
+                    element.removeEventListener('paste', this._pasteHandler);
+                    element.removeEventListener('cut', this._cutHandler);
+                    element.removeEventListener('contextmenu', this._contextMenuHandler);
+                }
+                
+                console.log('🔓 Copy/paste enabled on:', element.tagName, element.id);
+            }
+
+            disableCopyPaste(element) {
+                if (!element) return;
+                element.classList.add('copy-paste-disabled');
+                
+                // Store handlers for removal
+                this._copyHandler = (e) => {
+                    e.preventDefault();
+                    this.addTestResult(`Copy BLOCKED on ${element.tagName} (${element.id})`);
+                    return false;
+                };
+                
+                this._pasteHandler = (e) => {
+                    e.preventDefault();
+                    this.addTestResult(`Paste BLOCKED on ${element.tagName} (${element.id})`);
+                    return false;
+                };
+                
+                this._cutHandler = (e) => {
+                    e.preventDefault();
+                    this.addTestResult(`Cut BLOCKED on ${element.tagName} (${element.id})`);
+                    return false;
+                };
+                
+                this._contextMenuHandler = (e) => {
+                    e.preventDefault();
+                    this.addTestResult(`Context menu BLOCKED on ${element.tagName} (${element.id})`);
+                    return false;
+                };
+                
+                // Add event listeners
+                element.addEventListener('copy', this._copyHandler);
+                element.addEventListener('paste', this._pasteHandler);
+                element.addEventListener('cut', this._cutHandler);
+                element.addEventListener('contextmenu', this._contextMenuHandler);
+                
+                console.log('🔒 Copy/paste disabled on:', element.tagName, element.id);
+            }
+
+            logTest(action, elementType, event) {
+                if (this.copyPasteEnabled) {
+                    this.addTestResult(`${action.toUpperCase()} ALLOWED on ${elementType}`);
+                } else {
+                    this.addTestResult(`${action.toUpperCase()} BLOCKED on ${elementType}`);
+                }
+            }
+
+            addTestResult(result) {
+                this.testResults.push({
+                    timestamp: new Date().toLocaleTimeString(),
+                    result: result
+                });
+                
+                // Keep only last 10 results
+                if (this.testResults.length > 10) {
+                    this.testResults.shift();
+                }
+                
+                this.updateTestResults();
+            }
+
+            updateTestResults() {
+                const resultsDiv = document.getElementById('test-results');
+                if (!resultsDiv) return;
+                
+                if (this.testResults.length === 0) {
+                    resultsDiv.innerHTML = '<p>No tests run yet. Try copying and pasting text to see results.</p>';
+                    return;
+                }
+                
+                let html = '<h4>Recent Test Results:</h4><ul>';
+                this.testResults.forEach(test => {
+                    html += `<li><strong>${test.timestamp}:</strong> ${test.result}</li>`;
+                });
+                html += '</ul>';
+                
+                resultsDiv.innerHTML = html;
+            }
+        }
+
+        // Initialize the test when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new CopyPasteTest();
+        });
+    </script>
+</body>
+</html>

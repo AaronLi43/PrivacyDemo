@@ -1,0 +1,687 @@
+{
+  "metadata": {
+    "mode": "featured",
+    "export_timestamp": "2025-08-24T21:27:38.351Z",
+    "total_messages": 19,
+    "consent_given": true,
+    "consent_tag": "accept",
+    "survey_completed": true,
+    "edited_messages_count": 0,
+    "privacy_features_used": {
+      "placeholder": 0,
+      "blurred_data": 1,
+      "ignore": 0
+    },
+    "prolific": {
+      "pid": "TEST_A5R1HL",
+      "study": null,
+      "session": null,
+      "test_mode": false
+    },
+    "study_context": {
+      "mode_readable": "featured",
+      "whether_share_original": "Ignored"
+    }
+  },
+  "conversation": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "timestamp": "2025-08-24T20:55:58.446Z"
+    },
+    {
+      "user": "Hi, I studied a mix of engineering and computer science, at  the local university",
+      "bot": "Thank you for sharing that about your studies. When did you start your degree and when did you finish?",
+      "timestamp": "2025-08-24T20:56:10.613Z"
+    },
+    {
+      "user": "I started during 1987, ending it at the beginning of 1991",
+      "bot": "Thank you for outlining your academic timeline. Thinking back to your time at university, Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.?",
+      "timestamp": "2025-08-24T20:56:30.636Z"
+    },
+    {
+      "user": "Probably my best friend Giacomo",
+      "bot": "Building on your experiences with Giacomo and your academic background, I'd love to hear about your current work and how you got into it by job interviews?",
+      "timestamp": "2025-08-24T20:58:07.014Z"
+    },
+    {
+      "user": "I am an IT manager, Some years ago I was interviewed briefly by my future boss",
+      "bot": "What is your current employer or company? To follow up on that,",
+      "timestamp": "2025-08-24T21:00:09.476Z"
+    },
+    {
+      "user": "I work in a local manufacturing company",
+      "bot": "Thank you for sharing those details about your role and company. To better understand your career path, When did you start your current job and when did you do the interview? This will help clarify your professional timeline.",
+      "timestamp": "2025-08-24T21:00:51.708Z"
+    },
+    {
+      "user": "I was hired in 2015, soon after my interview",
+      "bot": "Thanks for outlining your hiring timeline. To delve a bit deeper, Can you walk me through a specific time when you used AI before and during job interviews? Please share any details about your experience with AI in the context of job interviews.",
+      "timestamp": "2025-08-24T21:01:43.850Z"
+    },
+    {
+      "user": "At present I use AI in order to check rapidly what applicant is saying",
+      "bot": "When exactly did you use AI around the interview timeline? This will help me understand the timing of your AI usage in relation to your interviews.",
+      "timestamp": "2025-08-24T21:03:45.748Z"
+    },
+    {
+      "user": "Sometime applicant say something that could be verified immediately, then I use Ai intead of Google searches",
+      "bot": "Which AI tools did you use and for what tasks?",
+      "timestamp": "2025-08-24T21:05:51.260Z"
+    },
+    {
+      "user": "ChatGPT",
+      "bot": "Thanks for clarifying your process. To follow up, How did you use AI and what difference did it make? I'm interested to hear about the impact this approach had on your interviews.",
+      "timestamp": "2025-08-24T21:06:06.702Z"
+    },
+    {
+      "user": "I used it to verify the answer from applicants and AI works better than google searches",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "timestamp": "2025-08-24T21:10:09.106Z"
+    },
+    {
+      "user": "Yes, in some cases the answer is incorrect or out of scope",
+      "bot": "Thank you for sharing that experience. Do you remember at what time that happened?",
+      "timestamp": "2025-08-24T21:11:30.310Z"
+    },
+    {
+      "user": "No, I can't remember the time",
+      "bot": "Thanks for clarifying. If you're comfortable sharing, Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?",
+      "timestamp": "2025-08-24T21:11:49.166Z"
+    },
+    {
+      "user": "Not a real problem, as I use it only as fact-checking",
+      "bot": "I appreciate your openness as we continue. Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+      "timestamp": "2025-08-24T21:12:11.262Z"
+    },
+    {
+      "user": "To me is fully appropriate",
+      "bot": "I appreciate your perspective. For a bit more background, could you walk me through what made you reach for AI in that situation? Any details you can share would be helpful.",
+      "timestamp": "2025-08-24T21:13:47.886Z"
+    },
+    {
+      "user": "There were too many info from applicants requiring verification so I just wanted to use a more powerful tool to help me get it quickly done",
+      "bot": "Thank you for explaining your approach. As you considered the boundaries of using AI, when you thought about the possibility of going too far with AI, what concerns were on your mind?",
+      "timestamp": "2025-08-24T21:15:28.970Z"
+    },
+    {
+      "user": "Since they can give incorrect answer, I still need to double check everything before delivering.",
+      "bot": "Thanks for clarifying your process. Building on that, what additional ethics reflection did you have during using AI for job interviews?",
+      "timestamp": "2025-08-24T21:22:13.478Z"
+    },
+    {
+      "user": "Do not over rely on AI or they will take over your job very soon",
+      "bot": "Thank you for sharing your thoughts on responsible AI use. On a related note, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "timestamp": "2025-08-24T21:22:55.434Z"
+    },
+    {
+      "user": "Sometimes I use AI to help me write code and other materials which I do not want others know",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "timestamp": "2025-08-24T21:24:10.482Z"
+    }
+  ],
+  "survey_data": {
+    "q1": "yes",
+    "q2": "test",
+    "q3": "1",
+    "q4": "1",
+    "q10": "test",
+    "q11": "test",
+    "q12": "3",
+    "q13": "5",
+    "q14": "2",
+    "q15": "18-29",
+    "q16": "Female",
+    "q17": "Black",
+    "q18": "Bachelor's degree",
+    "questions": [
+      "Could you tell me about your educational background - what did you study in college or university?",
+      "I'd love to hear about your current work and how you got into it by job interviews?",
+      "Can you walk me through a specific time when you used AI before and during job interviews?",
+      "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
+      "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+      "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    ]
+  },
+  "original_conversation": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "timestamp": "2025-08-24T20:55:58.446Z"
+    },
+    {
+      "user": "Hi, I studied a mix of engineering and computer science, at  the local university",
+      "bot": "Thank you for sharing that about your studies. When did you start your degree and when did you finish?",
+      "timestamp": "2025-08-24T20:56:10.613Z"
+    },
+    {
+      "user": "I started during 1987, ending it at the beginning of 1991",
+      "bot": "Thank you for outlining your academic timeline. Thinking back to your time at university, Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.?",
+      "timestamp": "2025-08-24T20:56:30.636Z"
+    },
+    {
+      "user": "Probably my best friend Giacomo",
+      "bot": "Building on your experiences with Giacomo and your academic background, I'd love to hear about your current work and how you got into it by job interviews?",
+      "timestamp": "2025-08-24T20:58:07.014Z"
+    },
+    {
+      "user": "I am an IT manager, Some years ago I was interviewed briefly by my future boss",
+      "bot": "What is your current employer or company? To follow up on that,",
+      "timestamp": "2025-08-24T21:00:09.476Z"
+    },
+    {
+      "user": "I work in a local manufacturing company",
+      "bot": "Thank you for sharing those details about your role and company. To better understand your career path, When did you start your current job and when did you do the interview? This will help clarify your professional timeline.",
+      "timestamp": "2025-08-24T21:00:51.708Z"
+    },
+    {
+      "user": "I was hired in 2015, soon after my interview",
+      "bot": "Thanks for outlining your hiring timeline. To delve a bit deeper, Can you walk me through a specific time when you used AI before and during job interviews? Please share any details about your experience with AI in the context of job interviews.",
+      "timestamp": "2025-08-24T21:01:43.850Z"
+    },
+    {
+      "user": "At present I use AI in order to check rapidly what applicant is saying",
+      "bot": "When exactly did you use AI around the interview timeline? This will help me understand the timing of your AI usage in relation to your interviews.",
+      "timestamp": "2025-08-24T21:03:45.748Z"
+    },
+    {
+      "user": "Sometime applicant say something that could be verified immediately, then I use Ai intead of Google searches",
+      "bot": "Which AI tools did you use and for what tasks?",
+      "timestamp": "2025-08-24T21:05:51.260Z"
+    },
+    {
+      "user": "ChatGPT",
+      "bot": "Thanks for clarifying your process. To follow up, How did you use AI and what difference did it make? I'm interested to hear about the impact this approach had on your interviews.",
+      "timestamp": "2025-08-24T21:06:06.702Z"
+    },
+    {
+      "user": "I used it to verify the answer from applicants and AI works better than google searches",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "timestamp": "2025-08-24T21:10:09.106Z"
+    },
+    {
+      "user": "Yes, in some cases the answer is incorrect or out of scope",
+      "bot": "Thank you for sharing that experience. Do you remember at what time that happened?",
+      "timestamp": "2025-08-24T21:11:30.310Z"
+    },
+    {
+      "user": "No, I can't remember the time",
+      "bot": "Thanks for clarifying. If you're comfortable sharing, Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?",
+      "timestamp": "2025-08-24T21:11:49.166Z"
+    },
+    {
+      "user": "Not a real problem, as I use it only as fact-checking",
+      "bot": "I appreciate your openness as we continue. Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+      "timestamp": "2025-08-24T21:12:11.262Z"
+    },
+    {
+      "user": "To me is fully appropriate",
+      "bot": "I appreciate your perspective. For a bit more background, could you walk me through what made you reach for AI in that situation? Any details you can share would be helpful.",
+      "timestamp": "2025-08-24T21:13:47.886Z"
+    },
+    {
+      "user": "There were too many info from applicants requiring verification so I just wanted to use a more powerful tool to help me get it quickly done",
+      "bot": "Thank you for explaining your approach. As you considered the boundaries of using AI, when you thought about the possibility of going too far with AI, what concerns were on your mind?",
+      "timestamp": "2025-08-24T21:15:28.970Z"
+    },
+    {
+      "user": "Since they can give incorrect answer, I still need to double check everything before delivering.",
+      "bot": "Thanks for clarifying your process. Building on that, what additional ethics reflection did you have during using AI for job interviews?",
+      "timestamp": "2025-08-24T21:22:13.478Z"
+    },
+    {
+      "user": "Do not over rely on AI or they will take over your job very soon",
+      "bot": "Thank you for sharing your thoughts on responsible AI use. On a related note, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "timestamp": "2025-08-24T21:22:55.434Z"
+    },
+    {
+      "user": "Sometimes I use AI to help me write code and other materials which I do not want others know",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "timestamp": "2025-08-24T21:24:10.482Z"
+    }
+  ],
+  "privacy_analysis": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "userPrivacy": null,
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Hi, I studied a mix of engineering and computer science, at  the local university",
+      "bot": "Thank you for sharing that about your studies. When did you start your degree and when did you finish?",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "EDUCATIONAL_RECORD",
+        "suggestion": "Before: \"Hi, I studied a mix of engineering and [Education_Record1], at  the [Affiliation1]\"\nAfter: \"Hi, I studied a mix of engineering and computer science, at  the local university\"",
+        "explanation": "Protected information abstracted: [Education_Record1],[Affiliation1]",
+        "affected_text": "[Education_Record1],[Affiliation1]",
+        "sensitive_text": "[Education_Record1],[Affiliation1]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "Hi, I studied a mix of engineering and [Education_Record1], at  the [Affiliation1]",
+          "abstraction": "Hi, I studied a mix of engineering and computer science, at  the local university"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "I started during 1987, ending it at the beginning of 1991",
+      "bot": "Thank you for outlining your academic timeline. Thinking back to your time at university, Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.?",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "TIME",
+        "suggestion": "Before: \"I started during [Time1], ending it at [Time2]\"\nAfter: \"I started during 1987, ending it at the beginning of 1991\"",
+        "explanation": "Protected information abstracted: [Time1],[Time2]",
+        "affected_text": "[Time1],[Time2]",
+        "sensitive_text": "[Time1],[Time2]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "I started during [Time1], ending it at [Time2]",
+          "abstraction": "I started during 1987, ending it at the beginning of 1991"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "Probably my best friend Giacomo",
+      "bot": "Building on your experiences with Giacomo and your academic background, I'd love to hear about your current work and how you got into it by job interviews?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "I am an IT manager, Some years ago I was interviewed briefly by my future boss",
+      "bot": "What is your current employer or company? To follow up on that,",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "I work in a local manufacturing company",
+      "bot": "Thank you for sharing those details about your role and company. To better understand your career path, When did you start your current job and when did you do the interview? This will help clarify your professional timeline.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "I was hired in 2015, soon after my interview",
+      "bot": "Thanks for outlining your hiring timeline. To delve a bit deeper, Can you walk me through a specific time when you used AI before and during job interviews? Please share any details about your experience with AI in the context of job interviews.",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "TIME",
+        "suggestion": "Before: \"I was hired in [Time3], soon after my interview\"\nAfter: \"I was hired in a certain time period, soon after my interview\"",
+        "explanation": "Protected information abstracted: [Time3]",
+        "affected_text": "[Time3]",
+        "sensitive_text": "[Time3]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "I was hired in [Time3], soon after my interview",
+          "abstraction": "I was hired in a certain time period, soon after my interview"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "At present I use AI in order to check rapidly what applicant is saying",
+      "bot": "When exactly did you use AI around the interview timeline? This will help me understand the timing of your AI usage in relation to your interviews.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Sometime applicant say something that could be verified immediately, then I use Ai intead of Google searches",
+      "bot": "Which AI tools did you use and for what tasks?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "ChatGPT",
+      "bot": "Thanks for clarifying your process. To follow up, How did you use AI and what difference did it make? I'm interested to hear about the impact this approach had on your interviews.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "I used it to verify the answer from applicants and AI works better than google searches",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Yes, in some cases the answer is incorrect or out of scope",
+      "bot": "Thank you for sharing that experience. Do you remember at what time that happened?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "No, I can't remember the time",
+      "bot": "Thanks for clarifying. If you're comfortable sharing, Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Not a real problem, as I use it only as fact-checking",
+      "bot": "I appreciate your openness as we continue. Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "To me is fully appropriate",
+      "bot": "I appreciate your perspective. For a bit more background, could you walk me through what made you reach for AI in that situation? Any details you can share would be helpful.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "There were too many info from applicants requiring verification so I just wanted to use a more powerful tool to help me get it quickly done",
+      "bot": "Thank you for explaining your approach. As you considered the boundaries of using AI, when you thought about the possibility of going too far with AI, what concerns were on your mind?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Since they can give incorrect answer, I still need to double check everything before delivering.",
+      "bot": "Thanks for clarifying your process. Building on that, what additional ethics reflection did you have during using AI for job interviews?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Do not over rely on AI or they will take over your job very soon",
+      "bot": "Thank you for sharing your thoughts on responsible AI use. On a related note, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Sometimes I use AI to help me write code and other materials which I do not want others know",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    }
+  ],
+  "privacy_suggestions": [
+    {
+      "message_index": 1,
+      "user_suggestions": {
+        "type": "EDUCATIONAL_RECORD",
+        "original_text": "Hi, I studied a mix of engineering and computer science, at  the local university",
+        "suggestion": "Before: \"Hi, I studied a mix of engineering and [Education_Record1], at  the [Affiliation1]\"\nAfter: \"Hi, I studied a mix of engineering and computer science, at  the local university\"",
+        "placeholder": "Hi, I studied a mix of engineering and [Education_Record1], at  the [Affiliation1]",
+        "blurred_data": "Hi, I studied a mix of engineering and computer science, at  the local university"
+      },
+      "bot_suggestions": null
+    },
+    {
+      "message_index": 2,
+      "user_suggestions": {
+        "type": "TIME",
+        "original_text": "I started during 1987, ending it at the beginning of 1991",
+        "suggestion": "Before: \"I started during [Time1], ending it at [Time2]\"\nAfter: \"I started during 1987, ending it at the beginning of 1991\"",
+        "placeholder": "I started during [Time1], ending it at [Time2]",
+        "blurred_data": "I started during 1987, ending it at the beginning of 1991"
+      },
+      "bot_suggestions": null
+    },
+    {
+      "message_index": 6,
+      "user_suggestions": {
+        "type": "TIME",
+        "original_text": "I was hired in 2015, soon after my interview",
+        "suggestion": "Before: \"I was hired in [Time3], soon after my interview\"\nAfter: \"I was hired in a certain time period, soon after my interview\"",
+        "placeholder": "I was hired in [Time3], soon after my interview",
+        "blurred_data": "I was hired in a certain time period, soon after my interview"
+      },
+      "bot_suggestions": null
+    }
+  ]
+}

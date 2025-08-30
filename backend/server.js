@@ -3378,139 +3378,146 @@ app.post('/api/verify-completion', async (req, res) => {
     try {
         const { sessionId, prolificPid } = req.body;
         
-        if (!sessionId) {
+        if (!sessionId && !prolificPid) {
             return res.status(400).json({ 
-                error: 'Session ID is required',
+                error: 'Session ID or Prolific PID is required',
                 status: 'ERROR'
             });
         }
         
-        const session = getSession(sessionId);
-        
-        // Check if we have a chat session
-        if (!session.activeChatSession) {
-            // FALLBACK: Check if there's a recently uploaded complete file for this participant
-            console.log(`⚠️ No active session found for ${sessionId}, checking for recent uploads...`);
-            
+        // PRIORITY 1: Check S3 for completed study (most reliable)
+        if (prolificPid) {
+            console.log(`🔍 Checking S3 records for participant ${prolificPid}...`);
             try {
-                // Check if there's a recent non-partial upload for this participant
-                // This handles cases where session expired but participant completed the study
                 const recentUploadCheck = await checkRecentCompleteUpload(prolificPid);
                 
                 if (recentUploadCheck.isComplete) {
                     console.log(`✅ Found recent complete upload for participant ${prolificPid}`);
                     
-                    // Session expired but we have evidence of completion - provide completion code
                     return res.json({
                         status: 'COMPLETE',
                         completionCode: 'C15VDGHG',
                         redirectUrl: 'https://app.prolific.com/submissions/complete?cc=C15VDGHG',
-                        message: 'Thank you for completing the study! (Verified via upload records)',
+                        message: 'Thank you for completing the study!',
                         completedPercentage: 100,
                         totalQuestions: 7,
                         completedQuestions: 7,
-                        verificationMethod: 'upload_record_fallback'
+                        verificationMethod: 'upload_record_verification'
+                    });
+                } else {
+                    console.log(`⚠️ No complete upload found for ${prolificPid}: ${recentUploadCheck.reason}`);
+                }
+            } catch (uploadError) {
+                console.error('S3 verification error:', uploadError);
+            }
+        }
+        
+        // PRIORITY 2: Check active session (if available)
+        if (sessionId) {
+            const session = getSession(sessionId);
+            
+            if (session.activeChatSession) {
+                console.log(`🔍 Found active session for ${sessionId}, verifying completion...`);
+                
+                // Get the orchestrator state
+                const chatState = session.activeChatSession;
+                const totalQuestions = chatState.totalQuestions || 7;
+                const completedQuestions = chatState.completedQuestions || 0;
+                const progressPercentage = chatState.progressPercentage || 0;
+                
+                // Check survey completion status from session state
+                const surveyCompleted = chatState.surveyCompleted || false;
+                
+                // Check if post-conversation tasks were completed (depends on mode)
+                // This is indicated by having performed one of the export actions
+                const hasPostTaskCompletion = chatState.pendingExportAction || 
+                                             chatState.exportActionCompleted ||
+                                             (chatState.conversationLog && chatState.conversationLog.length > 0 && surveyCompleted);
+                
+                // Full completion requires:
+                // 1. All conversation questions completed (7/7)
+                // 2. Survey completed 
+                // 3. Post-conversation tasks done (editing/analysis depending on mode)
+                const conversationComplete = completedQuestions >= totalQuestions;
+                const isFullyCompleted = conversationComplete && surveyCompleted && hasPostTaskCompletion;
+                
+                // Log the verification attempt
+                console.log(`🔍 Session completion verification for ${sessionId}:`, {
+                    totalQuestions,
+                    completedQuestions,
+                    progressPercentage,
+                    conversationComplete,
+                    surveyCompleted,
+                    hasPostTaskCompletion,
+                    isFullyCompleted,
+                    prolificPid
+                });
+                
+                if (isFullyCompleted) {
+                    // Full completion - provide the completion code
+                    const COMPLETION_CODE = 'C15VDGHG';
+                    
+                    // Mark session as fully completed
+                    session.status = 'FULLY_COMPLETED';
+                    session.completionTimestamp = new Date().toISOString();
+                    
+                    return res.json({
+                        status: 'COMPLETE',
+                        completionCode: COMPLETION_CODE,
+                        redirectUrl: `https://app.prolific.com/submissions/complete?cc=${COMPLETION_CODE}`,
+                        message: 'Thank you for completing the study!',
+                        completedPercentage: 100,
+                        totalQuestions,
+                        completedQuestions,
+                        verificationMethod: 'active_session'
+                    });
+                } else {
+                    // Partial completion - no completion code
+                    session.status = 'PARTIALLY_COMPLETED';
+                    session.partialCompletionTimestamp = new Date().toISOString();
+                    
+                    // Determine what's missing
+                    const missingSteps = [];
+                    if (!conversationComplete) {
+                        missingSteps.push(`${totalQuestions - completedQuestions} conversation questions remaining`);
+                    }
+                    if (!surveyCompleted) {
+                        missingSteps.push('post-task survey not completed');
+                    }
+                    if (!hasPostTaskCompletion) {
+                        missingSteps.push('post-conversation tasks (editing/analysis) not completed');
+                    }
+                    
+                    const detailedMessage = missingSteps.length > 0 
+                        ? `Study incomplete: ${missingSteps.join(', ')}`
+                        : `Study incomplete - ${completedQuestions} of ${totalQuestions} questions answered`;
+                    
+                    return res.json({
+                        status: 'PARTIAL',
+                        completionCode: null,
+                        redirectUrl: null,
+                        message: detailedMessage,
+                        completedPercentage: progressPercentage,
+                        totalQuestions,
+                        completedQuestions,
+                        missingSteps,
+                        verificationMethod: 'active_session'
                     });
                 }
-            } catch (fallbackError) {
-                console.error('Fallback verification error:', fallbackError);
             }
-            
-            return res.json({
-                status: 'PARTIAL',
-                completionCode: null,
-                message: 'No active study session found',
-                completedPercentage: 0
-            });
         }
         
-        // Get the orchestrator state
-        const chatState = session.activeChatSession;
-        const totalQuestions = chatState.totalQuestions || 7;
-        const completedQuestions = chatState.completedQuestions || 0;
-        const progressPercentage = chatState.progressPercentage || 0;
-        
-        // Check survey completion status from session state
-        const surveyCompleted = chatState.surveyCompleted || false;
-        
-        // Check if post-conversation tasks were completed (depends on mode)
-        // This is indicated by having performed one of the export actions
-        const hasPostTaskCompletion = chatState.pendingExportAction || 
-                                     chatState.exportActionCompleted ||
-                                     (chatState.conversationLog && chatState.conversationLog.length > 0 && surveyCompleted);
-        
-        // Full completion requires:
-        // 1. All conversation questions completed (7/7)
-        // 2. Survey completed 
-        // 3. Post-conversation tasks done (editing/analysis depending on mode)
-        const conversationComplete = completedQuestions >= totalQuestions;
-        const isFullyCompleted = conversationComplete && surveyCompleted && hasPostTaskCompletion;
-        
-        // Log the verification attempt
-        console.log(`🔍 Completion verification for session ${sessionId}:`, {
-            totalQuestions,
-            completedQuestions,
-            progressPercentage,
-            conversationComplete,
-            surveyCompleted,
-            hasPostTaskCompletion,
-            isFullyCompleted,
-            prolificPid
+        // PRIORITY 3: Neither S3 nor session verification succeeded
+        console.log(`❌ No completion evidence found - neither S3 upload nor active session`);
+        return res.json({
+            status: 'PARTIAL',
+            completionCode: null,
+            message: 'No completion evidence found. Please contact support if you believe this is an error.',
+            completedPercentage: 0,
+            totalQuestions: 7,
+            completedQuestions: 0,
+            verificationMethod: 'no_evidence_found'
         });
-        
-        if (isFullyCompleted) {
-            // Full completion - provide the completion code
-            const COMPLETION_CODE = 'C15VDGHG';
-            
-            // Mark session as fully completed
-            session.status = 'FULLY_COMPLETED';
-            session.completionTimestamp = new Date().toISOString();
-            
-            return res.json({
-                status: 'COMPLETE',
-                completionCode: COMPLETION_CODE,
-                redirectUrl: `https://app.prolific.com/submissions/complete?cc=${COMPLETION_CODE}`,
-                message: 'Thank you for completing the study!',
-                completedPercentage: 100,
-                totalQuestions,
-                completedQuestions
-            });
-        } else {
-            // Partial completion - no completion code
-            session.status = 'PARTIALLY_COMPLETED';
-            session.partialCompletionTimestamp = new Date().toISOString();
-            
-            // Determine what's missing
-            const missingSteps = [];
-            if (!conversationComplete) {
-                missingSteps.push(`${totalQuestions - completedQuestions} conversation questions remaining`);
-            }
-            if (!surveyCompleted) {
-                missingSteps.push('post-task survey not completed');
-            }
-            if (!hasPostTaskCompletion) {
-                missingSteps.push('post-conversation tasks (editing/analysis) not completed');
-            }
-            
-            const detailedMessage = missingSteps.length > 0 
-                ? `Study incomplete: ${missingSteps.join(', ')}`
-                : `Study incomplete - ${completedQuestions} of ${totalQuestions} questions answered`;
-            
-            return res.json({
-                status: 'PARTIAL',
-                completionCode: null,
-                redirectUrl: null,
-                message: detailedMessage,
-                completedPercentage: progressPercentage,
-                totalQuestions,
-                completedQuestions,
-                remainingQuestions: totalQuestions - completedQuestions,
-                conversationComplete,
-                surveyCompleted,
-                hasPostTaskCompletion,
-                missingSteps
-            });
-        }
     } catch (error) {
         console.error('Completion verification error:', error);
         return res.status(500).json({ 
@@ -4247,12 +4254,13 @@ function isEventBasedMainQuestion(q) {
                 return { isComplete: false, reason: 'Most recent upload is partial completion' };
             }
             
-            // Check if file was uploaded recently (within last 30 minutes)
+            // Check if file was uploaded recently (within last 2 hours)
+            // Extended time window to account for potential delays in reaching thanks page
             const fileTime = new Date(mostRecentFile.LastModified);
             const now = new Date();
             const timeDiffMinutes = (now - fileTime) / (1000 * 60);
             
-            if (timeDiffMinutes > 30) {
+            if (timeDiffMinutes > 120) {
                 return { isComplete: false, reason: `File too old: ${timeDiffMinutes.toFixed(1)} minutes ago` };
             }
             

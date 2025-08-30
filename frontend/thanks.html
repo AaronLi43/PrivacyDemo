@@ -246,8 +246,17 @@
             return null;
         }
         
-        // Function to get Prolific PID
+        // Function to get Prolific PID from URL or localStorage
         function getProlificPid() {
+            // First check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const pidFromUrl = urlParams.get('PROLIFIC_PID');
+            
+            if (pidFromUrl) {
+                return pidFromUrl;
+            }
+            
+            // Fallback to localStorage
             return localStorage.getItem('prolific_pid') || null;
         }
         
@@ -256,8 +265,8 @@
             const sessionId = getSessionId();
             const prolificPid = getProlificPid();
             
-            if (!sessionId) {
-                showError('No session found. Please ensure you accessed this page through the study.');
+            if (!sessionId && !prolificPid) {
+                showError('No session or participant ID found. Please ensure you accessed this page through the study.');
                 return;
             }
             

@@ -1,0 +1,579 @@
+{
+  "metadata": {
+    "mode": "featured",
+    "export_timestamp": "2025-08-24T09:25:51.628Z",
+    "total_messages": 15,
+    "consent_given": true,
+    "consent_tag": "accept",
+    "survey_completed": true,
+    "edited_messages_count": 0,
+    "privacy_features_used": {
+      "placeholder": 4,
+      "blurred_data": 0,
+      "ignore": 0
+    },
+    "prolific": {
+      "pid": "6761d7843f52c97b6028f43a",
+      "study": null,
+      "session": null,
+      "test_mode": false
+    },
+    "study_context": {
+      "mode_readable": "featured",
+      "whether_share_original": "Ignored"
+    }
+  },
+  "conversation": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "timestamp": "2025-08-24T09:03:43.323Z"
+    },
+    {
+      "user": "Hello I finished as a graduate of Mechanical Engineering for [Education_Record1]",
+      "bot": "Thank you for sharing your degree in Mechanical Engineering. Where is your college or university located?",
+      "timestamp": "2025-08-24T09:04:29.869Z"
+    },
+    {
+      "user": "I finished from a [Affiliation1] in [Geolocation1] I am now in the [Geolocation2] for my Masters in Cyber Security Engineering",
+      "bot": "Thanks for outlining your academic journey so far. When did you start your degree and when did you finish? It would be helpful to know the timeline for your degrees.",
+      "timestamp": "2025-08-24T09:05:46.246Z"
+    },
+    {
+      "user": "finished my Bachelors in [Time1] started my Masters in [Time2]",
+      "bot": "Thanks for providing those details about your studies. Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.? Thinking back to your time as a student, please share your thoughts.",
+      "timestamp": "2025-08-24T09:06:27.202Z"
+    },
+    {
+      "user": "that would be one of my departmental professors he was my personal mentor",
+      "bot": "Thank you for sharing about your mentor. Moving forward, I'd love to hear about your current work and how you got into it by job interviews? Feel free to describe your role and the interview process that led you there.",
+      "timestamp": "2025-08-24T09:07:10.977Z"
+    },
+    {
+      "user": "Well my current role involved the normal routine interviews after  some assessments",
+      "bot": "Thanks for sharing those insights about your job search process. What is your current job title? To get a clearer picture of your professional path, please share:",
+      "timestamp": "2025-08-24T09:11:28.003Z"
+    },
+    {
+      "user": "Currently I work as a Systems Designer for an automation Company",
+      "bot": "Thanks for explaining your role and interview process. To understand your timeline a bit better, When did you start your current job and when did you do the interview? This will help clarify the sequence of your recent career steps.",
+      "timestamp": "2025-08-24T09:13:53.162Z"
+    },
+    {
+      "user": "Well I started about 2 years ago and did everything about the interview virtually",
+      "bot": "That's helpful background on your virtual interview experience. Looking back, Can you walk me through a specific time when you used AI before and during job interviews?",
+      "timestamp": "2025-08-24T09:14:43.443Z"
+    },
+    {
+      "user": "Yes I used them in a part time role I took to help get more information on how to answer some questions",
+      "bot": "That's helpful to know about your use of AI for interview preparation. To understand your approach in more detail, Which AI tools did you use and for what tasks?",
+      "timestamp": "2025-08-24T09:17:26.765Z"
+    },
+    {
+      "user": "I used ChatGPT in generating typical responses for questions",
+      "bot": "Thanks for clarifying your use of ChatGPT in preparing responses. How did you use AI and what difference did it make?",
+      "timestamp": "2025-08-24T09:20:16.026Z"
+    },
+    {
+      "user": "It made me more confident",
+      "bot": "❌ Error: Network error: Unable to connect to [URL1]. Please check if the server is running and accessible.",
+      "timestamp": "2025-08-24T09:20:52.045Z"
+    },
+    {
+      "user": "hello",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI during your job search, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "timestamp": "2025-08-24T09:21:14.561Z"
+    },
+    {
+      "user": "no",
+      "bot": "Thanks for letting me know. Since you haven't questioned your use of AI, could you walk me through what made you reach for AI in that situation? If you ever did use AI in a specific situation,",
+      "timestamp": "2025-08-24T09:21:41.644Z"
+    },
+    {
+      "user": "Just normal  everyday use of AI",
+      "bot": "Thanks for clarifying your typical use of AI. To understand your experience further, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "timestamp": "2025-08-24T09:22:29.763Z"
+    },
+    {
+      "user": "Editing texts, research and formatting docs",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "timestamp": "2025-08-24T09:22:58.853Z"
+    }
+  ],
+  "survey_data": {
+    "q1": "nil",
+    "q2": "nil",
+    "q3": "4",
+    "q4": "4",
+    "q10": "Privacy Information",
+    "q11": "I am comfortable because I'm familiar",
+    "q12": "3",
+    "q13": "4",
+    "q14": "4",
+    "q15": "18-29",
+    "q16": "Male",
+    "q17": "Black",
+    "q18": "Bachelor's degree",
+    "questions": [
+      "Could you tell me about your educational background - what did you study in college or university?",
+      "I'd love to hear about your current work and how you got into it by job interviews?",
+      "Can you walk me through a specific time when you used AI before and during job interviews?",
+      "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
+      "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+      "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+    ]
+  },
+  "original_conversation": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "timestamp": "2025-08-24T09:03:43.323Z"
+    },
+    {
+      "user": "Hello I finished as a graduate of Mechanical Engineering for Bacherlors degree",
+      "bot": "Thank you for sharing your degree in Mechanical Engineering. Where is your college or university located?",
+      "timestamp": "2025-08-24T09:04:29.869Z"
+    },
+    {
+      "user": "I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering",
+      "bot": "Thanks for outlining your academic journey so far. When did you start your degree and when did you finish? It would be helpful to know the timeline for your degrees.",
+      "timestamp": "2025-08-24T09:05:46.246Z"
+    },
+    {
+      "user": "finished my Bachelors in 2019 started my Masters in 2024",
+      "bot": "Thanks for providing those details about your studies. Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.? Thinking back to your time as a student, please share your thoughts.",
+      "timestamp": "2025-08-24T09:06:27.202Z"
+    },
+    {
+      "user": "that would be one of my departmental professors he was my personal mentor",
+      "bot": "Thank you for sharing about your mentor. Moving forward, I'd love to hear about your current work and how you got into it by job interviews? Feel free to describe your role and the interview process that led you there.",
+      "timestamp": "2025-08-24T09:07:10.977Z"
+    },
+    {
+      "user": "Well my current role involved the normal routine interviews after  some assessments",
+      "bot": "Thanks for sharing those insights about your job search process. What is your current job title? To get a clearer picture of your professional path, please share:",
+      "timestamp": "2025-08-24T09:11:28.003Z"
+    },
+    {
+      "user": "Currently I work as a Systems Designer for an automation Company",
+      "bot": "Thanks for explaining your role and interview process. To understand your timeline a bit better, When did you start your current job and when did you do the interview? This will help clarify the sequence of your recent career steps.",
+      "timestamp": "2025-08-24T09:13:53.162Z"
+    },
+    {
+      "user": "Well I started about 2 years ago and did everything about the interview virtually",
+      "bot": "That's helpful background on your virtual interview experience. Looking back, Can you walk me through a specific time when you used AI before and during job interviews?",
+      "timestamp": "2025-08-24T09:14:43.443Z"
+    },
+    {
+      "user": "Yes I used them in a part time role I took to help get more information on how to answer some questions",
+      "bot": "That's helpful to know about your use of AI for interview preparation. To understand your approach in more detail, Which AI tools did you use and for what tasks?",
+      "timestamp": "2025-08-24T09:17:26.765Z"
+    },
+    {
+      "user": "I used ChatGPT in generating typical responses for questions",
+      "bot": "Thanks for clarifying your use of ChatGPT in preparing responses. How did you use AI and what difference did it make?",
+      "timestamp": "2025-08-24T09:20:16.026Z"
+    },
+    {
+      "user": "It made me more confident",
+      "bot": "❌ Error: Network error: Unable to connect to https://privacydemo.onrender.com. Please check if the server is running and accessible.",
+      "timestamp": "2025-08-24T09:20:52.045Z"
+    },
+    {
+      "user": "hello",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI during your job search, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "timestamp": "2025-08-24T09:21:14.561Z"
+    },
+    {
+      "user": "no",
+      "bot": "Thanks for letting me know. Since you haven't questioned your use of AI, could you walk me through what made you reach for AI in that situation? If you ever did use AI in a specific situation,",
+      "timestamp": "2025-08-24T09:21:41.644Z"
+    },
+    {
+      "user": "Just normal  everyday use of AI",
+      "bot": "Thanks for clarifying your typical use of AI. To understand your experience further, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "timestamp": "2025-08-24T09:22:29.763Z"
+    },
+    {
+      "user": "Editing texts, research and formatting docs",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "timestamp": "2025-08-24T09:22:58.853Z"
+    }
+  ],
+  "privacy_analysis": [
+    {
+      "user": "",
+      "bot": "Welcome, and thank you for being here today! We'll be discussing your experiences using AI for job interviews. Our goal is to better understand how people use AI in real-life situations and how that connects with their backgrounds. There are no right or wrong answers—we simply value your honest perspective, and we'd really appreciate it if you could elaborate on your responses to give us richer details.\n\nCould you tell me about your educational background - what did you study in college or university?",
+      "userPrivacy": null,
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Hello I finished as a graduate of Mechanical Engineering for Bacherlors degree",
+      "bot": "Thank you for sharing your degree in Mechanical Engineering. Where is your college or university located?",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "EDUCATIONAL_RECORD",
+        "suggestion": "Before: \"Hello I finished as a graduate of Mechanical Engineering for [Education_Record1]\"\nAfter: \"Hello I finished as a graduate of Mechanical Engineering for a university\"",
+        "explanation": "Protected information abstracted: [Education_Record1]",
+        "affected_text": "[Education_Record1]",
+        "sensitive_text": "[Education_Record1]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "Hello I finished as a graduate of Mechanical Engineering for [Education_Record1]",
+          "abstraction": "Hello I finished as a graduate of Mechanical Engineering for a university"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering",
+      "bot": "Thanks for outlining your academic journey so far. When did you start your degree and when did you finish? It would be helpful to know the timeline for your degrees.",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "AFFILIATION",
+        "suggestion": "Before: \"I finished from a [Affiliation1] in [Geolocation1] I am now in the [Geolocation2] for my Masters in Cyber Security Engineering\"\nAfter: \"I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering\"",
+        "explanation": "Protected information abstracted: [Affiliation1],[Geolocation1],[Geolocation2]",
+        "affected_text": "[Affiliation1],[Geolocation1],[Geolocation2]",
+        "sensitive_text": "[Affiliation1],[Geolocation1],[Geolocation2]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "I finished from a [Affiliation1] in [Geolocation1] I am now in the [Geolocation2] for my Masters in Cyber Security Engineering",
+          "abstraction": "I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "finished my Bachelors in 2019 started my Masters in 2024",
+      "bot": "Thanks for providing those details about your studies. Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.? Thinking back to your time as a student, please share your thoughts.",
+      "userPrivacy": {
+        "privacy_issue": true,
+        "type": "TIME",
+        "suggestion": "Before: \"finished my Bachelors in [Time1] started my Masters in [Time2]\"\nAfter: \"finished my Bachelors in 2019 started my Masters in 2024\"",
+        "explanation": "Protected information abstracted: [Time1],[Time2]",
+        "affected_text": "[Time1],[Time2]",
+        "sensitive_text": "[Time1],[Time2]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "finished my Bachelors in [Time1] started my Masters in [Time2]",
+          "abstraction": "finished my Bachelors in 2019 started my Masters in 2024"
+        }
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "that would be one of my departmental professors he was my personal mentor",
+      "bot": "Thank you for sharing about your mentor. Moving forward, I'd love to hear about your current work and how you got into it by job interviews? Feel free to describe your role and the interview process that led you there.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Well my current role involved the normal routine interviews after  some assessments",
+      "bot": "Thanks for sharing those insights about your job search process. What is your current job title? To get a clearer picture of your professional path, please share:",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Currently I work as a Systems Designer for an automation Company",
+      "bot": "Thanks for explaining your role and interview process. To understand your timeline a bit better, When did you start your current job and when did you do the interview? This will help clarify the sequence of your recent career steps.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Well I started about 2 years ago and did everything about the interview virtually",
+      "bot": "That's helpful background on your virtual interview experience. Looking back, Can you walk me through a specific time when you used AI before and during job interviews?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Yes I used them in a part time role I took to help get more information on how to answer some questions",
+      "bot": "That's helpful to know about your use of AI for interview preparation. To understand your approach in more detail, Which AI tools did you use and for what tasks?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "I used ChatGPT in generating typical responses for questions",
+      "bot": "Thanks for clarifying your use of ChatGPT in preparing responses. How did you use AI and what difference did it make?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "It made me more confident",
+      "bot": "❌ Error: Network error: Unable to connect to https://privacydemo.onrender.com. Please check if the server is running and accessible.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": true,
+        "type": "URL",
+        "suggestion": "Before: \"❌ Error: Network error: Unable to connect to [URL1]. Please check if the server is running and accessible.\"\nAfter: \"❌ Error: Network error: Unable to connect to the server address. Please check if the server is running and accessible.\"",
+        "explanation": "Protected information abstracted: [URL1]",
+        "affected_text": "[URL1]",
+        "sensitive_text": "[URL1]",
+        "highlights": [],
+        "safer_versions": {
+          "replacing": "❌ Error: Network error: Unable to connect to [URL1]. Please check if the server is running and accessible.",
+          "abstraction": "❌ Error: Network error: Unable to connect to the server address. Please check if the server is running and accessible."
+        }
+      },
+      "hasPrivacyIssues": true
+    },
+    {
+      "user": "hello",
+      "bot": "Thanks for sharing your experience so far. Thinking about your use of AI during your job search, Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "no",
+      "bot": "Thanks for letting me know. Since you haven't questioned your use of AI, could you walk me through what made you reach for AI in that situation? If you ever did use AI in a specific situation,",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Just normal  everyday use of AI",
+      "bot": "Thanks for clarifying your typical use of AI. To understand your experience further, Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    },
+    {
+      "user": "Editing texts, research and formatting docs",
+      "bot": "Thanks so much—that’s all we need for now.",
+      "userPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "botPrivacy": {
+        "privacy_issue": false,
+        "type": null,
+        "suggestion": null,
+        "explanation": null,
+        "affected_text": null,
+        "sensitive_text": null
+      },
+      "hasPrivacyIssues": false
+    }
+  ],
+  "privacy_suggestions": [
+    {
+      "message_index": 1,
+      "user_suggestions": {
+        "type": "EDUCATIONAL_RECORD",
+        "original_text": "Hello I finished as a graduate of Mechanical Engineering for Bacherlors degree",
+        "suggestion": "Before: \"Hello I finished as a graduate of Mechanical Engineering for [Education_Record1]\"\nAfter: \"Hello I finished as a graduate of Mechanical Engineering for a university\"",
+        "placeholder": "Hello I finished as a graduate of Mechanical Engineering for [Education_Record1]",
+        "blurred_data": "Hello I finished as a graduate of Mechanical Engineering for a university"
+      },
+      "bot_suggestions": null
+    },
+    {
+      "message_index": 2,
+      "user_suggestions": {
+        "type": "AFFILIATION",
+        "original_text": "I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering",
+        "suggestion": "Before: \"I finished from a [Affiliation1] in [Geolocation1] I am now in the [Geolocation2] for my Masters in Cyber Security Engineering\"\nAfter: \"I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering\"",
+        "placeholder": "I finished from a [Affiliation1] in [Geolocation1] I am now in the [Geolocation2] for my Masters in Cyber Security Engineering",
+        "blurred_data": "I finished from a university in Nigeria I am now in the UK for my Masters in Cyber Security Engineering"
+      },
+      "bot_suggestions": null
+    },
+    {
+      "message_index": 3,
+      "user_suggestions": {
+        "type": "TIME",
+        "original_text": "finished my Bachelors in 2019 started my Masters in 2024",
+        "suggestion": "Before: \"finished my Bachelors in [Time1] started my Masters in [Time2]\"\nAfter: \"finished my Bachelors in 2019 started my Masters in 2024\"",
+        "placeholder": "finished my Bachelors in [Time1] started my Masters in [Time2]",
+        "blurred_data": "finished my Bachelors in 2019 started my Masters in 2024"
+      },
+      "bot_suggestions": null
+    },
+    {
+      "message_index": 10,
+      "user_suggestions": null,
+      "bot_suggestions": {
+        "type": "URL",
+        "original_text": "❌ Error: Network error: Unable to connect to https://privacydemo.onrender.com. Please check if the server is running and accessible.",
+        "suggestion": "Before: \"❌ Error: Network error: Unable to connect to [URL1]. Please check if the server is running and accessible.\"\nAfter: \"❌ Error: Network error: Unable to connect to the server address. Please check if the server is running and accessible.\"",
+        "placeholder": "❌ Error: Network error: Unable to connect to [URL1]. Please check if the server is running and accessible.",
+        "blurred_data": "❌ Error: Network error: Unable to connect to the server address. Please check if the server is running and accessible."
+      }
+    }
+  ]
+}

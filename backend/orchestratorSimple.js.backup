@@ -1,0 +1,656 @@
+/**
+ * Simplified Orchestrator Module
+ * 
+ * 核心目标：
+ * 1. 简化的问题推进逻辑
+ * 2. 防止问题回退和重复
+ * 3. 状态持久化支持
+ * 4. 与现有前端完全兼容
+ * 5. 智能LLM检查决策
+ */
+
+// 导入LLM检查功能
+import { 
+    checkRelevance, 
+    checkCoverage, 
+    regenerateFollowup, 
+    makeSmartDecision 
+} from './llmChecks.js';
+
+// 问题数据定义（从server.js提取）
+const unifiedQuestions = [
+    "Could you tell me about your educational background - what did you study in college or university?",
+    "I'd love to hear about your current work and how you got into it by job interviews?",
+    "Can you walk me through a specific time when you used AI before and during job interviews?",
+    "Did you ever have a moment when using AI during your job search made you nervous — like it might cause a problem? Could you tell me about that? ",
+    "Did you ever find yourself questioning whether your use of AI in interviews was fully appropriate? If so, what led to that feeling?",
+    "Have you ever used AI for your job interviews in a way that you prefer not to share openly with others—such as your employer, family, friends, or colleagues?"
+];
+
+// Follow-ups映射 - 与server.js保持一致
+const FOLLOWUPS_BY_QUESTION = {
+    [unifiedQuestions[0]]: [
+        { id: "Q1_F1", prompt: "When did you start your degree and when did you finish?", keywords: [
+            "when","start","started","begin","began","enroll","enrolled",
+            "from","since","until","between",
+            "finish","finished","complete","completed","graduated","graduation",
+            "class of","year","semester","quarter","fall","spring","summer","winter",
+            "freshman","sophomore","junior","senior","201","202"
+        ] },
+        { id: "Q1_F2", prompt: "Where is your college or university located?", keywords: [
+            "where","location","located","city","town","state","province","country","region",
+            "university","college","school","campus","institution",
+            "university of","college of","state university","polytechnic","tech university"
+        ] },
+        { id: "Q1_F3", prompt: "Who comes to mind as someone you learned the most from during your degree? Naming a person can sometimes help you reflect more concretely on your experience.", keywords: [
+            "supervisor","advisor","adviser","mentor","thesis advisor","capstone advisor","co-advisor",
+            "professor","lecturer","pi","principal investigator","dr","prof","supervised by"
+        ] }
+    ],
+    [unifiedQuestions[1]]: [
+        { id: "Q2_F1", prompt: "When did you start your current job and when did you do the interview?", keywords: [
+            "when","start","started","join","joined","since","until","between",
+            "interview","phone screen","screen","assessment","take-home","onsite","on-site","loop",
+            "offer","offer date","start date","hire date","hired","accepted",
+            "month","year","week","201","202"
+        ] },
+        { id: "Q2_F2", prompt: "What is your current job title?", keywords: [
+            "title","job title","position","role","level",
+            "senior","junior","lead","manager","intern","contractor","staff","principal",
+            "swe","engineer","developer","scientist","analyst","designer","researcher",
+            "qa","qe","pm","product manager","data scientist","ml engineer"
+        ] },
+        { id: "Q2_F3", prompt: "What is your current employer or company?", keywords: [
+            "employer","company","organization","org","firm","startup",
+            "corp","corporation","inc","llc","ltd","co","company name","employed at","work at","at"
+        ] }
+    ],
+    [unifiedQuestions[2]]: [
+        { id: "Q3_F1", prompt: "When exactly did you use AI around the interview timeline?", keywords: [
+            "when","exactly","interview","timeline","around","before","after","during",
+            "date","time","month","year","201","202","preparation","prep","application",
+            "offer","assessment","screen","onsite","on-site","loop","process"
+        ] },
+        { id: "Q3_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+            "which","ai","tools","did you use","use","used","what","tasks","purpose",
+            "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+            "bing ai","perplexity","notion ai","quillbot","grammarly","prompt","prompts",
+            "generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+            "mock interview","practice q&a","script","answer bank","cheatsheet"
+        ] },
+        { id: "Q3_F3", prompt: "How did you use AI and what difference did it make?", keywords: [
+            "how","did you use","use","used","ai","difference","impact","effect","result",
+            "help","assist","improve","change","outcome","benefit","advantage","disadvantage",
+            "influence","process","performance","success","failure","resulted in"
+        ] }
+    ],
+    [unifiedQuestions[3]]: [
+        { id: "Q4_F1", prompt: "Do you remember at what time that happened?", keywords: [
+            "when","incident","close call","almost caught","nearly","time","date","month","year","201","202"
+        ] },
+        { id: "Q4_F2", prompt: "Which AI tools did you use and for what tasks?", keywords: [
+            "chatgpt","gpt-4","gpt4","gpt-4o","gemini","bard","claude","copilot","github copilot",
+            "bing ai","perplexity","notion ai","quillbot","grammarly",
+            "prompt","prompts","generate","rewrite","rephrase","summarize","translate","brainstorm","outline",
+            "star","bullet points","mock interview","practice q&a","script","answer bank","cheatsheet",
+            "cover letter","resume","cv","email","thank-you note"
+        ] },
+        { id: "Q4_F3", prompt: "Could you tell me more about what impact that had on you at the time? Was it an actual issue, or more of a worry?", keywords: [
+            "trouble","caught","flagged","plagiarism","cheating","ban","banned","policy","violation",
+            "integrity","academic integrity","code of conduct","warning","revoke","rescinded","revoke offer",
+            "disqualify","disqualified","penalty","strike","concern","red flag","hr","recruiter",
+            "investigation","reported","suspension","blacklist"
+        ] }
+    ],
+    [unifiedQuestions[4]]: [
+        { id: "Q5_F1", prompt: "could you walk me through what made you reach for AI in that situation?", keywords: [
+            "trigger","reason","because","due to","pressure","deadline","time pressure",
+            "hard question","difficult","competition","anxiety","stress","desperate","temptation",
+            "incentive","recommendation","friend suggested","saw others","reddit","forum","example",
+            "shortcut","cheat","hack"
+        ] },
+        { id: "Q5_F2", prompt: "when you thought about the possibility of going too far with AI, what concerns were on your mind?", keywords: [
+            "concern","worry","afraid","fear","risk","getting caught","detect","detection",
+            "policy","violation","ethics","integrity","honesty","privacy","security",
+            "consequence","ban","penalty","expelled","fired","background check","nda","legal","guidelines"
+        ] },
+        { id: "Q5_F3", prompt: "what additional ethics reflection did you have during using AI for job interviews?", keywords: [
+            "ethics","ethical","reflection","in hindsight","looking back","regret","lesson","learned",
+            "shouldn't have","boundary","line","values","responsibility","fairness","transparency",
+            "accountability","harm","trust","reputation","principle","moral","self-reflection"
+        ] }
+    ],
+    [unifiedQuestions[5]]: [
+        { id: "Q6_F1", prompt: "When was the incident of you using AI to hide from someone?", keywords: [
+            "when","incident","time","date","month","year","201","202","hide","hidden","keeping secret"
+        ] },
+        { id: "Q6_F2", prompt: "Who were you hiding from?", keywords: [
+            "who","from","employer","manager","boss","hr","recruiter","interviewer",
+            "coworker","colleague","team","professor","ta","teacher","advisor","supervisor",
+            "client","customer","family","parents","partner","girlfriend","boyfriend","spouse",
+            "friend","roommate"
+        ] },
+        { id: "Q6_F3", prompt: "What AI uses did you try to hide from them?", keywords: [
+            "hide","conceal","secret","ai use","used chatgpt","copilot","generate","autocompletion","auto-complete",
+            "rewrite","translate","summarize","grammar","proofread","code","solution","answers","essay","report",
+            "homework","assignment","take-home","test","automation","voice to text","image generator",
+            "dall-e","midjourney","stable diffusion","quillbot","grammarly"
+        ] },
+        { id: "Q6_F4", prompt: "Why do you feel that's something you wouldn't want to share openly?", keywords: [
+            "why","feel","share","openly","private","confidential","sensitive","sensitive information",
+            "privacy","ethics","integrity","honesty","transparency","accountability","harm","trust",
+            "reputation","principle","moral","self-reflection"
+        ] }
+    ]
+};
+
+/**
+ * 初始化会话状态
+ * @param {string} sessionId - 会话ID
+ * @param {string} mode - 模式 (naive/neutral/featured)
+ * @returns {Object} 初始化的状态对象
+ */
+export function initSession(sessionId, mode = 'neutral') {
+    return {
+        // 基础信息
+        sessionId: sessionId,
+        mode: mode,
+        startTimestamp: new Date().toISOString(),
+        lastActivityTimestamp: new Date().toISOString(),
+        
+        // 问题管理
+        mainQuestions: unifiedQuestions,
+        currentMainIdx: 0,
+        completedMainQuestions: new Set(), // 防止重复的关键
+        
+        // 当前问题状态
+        currentQuestionAnswers: [],    // 累积当前主问题的所有回答
+        currentFollowups: [],          // 当前主问题的followup列表
+        currentFollowupIdx: 0,
+        completedFollowups: new Set(),  // 已完成的followup ID
+        
+        // 进度跟踪
+        totalQuestions: unifiedQuestions.length,
+        completedQuestions: 0,
+        progressPercentage: 0,
+        
+        // 对话记录（用于生成导出JSON）
+        conversationLog: [],
+        originalConversation: [],
+        privacyAnalysis: [],
+        privacySuggestions: [],
+        
+        // 调试和恢复信息
+        lastAction: null,
+        lastError: null,
+        retryCount: 0,
+        
+        // 防止重复问题的追踪
+        followupAttempts: new Map() // 记录每个followup被问的次数
+    };
+}
+
+/**
+ * 获取当前应该询问的问题
+ * @param {Object} state - 会话状态
+ * @returns {Object} 当前问题信息
+ */
+export function getCurrentQuestion(state) {
+    // 更新活动时间戳
+    state.lastActivityTimestamp = new Date().toISOString();
+    
+    // 检查是否已完成所有主问题
+    if (state.currentMainIdx >= state.mainQuestions.length) {
+        return {
+            type: 'completed',
+            message: "Thanks so much—that's all we need for now.",
+            isComplete: true
+        };
+    }
+    
+    const mainQuestion = state.mainQuestions[state.currentMainIdx];
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    
+    // 检查主问题是否已完成（防回退）
+    if (!state.completedMainQuestions.has(mainQuestionId)) {
+        // 需要询问主问题
+        return {
+            type: 'main',
+            id: mainQuestionId,
+            question: mainQuestion,
+            index: state.currentMainIdx,
+            isFirstTime: state.currentQuestionAnswers.length === 0
+        };
+    }
+    
+    // 主问题已完成，检查是否有未完成的followup
+    const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
+    
+    for (let i = 0; i < followups.length; i++) {
+        const followup = followups[i];
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        
+        if (!state.completedFollowups.has(followupId)) {
+            // 找到未完成的followup
+            state.currentFollowupIdx = i;
+            return {
+                type: 'followup',
+                id: followupId,
+                question: followup.prompt,
+                keywords: followup.keywords,
+                mainQuestionIdx: state.currentMainIdx,
+                followupIdx: i
+            };
+        }
+    }
+    
+    // 当前主问题及其所有followup都已完成，移到下一个主问题
+    state.currentMainIdx++;
+    state.currentQuestionAnswers = [];
+    state.completedFollowups.clear(); // 清空followup记录，为下一个主问题准备
+    
+    // 递归调用获取下一个问题
+    return getCurrentQuestion(state);
+}
+
+/**
+ * 处理用户的回答
+ * @param {Object} state - 会话状态
+ * @param {string} userAnswer - 用户的回答
+ * @param {Object} currentQuestion - 当前问题对象
+ * @returns {Object} 处理结果
+ */
+export function processAnswer(state, userAnswer, currentQuestion) {
+    // 记录回答
+    state.currentQuestionAnswers.push({
+        questionId: currentQuestion.id,
+        questionType: currentQuestion.type,
+        question: currentQuestion.question,
+        answer: userAnswer,
+        timestamp: new Date().toISOString()
+    });
+    
+    // 添加到对话记录
+    state.conversationLog.push({
+        user: userAnswer,
+        bot: currentQuestion.question,
+        timestamp: new Date().toISOString()
+    });
+    
+    // 根据问题类型处理
+    if (currentQuestion.type === 'main') {
+        // 主问题回答后，默认标记为待检查
+        // LLM检查后会决定是否标记为完成
+        return {
+            status: 'pending_check',
+            needsLLMCheck: true,
+            checkType: 'relevance'
+        };
+    } else if (currentQuestion.type === 'followup') {
+        // Followup回答后，标记为完成
+        state.completedFollowups.add(currentQuestion.id);
+        return {
+            status: 'followup_completed',
+            needsLLMCheck: true,
+            checkType: 'coverage'
+        };
+    }
+    
+    return {
+        status: 'processed'
+    };
+}
+
+/**
+ * 标记主问题为完成
+ * @param {Object} state - 会话状态
+ */
+export function markMainQuestionComplete(state) {
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    state.completedMainQuestions.add(mainQuestionId);
+    state.completedQuestions++;
+    state.progressPercentage = Math.round((state.completedQuestions / state.totalQuestions) * 100);
+}
+
+/**
+ * 检查是否应该进入下一个主问题
+ * @param {Object} state - 会话状态
+ * @param {Object} llmCheckResult - LLM检查结果
+ * @returns {boolean} 是否应该进入下一个主问题
+ */
+export function shouldAdvanceToNext(state, llmCheckResult) {
+    // 基于LLM检查结果决定
+    if (llmCheckResult && llmCheckResult.verdict === 'NEXT_MAIN_QUESTION') {
+        markMainQuestionComplete(state);
+        return true;
+    }
+    
+    // 检查是否所有followup都已完成
+    const mainQuestion = state.mainQuestions[state.currentMainIdx];
+    const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    
+    let allFollowupsCompleted = true;
+    for (let i = 0; i < followups.length; i++) {
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        if (!state.completedFollowups.has(followupId)) {
+            allFollowupsCompleted = false;
+            break;
+        }
+    }
+    
+    if (allFollowupsCompleted && followups.length > 0) {
+        markMainQuestionComplete(state);
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * 简单决策逻辑 - 不使用LLM，基于简单规则
+ * @param {Object} state - 会话状态
+ * @returns {Promise<Object>} 决策结果
+ */
+export async function makeIntelligentDecision(state) {
+    if (state.currentQuestionAnswers.length === 0) {
+        return {
+            decision: 'NEED_MAIN_ANSWER',
+            reasoning: 'No answers provided yet for main question'
+        };
+    }
+    
+    // 获取用户的第一个回答（对主问题的回答）
+    const firstAnswer = state.currentQuestionAnswers[0];
+    if (!firstAnswer) {
+        return {
+            decision: 'NEED_MAIN_ANSWER',
+            reasoning: 'Need main question answer'
+        };
+    }
+    
+    const answer = firstAnswer.answer.toLowerCase();
+    const mainQuestion = state.mainQuestions[state.currentMainIdx];
+    const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
+    
+    // 检查用户是否表示没有相关经历
+    // 优先检查明确的否定词汇，即使有记忆相关词汇
+    const hasStrongNegatives = answer.includes('never') ||
+        answer.includes("haven't") ||
+        answer.includes("didn't") ||
+        answer.includes("don't have") ||
+        answer.includes("no experience") ||
+        answer.includes("not applicable") ||
+        answer.includes("n/a");
+    
+    const memoryIssueOnly = (answer.includes('remember') || answer.includes('recall') || answer.includes('forget')) && !hasStrongNegatives;
+    
+    const noExperience = hasStrongNegatives || (!memoryIssueOnly && (
+        (answer.includes('no') && (answer.includes('never') || answer.includes('not') || answer.includes("n't") || answer.includes("don't"))) ||
+        (answer.length < 20 && (answer.includes('no') || answer.includes('none')))
+    ));
+    
+    if (noExperience) {
+        // 用户没有相关经历，跳到下一个主问题
+        console.log('📝 User indicated no relevant experience, skipping to next topic');
+        return {
+            decision: 'ADVANCE_TO_NEXT',
+            reasoning: 'User indicated no relevant experience, moving to next topic'
+        };
+    }
+    
+    // 用户有相关经历，检查是否已问完所有followup
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    let allFollowupsAsked = true;
+    
+    for (let i = 0; i < followups.length; i++) {
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        if (!state.completedFollowups.has(followupId)) {
+            allFollowupsAsked = false;
+            break;
+        }
+    }
+    
+    if (allFollowupsAsked || followups.length === 0) {
+        // 所有followup都已问完，进入下一个主问题
+        console.log('✅ All follow-ups completed for this topic');
+        return {
+            decision: 'ADVANCE_TO_NEXT',
+            reasoning: 'All follow-ups completed'
+        };
+    } else {
+        // 还有followup需要询问
+        return {
+            decision: 'ASK_FOLLOWUPS',
+            reasoning: 'Continue with follow-up questions'
+        };
+    }
+}
+
+/**
+ * 获取下一个需要询问的followup（简单版本）
+ * @param {Object} state - 会话状态
+ * @returns {Object} followup问题信息
+ */
+export function getNextIntelligentFollowup(state) {
+    const mainQuestion = state.mainQuestions[state.currentMainIdx];
+    const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    
+    // 简单地找到下一个未完成的followup
+    for (let i = 0; i < followups.length; i++) {
+        const followup = followups[i];
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        
+        if (!state.completedFollowups.has(followupId)) {
+            console.log(`❓ Asking ${followupId}: ${followup.prompt.substring(0, 50)}...`);
+            
+            return {
+                type: 'followup',
+                id: followupId,
+                question: followup.prompt,
+                originalQuestion: followup.prompt,
+                keywords: followup.keywords,
+                mainQuestionIdx: state.currentMainIdx,
+                followupIdx: i,
+                intelligentlyGenerated: false
+            };
+        }
+    }
+    
+    // 没有更多followup需要询问
+    return null;
+}
+
+/**
+ * 获取需要检查的followup列表
+ * @param {Object} state - 会话状态
+ * @returns {Array} 未完成的followup列表
+ */
+export function getPendingFollowups(state) {
+    const mainQuestion = state.mainQuestions[state.currentMainIdx];
+    const followups = FOLLOWUPS_BY_QUESTION[mainQuestion] || [];
+    const mainQuestionId = `main_${state.currentMainIdx}`;
+    
+    const pending = [];
+    for (let i = 0; i < followups.length; i++) {
+        const followupId = `${mainQuestionId}_followup_${i}`;
+        if (!state.completedFollowups.has(followupId)) {
+            pending.push({
+                id: followupId,
+                ...followups[i],
+                index: i
+            });
+        }
+    }
+    
+    return pending;
+}
+
+/**
+ * 保存状态快照（用于持久化）
+ * @param {Object} state - 会话状态
+ * @returns {Object} 可序列化的状态快照
+ */
+export function saveStateSnapshot(state) {
+    return {
+        ...state,
+        completedMainQuestions: Array.from(state.completedMainQuestions),
+        completedFollowups: Array.from(state.completedFollowups)
+    };
+}
+
+/**
+ * 从快照恢复状态
+ * @param {Object} snapshot - 状态快照
+ * @returns {Object} 恢复的状态对象
+ */
+export function restoreStateFromSnapshot(snapshot) {
+    const state = { ...snapshot };
+    state.completedMainQuestions = new Set(snapshot.completedMainQuestions || []);
+    state.completedFollowups = new Set(snapshot.completedFollowups || []);
+    return state;
+}
+
+/**
+ * 生成前端兼容的响应格式
+ * @param {Object} state - 会话状态
+ * @param {string} botResponse - 机器人回复
+ * @param {Object} options - 额外选项
+ * @returns {Object} API响应对象
+ */
+export function buildApiResponse(state, botResponse, options = {}) {
+    const currentQuestion = getCurrentQuestion(state);
+    
+    return {
+        bot_response: botResponse,
+        question_completed: currentQuestion.type === 'completed' || options.questionCompleted || false,
+        follow_up_questions: options.followUpQuestions || [],
+        audit_result: options.auditResult || null,
+        privacy_detection: options.privacyDetection || null,
+        
+        // 内部状态，用于恢复
+        orchestrator_state: {
+            currentMainIdx: state.currentMainIdx,
+            currentFollowupIdx: state.currentFollowupIdx,
+            completedMainQuestions: Array.from(state.completedMainQuestions),
+            completedFollowups: Array.from(state.completedFollowups),
+            progressPercentage: state.progressPercentage
+        },
+        
+        // 调试信息（仅在开发模式）
+        ...(process.env.NODE_ENV === 'development' && {
+            debug: {
+                currentQuestion: currentQuestion,
+                pendingFollowups: getPendingFollowups(state),
+                totalAnswers: state.currentQuestionAnswers.length
+            }
+        })
+    };
+}
+
+/**
+ * 验证状态一致性（防止异常状态）
+ * @param {Object} state - 会话状态
+ * @returns {boolean} 状态是否有效（true=原本有效，false=发现并修复了问题）
+ */
+export function validateState(state) {
+    let wasValid = true;
+    
+    // 确保索引在有效范围内
+    if (state.currentMainIdx < 0 || state.currentMainIdx > state.mainQuestions.length) {
+        console.error(`Invalid currentMainIdx: ${state.currentMainIdx}`);
+        state.currentMainIdx = Math.max(0, Math.min(state.currentMainIdx, state.mainQuestions.length));
+        wasValid = false;
+    }
+    
+    // 确保Set对象存在
+    if (!(state.completedMainQuestions instanceof Set)) {
+        state.completedMainQuestions = new Set();
+        wasValid = false;
+    }
+    if (!(state.completedFollowups instanceof Set)) {
+        state.completedFollowups = new Set();
+        wasValid = false;
+    }
+    
+    // 确保进度百分比正确
+    const expectedProgress = Math.round((state.completedQuestions / state.totalQuestions) * 100);
+    if (Math.abs(state.progressPercentage - expectedProgress) > 1) {
+        state.progressPercentage = expectedProgress;
+        wasValid = false;
+    }
+    
+    return wasValid;
+}
+
+/**
+ * 处理错误和恢复
+ * @param {Object} state - 会话状态
+ * @param {Error} error - 错误对象
+ * @returns {Object} 错误恢复响应
+ */
+export function handleError(state, error) {
+    state.lastError = {
+        message: error.message,
+        timestamp: new Date().toISOString(),
+        retryCount: state.retryCount++
+    };
+    
+    // 保存当前状态以便恢复
+    const snapshot = saveStateSnapshot(state);
+    
+    return {
+        bot_response: "Let me continue with our conversation...",
+        error_recovery: true,
+        orchestrator_state: snapshot,
+        retry_needed: state.retryCount < 3
+    };
+}
+
+/**
+ * 获取导出数据（符合示例JSON格式）
+ * @param {Object} state - 会话状态
+ * @param {Object} additionalData - 额外数据
+ * @returns {Object} 导出数据对象
+ */
+export function getExportData(state, additionalData = {}) {
+    const isComplete = state.currentMainIdx >= state.mainQuestions.length;
+    
+    return {
+        metadata: {
+            mode: state.mode,
+            export_timestamp: new Date().toISOString(),
+            export_type: isComplete ? 'full_completion' : 'partial_completion',
+            completion_status: isComplete ? 'COMPLETED' : 'PARTIAL',
+            total_questions: state.totalQuestions,
+            completed_questions: state.completedQuestions,
+            current_question_index: state.currentMainIdx,
+            progress_percentage: state.progressPercentage,
+            ...additionalData.metadata
+        },
+        conversation: state.conversationLog,
+        original_conversation: state.originalConversation,
+        privacy_analysis: state.privacyAnalysis,
+        privacy_suggestions: state.privacySuggestions,
+        survey_data: additionalData.surveyData || {}
+    };
+}
+
+// 导出所有函数
+export default {
+    initSession,
+    getCurrentQuestion,
+    processAnswer,
+    markMainQuestionComplete,
+    shouldAdvanceToNext,
+    makeIntelligentDecision,
+    getNextIntelligentFollowup,
+    getPendingFollowups,
+    saveStateSnapshot,
+    restoreStateFromSnapshot,
+    buildApiResponse,
+    validateState,
+    handleError,
+    getExportData
+};

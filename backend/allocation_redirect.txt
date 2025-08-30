@@ -1,0 +1,193 @@
+--- a/redirect.html
++++ b/redirect.html
+@@
+   <script>
+-    // 解析 Prolific 参数
+-    function getProlificParams() {
+-      const sp = new URLSearchParams(window.location.search);
+-      const pid = sp.get('PROLIFIC_PID');
+-      const study = sp.get('STUDY_ID');
+-      const session = sp.get('SESSION_ID');
+-      return { pid, study, session };
+-    }
++    // 解析 Prolific 参数（NEW: 解析 TARGET，总量，默认 150）
++    function getProlificParams() {
++      const sp = new URLSearchParams(window.location.search);
++      const pid = sp.get('PROLIFIC_PID');
++      const study = sp.get('STUDY_ID');
++      const session = sp.get('SESSION_ID');
++      const target = parseInt(sp.get('TARGET') || '150', 10);
++      return { pid, study, session, target };
++    }
+@@
+-    function ensureProlificOrTest() {
++    function ensureProlificOrTest() {
+       const sp = new URLSearchParams(window.location.search);
+       const forceTest = sp.get('test') === '1' || sp.get('preview') === 'true';
+-      let { pid, study, session } = getProlificParams();
++      let { pid, study, session, target } = getProlificParams();
+ 
+       if (!pid || !study || !session) {
+         if (!forceTest) {
+           // 进入测试模式
+           const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+           pid = `TEST_${rand}`;
+           study = 'TEST_STUDY';
+           session = `TEST_SESSION_${Date.now()}`;
+         }
+         addTestBanner();
+         localStorage.setItem('prolific_test_mode', 'true');
+       } else {
+         localStorage.removeItem('prolific_test_mode');
+       }
+ 
+       localStorage.setItem('prolific_pid', pid);
+       localStorage.setItem('prolific_study', study);
+       localStorage.setItem('prolific_session', session);
++      localStorage.setItem('prolific_target', String(target));
+-      return { pid, study, session, test_mode: localStorage.getItem('prolific_test_mode') === 'true' };
++      return { pid, study, session, target, test_mode: localStorage.getItem('prolific_test_mode') === 'true' };
+     }
+@@
+-    // 可选的三种模式
++    // 可选的三种模式
+     const modes = [
+       { name: 'naive',    identifier: '0', file: 'naive.html' },
+       { name: 'neutral',  identifier: '1', file: 'neutral.html' },
+       { name: 'featured', identifier: '2', file: 'featured.html' }
+     ];
+@@
+-    // 随机选一个模式
+-    function getRandomMode() {
+-      const randomIndex = Math.floor(Math.random() * modes.length);
+-      return modes[randomIndex];
+-    }
++    // 从候选里随机（NEW: 支持传入候选）
++    function getRandomMode(candidates = modes) {
++      const pool = (candidates && candidates.length) ? candidates : modes;
++      const idx = Math.floor(Math.random() * pool.length);
++      return pool[idx];
++    }
+@@
+     // 跳转
+     function redirectToMode(mode) {
+       const currentUrl = new URL(window.location.href);
+       const newUrl = new URL(mode.file, window.location.href);
+       // 保留查询参数
+       newUrl.search = currentUrl.search;
+       setTimeout(() => {
+         window.location.href = newUrl.toString();
+       }, 500);
+     }
++
++    // NEW: 调用后端原子分配
++    async function allocateModeViaBackend({ pid, study, session, target, test_mode }) {
++      try {
++        const resp = await fetch('https://privacydemo.onrender.com/api/study/allocate', {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/json' },
++          body: JSON.stringify({
++            study,
++            pid,
++            session,
++            desired_total: Number.isFinite(target) ? target : 150,
++            test_mode: !!test_mode
++          })
++        });
++        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
++        const data = await resp.json(); // { mode, cap_per_mode? , full? }
++        const modeName = data && data.mode;
++        if (!modeName) return null;
++        const found = modes.find(m => m.name === modeName);
++        return found || null;
++      } catch (e) {
++        console.warn('⚠️ Backend allocation failed:', e);
++        return null;
++      }
++    }
++
++    // NEW: 兜底获取 study 状态
++    async function fetchStudyStatus(study, target) {
++      try {
++        const url = `https://privacydemo.onrender.com/api/study/status?study=${encodeURIComponent(study)}&desired_total=${encodeURIComponent(Number.isFinite(target)?target:150)}`;
++        const resp = await fetch(url);
++        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
++        return await resp.json(); // { counts:{}, cap_per_mode }
++      } catch (e) {
++        console.warn('⚠️ Fetch status failed:', e);
++        return null;
++      }
++    }
+@@
+-    document.addEventListener('DOMContentLoaded', function () {
++    document.addEventListener('DOMContentLoaded', async function () {
+       resetAllData();
+       resetBackendSession(); // 非阻塞
+-      const prolific = ensureProlificOrTest();
+-      logProlificStart(prolific);
+-      const selectedMode = getRandomMode();
+-      redirectToMode(selectedMode);
++      const prolific = ensureProlificOrTest();
++      logProlificStart(prolific);
++
++      // 1) 优先后端原子分配
++      let selectedMode = await allocateModeViaBackend(prolific);
++
++      // 2) 后端不可用则兜底：只在“未满”的模式中随机
++      if (!selectedMode) {
++        const status = await fetchStudyStatus(prolific.study, prolific.target);
++        if (status && status.counts && Number.isFinite(status.cap_per_mode)) {
++          const { counts, cap_per_mode } = status;
++          const notFull = modes.filter(m => (counts[m.name] || 0) < cap_per_mode);
++          selectedMode = getRandomMode(notFull.length ? notFull : modes);
++        } else {
++          // 3) 实在拿不到状态，就完全随机
++          selectedMode = getRandomMode(modes);
++        }
++      }
++      redirectToMode(selectedMode);
+     });
+   </script>
+@@
+-      // 2) 后端不可用则兜底：只在“未满”的模式中随机
++      // 2) 后端不可用则兜底：只在“未满”的模式中随机；如都满了则不再跳转
+       if (!selectedMode) {
+         const status = await fetchStudyStatus(prolific.study, prolific.target);
+         if (status && status.counts && Number.isFinite(status.cap_per_mode)) {
+           const { counts, cap_per_mode } = status;
+           const notFull = modes.filter(m => (counts[m.name] || 0) < cap_per_mode);
+-          selectedMode = getRandomMode(notFull.length ? notFull : modes);
++          if (notFull.length === 0) {
++            // 显示“Study 已满”的友好提示，或跳转到结束页
++            showStudyFullMessage(); // 你可以实现一个简单的提示函数
++            return; // 不再重定向
++          }
++          selectedMode = getRandomMode(notFull);
+         } else {
+           // 3) 实在拿不到状态，就完全随机
+           selectedMode = getRandomMode(modes);
+         }
+       }
+<script>
+  function showStudyFullMessage() {
+    const el = document.getElementById('status') || document.body;
+    const div = document.createElement('div');
+    div.style.padding = '16px';
+    div.style.margin = '16px';
+    div.style.border = '1px solid #ddd';
+    div.style.borderRadius = '8px';
+    div.innerText = 'This study is full. Thank you for your interest!';
+    el.appendChild(div);
+  }
+</script>
+await fetch('/api/study/allocate', {
+  method: 'POST',
+  headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({
+    study, pid, session,
+    desired_total: target,            // 仍然是 150
+    test_mode: !!test_mode,
+    desired_strategy: 'balanced',     // 新增：'balanced' | 'random' | 'weighted'
+    pilot_min_per_group: 2            // 新增：比如 pilot 阶段先确保每组至少 2 人
+  })
+});
