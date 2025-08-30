@@ -114,7 +114,7 @@ async function testPartialCompletion() {
 
 // Test: Full completion scenario
 async function testFullCompletion() {
-    console.log('Test 3: Full Completion (7 of 7 questions)');
+    console.log('Test 3: Full Completion (7 questions + survey + post-tasks)');
     console.log('Expected: COMPLETE status with completion code C15VDGHG');
     
     try {

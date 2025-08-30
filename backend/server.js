@@ -3403,14 +3403,30 @@ app.post('/api/verify-completion', (req, res) => {
         const completedQuestions = chatState.completedQuestions || 0;
         const progressPercentage = chatState.progressPercentage || 0;
         
-        // Check if all questions are completed (100% completion)
-        const isFullyCompleted = completedQuestions >= totalQuestions && progressPercentage >= 100;
+        // Check survey completion status from session state
+        const surveyCompleted = chatState.surveyCompleted || false;
+        
+        // Check if post-conversation tasks were completed (depends on mode)
+        // This is indicated by having performed one of the export actions
+        const hasPostTaskCompletion = chatState.pendingExportAction || 
+                                     chatState.exportActionCompleted ||
+                                     (chatState.conversationLog && chatState.conversationLog.length > 0 && surveyCompleted);
+        
+        // Full completion requires:
+        // 1. All conversation questions completed (7/7)
+        // 2. Survey completed 
+        // 3. Post-conversation tasks done (editing/analysis depending on mode)
+        const conversationComplete = completedQuestions >= totalQuestions;
+        const isFullyCompleted = conversationComplete && surveyCompleted && hasPostTaskCompletion;
         
         // Log the verification attempt
         console.log(`🔍 Completion verification for session ${sessionId}:`, {
             totalQuestions,
             completedQuestions,
             progressPercentage,
+            conversationComplete,
+            surveyCompleted,
+            hasPostTaskCompletion,
             isFullyCompleted,
             prolificPid
         });
@@ -3437,15 +3453,35 @@ app.post('/api/verify-completion', (req, res) => {
             session.status = 'PARTIALLY_COMPLETED';
             session.partialCompletionTimestamp = new Date().toISOString();
             
+            // Determine what's missing
+            const missingSteps = [];
+            if (!conversationComplete) {
+                missingSteps.push(`${totalQuestions - completedQuestions} conversation questions remaining`);
+            }
+            if (!surveyCompleted) {
+                missingSteps.push('post-task survey not completed');
+            }
+            if (!hasPostTaskCompletion) {
+                missingSteps.push('post-conversation tasks (editing/analysis) not completed');
+            }
+            
+            const detailedMessage = missingSteps.length > 0 
+                ? `Study incomplete: ${missingSteps.join(', ')}`
+                : `Study incomplete - ${completedQuestions} of ${totalQuestions} questions answered`;
+            
             return res.json({
                 status: 'PARTIAL',
                 completionCode: null,
                 redirectUrl: null,
-                message: `Study incomplete - ${completedQuestions} of ${totalQuestions} questions answered`,
+                message: detailedMessage,
                 completedPercentage: progressPercentage,
                 totalQuestions,
                 completedQuestions,
-                remainingQuestions: totalQuestions - completedQuestions
+                remainingQuestions: totalQuestions - completedQuestions,
+                conversationComplete,
+                surveyCompleted,
+                hasPostTaskCompletion,
+                missingSteps
             });
         }
     } catch (error) {

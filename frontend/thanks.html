@@ -331,8 +331,17 @@
             
             // Show partial completion details
             document.getElementById('partial-message').textContent = data.message || 'You have not completed all required questions.';
-            document.getElementById('progress-info').textContent = 
-                `${data.completedQuestions || 0} of ${data.totalQuestions || 7} questions answered (${Math.round(data.completedPercentage || 0)}% complete)`;
+            
+            let progressText = `${data.completedQuestions || 0} of ${data.totalQuestions || 7} questions answered`;
+            
+            // Add detailed status information
+            if (data.missingSteps && data.missingSteps.length > 0) {
+                progressText += `\n\nMissing components:\n• ${data.missingSteps.join('\n• ')}`;
+            } else {
+                progressText += ` (${Math.round(data.completedPercentage || 0)}% complete)`;
+            }
+            
+            document.getElementById('progress-info').innerHTML = progressText.replace(/\n/g, '<br>');
             document.getElementById('partial-completion-section').style.display = 'block';
             
             // Hide Prolific link - no completion code for partial completions
