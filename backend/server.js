@@ -3389,6 +3389,33 @@ app.post('/api/verify-completion', (req, res) => {
         
         // Check if we have a chat session
         if (!session.activeChatSession) {
+            // FALLBACK: Check if there's a recently uploaded complete file for this participant
+            console.log(`⚠️ No active session found for ${sessionId}, checking for recent uploads...`);
+            
+            try {
+                // Check if there's a recent non-partial upload for this participant
+                // This handles cases where session expired but participant completed the study
+                const recentUploadCheck = await checkRecentCompleteUpload(prolificPid);
+                
+                if (recentUploadCheck.isComplete) {
+                    console.log(`✅ Found recent complete upload for participant ${prolificPid}`);
+                    
+                    // Session expired but we have evidence of completion - provide completion code
+                    return res.json({
+                        status: 'COMPLETE',
+                        completionCode: 'C15VDGHG',
+                        redirectUrl: 'https://app.prolific.com/submissions/complete?cc=C15VDGHG',
+                        message: 'Thank you for completing the study! (Verified via upload records)',
+                        completedPercentage: 100,
+                        totalQuestions: 7,
+                        completedQuestions: 7,
+                        verificationMethod: 'upload_record_fallback'
+                    });
+                }
+            } catch (fallbackError) {
+                console.error('Fallback verification error:', fallbackError);
+            }
+            
             return res.json({
                 status: 'PARTIAL',
                 completionCode: null,
@@ -4190,6 +4217,83 @@ function isEventBasedMainQuestion(q) {
         const resp = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key }));
         const txt = await streamToString(resp.Body);
         return JSON.parse(txt);
+    }
+
+    // Check for recent complete upload for a participant (fallback verification)
+    async function checkRecentCompleteUpload(prolificPid) {
+        if (!prolificPid) {
+            return { isComplete: false, reason: 'No prolific PID provided' };
+        }
+        
+        try {
+            console.log(`🔍 Checking recent uploads for PID: ${prolificPid}`);
+            
+            // Get recent files for this participant
+            const recentFiles = await s3ListReturnsForPid(prolificPid);
+            
+            if (recentFiles.length === 0) {
+                return { isComplete: false, reason: 'No uploads found' };
+            }
+            
+            // Check the most recent file (files are already sorted by LastModified desc)
+            const mostRecentFile = recentFiles[0];
+            const fileName = mostRecentFile.Key;
+            
+            console.log(`📁 Most recent file: ${fileName}`);
+            
+            // Check if file has "Partial_" prefix
+            if (fileName.includes('Partial_')) {
+                return { isComplete: false, reason: 'Most recent upload is partial completion' };
+            }
+            
+            // Check if file was uploaded recently (within last 30 minutes)
+            const fileTime = new Date(mostRecentFile.LastModified);
+            const now = new Date();
+            const timeDiffMinutes = (now - fileTime) / (1000 * 60);
+            
+            if (timeDiffMinutes > 30) {
+                return { isComplete: false, reason: `File too old: ${timeDiffMinutes.toFixed(1)} minutes ago` };
+            }
+            
+            // Try to read the file metadata to verify completion
+            try {
+                const fileContent = await s3GetJSON(fileName);
+                const metadata = fileContent.metadata || {};
+                
+                const surveyCompleted = metadata.survey_completed || false;
+                const hasConversation = fileContent.conversation && fileContent.conversation.length > 0;
+                const hasPrivacyAnalysis = fileContent.privacy_suggestions || fileContent.privacy_analysis;
+                
+                console.log(`📊 File analysis:`, {
+                    surveyCompleted,
+                    hasConversation,
+                    hasPrivacyAnalysis,
+                    messageCount: fileContent.conversation?.length || 0
+                });
+                
+                if (surveyCompleted && hasConversation && (hasPrivacyAnalysis || metadata.mode === 'neutral')) {
+                    return { 
+                        isComplete: true, 
+                        fileName,
+                        uploadTime: fileTime,
+                        metadata: metadata
+                    };
+                } else {
+                    return { 
+                        isComplete: false, 
+                        reason: 'File exists but appears incomplete',
+                        details: { surveyCompleted, hasConversation, hasPrivacyAnalysis }
+                    };
+                }
+            } catch (parseError) {
+                console.error('Error parsing recent file:', parseError);
+                return { isComplete: false, reason: 'Error reading uploaded file' };
+            }
+            
+        } catch (error) {
+            console.error('Error in checkRecentCompleteUpload:', error);
+            return { isComplete: false, reason: 'Error checking uploads' };
+        }
     }
     function extractPidFromPayload(payload) {
         if (!payload || typeof payload !== 'object') return null;
