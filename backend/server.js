@@ -3718,7 +3718,8 @@ app.post('/api/upload-to-s3', async (req, res) => {
         
         // --- Apply privacy protection if consent not given ---
         // Skip masking for partial completion exports to allow raw data collection
-        const isPartialCompletion = merged.metadata?.export_type === 'partial_completion';
+        const isPartialCompletion = merged.metadata?.export_type === 'partial_completion' || 
+                                   merged.metadata?.export_type === 'early_abandonment';
         if (WhetherShareOriginal === 'Ignored' && !isPartialCompletion && merged.conversation && Array.isArray(merged.conversation)) {
           console.log('🔒 Consent not given - replacing conversation logs with placeholders');
           merged.conversation = merged.conversation.map((entry, index) => {

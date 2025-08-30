@@ -133,8 +133,11 @@ class PrivacyDemoApp {
 
         
         // Listen for page reload to ensure fresh start
-        window.addEventListener('beforeunload', () => {
+        window.addEventListener('beforeunload', (event) => {
             console.log('🔄 Page unloading - clearing state for fresh start');
+            
+            // CAPTURE EARLY ABANDONMENT DATA
+            this.captureEarlyAbandonmentData();
             
             // Clean up partial completion detection
             if (this.state.partialCompletionTimer) {
@@ -704,6 +707,124 @@ class PrivacyDemoApp {
         };
         
         return completionData;
+    }
+
+    // Capture early abandonment data (called on beforeunload)
+    captureEarlyAbandonmentData() {
+        try {
+            // Only capture if we have Prolific info and haven't already captured data
+            if (!this.state.prolificId || this.state.partialCompletionDetected) {
+                console.log('🚫 Skipping early abandonment capture - no PID or already captured');
+                return;
+            }
+
+            // Determine what phase user abandoned in
+            let abandonmentPhase = 'unknown';
+            let abandonmentDetails = {};
+
+            if (!this.state.consentGiven && this.state.currentStepPage !== 'chat') {
+                abandonmentPhase = 'consent_phase';
+                abandonmentDetails.consent_checked = this.state.consentChecked;
+            } else if (Object.keys(this.state.qualificationAnswers).length === 0) {
+                abandonmentPhase = 'qualification_phase';
+            } else if (!this.areAllQualificationQuestionsAnswered()) {
+                abandonmentPhase = 'qualification_incomplete';
+                abandonmentDetails.qualification_answers = { ...this.state.qualificationAnswers };
+            } else if (!this.isQualified()) {
+                abandonmentPhase = 'qualification_failed';
+                abandonmentDetails.qualification_answers = { ...this.state.qualificationAnswers };
+            } else if (!this.state.questionMode) {
+                abandonmentPhase = 'pre_interview';
+                abandonmentDetails.consent_given = this.state.consentGiven;
+            } else if (this.state.questionMode && !this.state.questionsCompleted) {
+                abandonmentPhase = 'during_interview';
+                abandonmentDetails.questions_completed = this.state.completedQuestionIndices.length;
+                abandonmentDetails.total_questions = this.state.predefinedQuestions[this.state.mode]?.length || 0;
+                abandonmentDetails.current_question_index = this.state.currentQuestionIndex;
+            } else if (this.state.questionsCompleted && !this.state.surveyCompleted) {
+                abandonmentPhase = 'post_interview_pre_survey';
+            } else {
+                abandonmentPhase = 'late_abandonment';
+            }
+
+            // Calculate time spent
+            const sessionStartTime = this.state.sessionStartTime || Date.now();
+            const timeSpentMs = Date.now() - sessionStartTime;
+            const timeSpentMinutes = Math.round(timeSpentMs / 60000 * 10) / 10; // Round to 1 decimal
+
+            // Create minimal abandonment data
+            const abandonmentData = {
+                metadata: {
+                    mode: this.state.mode,
+                    export_timestamp: new Date().toISOString(),
+                    export_type: 'early_abandonment',
+                    completion_status: 'ABANDONED',
+                    completion_code: null,
+                    abandonment_phase: abandonmentPhase,
+                    time_spent_minutes: timeSpentMinutes,
+                    consent_given: this.state.consentGiven,
+                    consent_tag: this.state.consentTag || (this.state.consentGiven ? 'accept' : 'ignored'),
+                    survey_completed: this.state.surveyCompleted,
+                    prolific_id: this.state.prolificId,
+                    prolific_study_id: this.state.prolificStudyId,
+                    prolific_session_id: this.state.prolificSessionId,
+                    current_step_page: this.state.currentStepPage,
+                    ...abandonmentDetails
+                },
+                // Include conversation if any exists
+                conversation: this.state.conversationLog || [],
+                // Include survey data if any exists
+                survey_data: {
+                    ...(this.state.surveyData || {}),
+                    questions: this.getSurveyQuestions()
+                },
+                // Include any partial qualification data
+                qualification_data: this.state.qualificationAnswers || {}
+            };
+
+            console.log('📤 Capturing early abandonment data:', {
+                phase: abandonmentPhase,
+                timeSpent: timeSpentMinutes,
+                prolificId: this.state.prolificId
+            });
+
+            // Use sendBeacon for reliability during page unload
+            const data = JSON.stringify({
+                exportData: abandonmentData,
+                prolific_id: this.state.prolificId,
+                study_id: this.state.prolificStudyId,
+                session_id: this.state.prolificSessionId,
+                mode: this.state.mode,
+                sharedOriginal: this.state.consentGiven ? 'Shared' : 'Ignored'
+            });
+
+            // Try sendBeacon first (most reliable for beforeunload)
+            const beaconSuccess = navigator.sendBeacon('/api/upload-to-s3', data);
+            
+            if (beaconSuccess) {
+                console.log('✅ Early abandonment data sent via beacon');
+                this.state.partialCompletionDetected = true; // Prevent duplicate captures
+            } else {
+                console.warn('⚠️ Beacon failed, early abandonment data may not be captured');
+                
+                // Fallback: try synchronous request (less reliable during unload)
+                try {
+                    fetch('/api/upload-to-s3', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: data,
+                        keepalive: true
+                    }).catch(err => {
+                        console.error('Failed to send early abandonment data:', err);
+                    });
+                } catch (fetchError) {
+                    console.error('Fetch also failed:', fetchError);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error capturing early abandonment data:', error);
+        }
     }
 
     // Set completion status (can be called from external sources or backend responses)
