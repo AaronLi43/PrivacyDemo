@@ -3374,7 +3374,7 @@ app.post('/api/mark-submission', async (req, res) => {
 });
 
 // Completion Verification API
-app.post('/api/verify-completion', (req, res) => {
+app.post('/api/verify-completion', async (req, res) => {
     try {
         const { sessionId, prolificPid } = req.body;
         
