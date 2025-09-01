@@ -3512,6 +3512,22 @@ app.post('/api/verify-completion', async (req, res) => {
         
         // PRIORITY 3: Neither S3 nor session verification succeeded
         console.log(`❌ No completion evidence found - neither S3 upload nor active session`);
+        
+        // Upload partial completion data to S3 for tracking
+        const partialCompletionData = {
+            totalQuestions: unifiedQuestions.length,
+            completedQuestions: 0,
+            completedPercentage: 0,
+            missingSteps: ['No completion evidence found'],
+            verificationMethod: 'no_evidence_found'
+        };
+        
+        try {
+            await uploadPartialCompletionToS3(sessionId, prolificPid, partialCompletionData);
+        } catch (uploadError) {
+            console.error('Failed to upload partial completion data:', uploadError);
+        }
+        
         return res.json({
             status: 'PARTIAL',
             completionCode: null,
@@ -4085,6 +4101,168 @@ function isEventBasedMainQuestion(q) {
         return /(use ai|used ai|close call|hide)/.test(qkey);
       }      
 
+// ===== S3 utility functions (moved outside IIFE for global access) =====
+const RETURNS_PREFIX = process.env.RETURNS_PREFIX || 'returns/';
+
+// S3 utility functions for reading client "return" snapshots
+async function streamToString(stream) {
+    const chunks = [];
+    for await (const c of stream) chunks.push(Buffer.from(c));
+    return Buffer.concat(chunks).toString('utf-8');
+}
+
+async function s3ListReturnsForPid(pid) {
+    if (!s3Client || !S3_BUCKET) return [];
+    const out = [];
+    let ContinuationToken = undefined;
+    const pidRe = new RegExp(pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // 安全转义
+    let guard = 0;
+    while (guard++ < 50) {
+        const resp = await s3Client.send(new ListObjectsV2Command({
+            Bucket: S3_BUCKET,
+            Prefix: RETURNS_PREFIX,
+            ContinuationToken
+        }));
+        const contents = resp.Contents || [];
+        for (const obj of contents) {
+            if (obj.Key && pidRe.test(obj.Key)) out.push(obj);
+        }
+        if (!resp.IsTruncated) break;
+        ContinuationToken = resp.NextContinuationToken;
+    }
+    // 最近的在前
+    out.sort((a, b) => new Date(b.LastModified||0) - new Date(a.LastModified||0));
+    return out;
+}
+
+async function s3GetJSON(Key) {
+    const resp = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key }));
+    const txt = await streamToString(resp.Body);
+    return JSON.parse(txt);
+}
+
+// Check for recent complete upload for a participant (fallback verification)
+async function checkRecentCompleteUpload(prolificPid) {
+    if (!prolificPid) {
+        return { isComplete: false, reason: 'No prolific PID provided' };
+    }
+    
+    try {
+        console.log(`🔍 Checking recent uploads for PID: ${prolificPid}`);
+        
+        // Get recent files for this participant
+        const recentFiles = await s3ListReturnsForPid(prolificPid);
+        
+        if (recentFiles.length === 0) {
+            return { isComplete: false, reason: 'No uploads found' };
+        }
+        
+        // Check the most recent file (files are already sorted by LastModified desc)
+        const mostRecentFile = recentFiles[0];
+        const fileName = mostRecentFile.Key;
+        
+        console.log(`📁 Most recent file: ${fileName}`);
+        
+        // Check if file has "Partial_" prefix
+        if (fileName.includes('Partial_')) {
+            return { isComplete: false, reason: 'Most recent upload is partial completion' };
+        }
+        
+        // Check if file was uploaded recently (within last 2 hours)
+        // Extended time window to account for potential delays in reaching thanks page
+        const fileTime = new Date(mostRecentFile.LastModified);
+        const now = new Date();
+        const timeDiffMinutes = (now - fileTime) / (1000 * 60);
+        
+        if (timeDiffMinutes > 120) {
+            return { isComplete: false, reason: `File too old: ${timeDiffMinutes.toFixed(1)} minutes ago` };
+        }
+        
+        // Try to read the file metadata to verify completion
+        try {
+            const fileContent = await s3GetJSON(fileName);
+            const metadata = fileContent.metadata || {};
+            
+            const surveyCompleted = metadata.survey_completed || false;
+            const hasConversation = fileContent.conversation && fileContent.conversation.length > 0;
+            const hasPrivacyAnalysis = fileContent.privacy_suggestions || fileContent.privacy_analysis;
+            
+            console.log(`📊 File analysis:`, {
+                surveyCompleted,
+                hasConversation,
+                hasPrivacyAnalysis,
+                messageCount: fileContent.conversation?.length || 0
+            });
+            
+            if (surveyCompleted && hasConversation && (hasPrivacyAnalysis || metadata.mode === 'neutral')) {
+                return { 
+                    isComplete: true, 
+                    fileName,
+                    uploadTime: fileTime,
+                    metadata: metadata
+                };
+            } else {
+                return { 
+                    isComplete: false, 
+                    reason: 'File exists but appears incomplete',
+                    details: { surveyCompleted, hasConversation, hasPrivacyAnalysis }
+                };
+            }
+        } catch (parseError) {
+            console.error('Error parsing recent file:', parseError);
+            return { isComplete: false, reason: 'Error reading uploaded file' };
+        }
+        
+    } catch (error) {
+        console.error('Error in checkRecentCompleteUpload:', error);
+        return { isComplete: false, reason: 'Error checking uploads' };
+    }
+}
+
+// Upload partial completion data to S3 for tracking
+async function uploadPartialCompletionToS3(sessionId, prolificPid, completionData) {
+    if (!s3Client || !S3_BUCKET) {
+        console.warn('S3 not available for partial completion upload');
+        return null;
+    }
+    
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `Partial_${prolificPid || sessionId}_${timestamp}.json`;
+        const key = `${RETURNS_PREFIX}${fileName}`;
+        
+        const uploadData = {
+            metadata: {
+                export_timestamp: new Date().toISOString(),
+                export_type: 'partial_completion_verification',
+                completion_status: 'PARTIAL',
+                session_id: sessionId,
+                prolific_pid: prolificPid,
+                verification_method: 'no_evidence_found',
+                total_questions: completionData.totalQuestions || 6,
+                completed_questions: completionData.completedQuestions || 0,
+                progress_percentage: completionData.completedPercentage || 0
+            },
+            completion_data: completionData,
+            session_id: sessionId,
+            prolific_pid: prolificPid
+        };
+        
+        await s3Client.send(new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: key,
+            Body: JSON.stringify(uploadData, null, 2),
+            ContentType: 'application/json'
+        }));
+        
+        console.log(`📤 Uploaded partial completion data: ${key}`);
+        return key;
+    } catch (error) {
+        console.error('Error uploading partial completion data:', error);
+        return null;
+    }
+}
+
 // ===== Built-in Prolific NO-CODE poller (embedded) =====
 (() => {
     const PROLIFIC_TOKEN = process.env.PROLIFIC_TOKEN;
@@ -4094,7 +4272,6 @@ function isEventBasedMainQuestion(q) {
     const SINCE_DAYS     = Number(process.env.POLL_SINCE_DAYS || 180); // Only process the last N days (default 180 days; set 0 = no limit)
     const PERSIST_PROCESSED = String(process.env.PERSIST_PROCESSED_ON_S3 || 'true').toLowerCase() === 'true';
     const PROCESSED_PREFIX  = process.env.POLLER_S3_PREFIX || 'poller/processed/'; // S3 prefix: one submission one mark
-    const RETURNS_PREFIX    = process.env.RETURNS_PREFIX || 'returns/';
     const AUTOSAVE_FOR_CODED = String(process.env.AUTOSAVE_FOR_CODED || 'false').toLowerCase() === 'true';
     const AUTOSAVE_FORCE_ALL = String(process.env.AUTOSAVE_FORCE_ALL || 'false').toLowerCase() === 'true';
 
@@ -4195,118 +4372,7 @@ function isEventBasedMainQuestion(q) {
         }
     }
 
-      // ---- S3 utils for reading last client "return" snapshot ----
-    async function streamToString(stream) {
-        const chunks = [];
-        for await (const c of stream) chunks.push(Buffer.from(c));
-        return Buffer.concat(chunks).toString('utf-8');
-    }
-    async function s3ListReturnsForPid(pid) {
-        if (!s3Client || !S3_BUCKET) return [];
-        const out = [];
-        let ContinuationToken = undefined;
-        const pidRe = new RegExp(pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // 安全转义
-        let guard = 0;
-        while (guard++ < 50) {
-            const resp = await s3Client.send(new ListObjectsV2Command({
-                Bucket: S3_BUCKET,
-                Prefix: RETURNS_PREFIX,
-                ContinuationToken
-            }));
-            const contents = resp.Contents || [];
-            for (const obj of contents) {
-                if (obj.Key && pidRe.test(obj.Key)) out.push(obj);
-            }
-            if (!resp.IsTruncated) break;
-            ContinuationToken = resp.NextContinuationToken;
-        }
-            // 最近的在前
-            out.sort((a, b) => new Date(b.LastModified||0) - new Date(a.LastModified||0));
-            return out;
-    }
-    async function s3GetJSON(Key) {
-        const resp = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key }));
-        const txt = await streamToString(resp.Body);
-        return JSON.parse(txt);
-    }
-
-    // Check for recent complete upload for a participant (fallback verification)
-    async function checkRecentCompleteUpload(prolificPid) {
-        if (!prolificPid) {
-            return { isComplete: false, reason: 'No prolific PID provided' };
-        }
-        
-        try {
-            console.log(`🔍 Checking recent uploads for PID: ${prolificPid}`);
-            
-            // Get recent files for this participant
-            const recentFiles = await s3ListReturnsForPid(prolificPid);
-            
-            if (recentFiles.length === 0) {
-                return { isComplete: false, reason: 'No uploads found' };
-            }
-            
-            // Check the most recent file (files are already sorted by LastModified desc)
-            const mostRecentFile = recentFiles[0];
-            const fileName = mostRecentFile.Key;
-            
-            console.log(`📁 Most recent file: ${fileName}`);
-            
-            // Check if file has "Partial_" prefix
-            if (fileName.includes('Partial_')) {
-                return { isComplete: false, reason: 'Most recent upload is partial completion' };
-            }
-            
-            // Check if file was uploaded recently (within last 2 hours)
-            // Extended time window to account for potential delays in reaching thanks page
-            const fileTime = new Date(mostRecentFile.LastModified);
-            const now = new Date();
-            const timeDiffMinutes = (now - fileTime) / (1000 * 60);
-            
-            if (timeDiffMinutes > 120) {
-                return { isComplete: false, reason: `File too old: ${timeDiffMinutes.toFixed(1)} minutes ago` };
-            }
-            
-            // Try to read the file metadata to verify completion
-            try {
-                const fileContent = await s3GetJSON(fileName);
-                const metadata = fileContent.metadata || {};
-                
-                const surveyCompleted = metadata.survey_completed || false;
-                const hasConversation = fileContent.conversation && fileContent.conversation.length > 0;
-                const hasPrivacyAnalysis = fileContent.privacy_suggestions || fileContent.privacy_analysis;
-                
-                console.log(`📊 File analysis:`, {
-                    surveyCompleted,
-                    hasConversation,
-                    hasPrivacyAnalysis,
-                    messageCount: fileContent.conversation?.length || 0
-                });
-                
-                if (surveyCompleted && hasConversation && (hasPrivacyAnalysis || metadata.mode === 'neutral')) {
-                    return { 
-                        isComplete: true, 
-                        fileName,
-                        uploadTime: fileTime,
-                        metadata: metadata
-                    };
-                } else {
-                    return { 
-                        isComplete: false, 
-                        reason: 'File exists but appears incomplete',
-                        details: { surveyCompleted, hasConversation, hasPrivacyAnalysis }
-                    };
-                }
-            } catch (parseError) {
-                console.error('Error parsing recent file:', parseError);
-                return { isComplete: false, reason: 'Error reading uploaded file' };
-            }
-            
-        } catch (error) {
-            console.error('Error in checkRecentCompleteUpload:', error);
-            return { isComplete: false, reason: 'Error checking uploads' };
-        }
-    }
+  
     function extractPidFromPayload(payload) {
         if (!payload || typeof payload !== 'object') return null;
         // Cover more common paths:
