@@ -24,6 +24,64 @@ import orchestratorSimple from './orchestratorSimple.js';
 const sessions = new Map();
 
 /**
+ * 确保主服务器会话存在并同步状态
+ * @param {string} sessionId 会话ID
+ * @param {Object} orchestratorState orchestrator状态
+ */
+function ensureMainServerSessionAndSync(sessionId, orchestratorState) {
+    try {
+        // 通过全局变量访问主服务器的sessions
+        if (typeof global !== 'undefined' && global.mainServerSessions) {
+            let mainSession = global.mainServerSessions.get(sessionId);
+            
+            // 如果主服务器会话不存在，创建一个
+            if (!mainSession) {
+                mainSession = {
+                    conversationHistory: [],
+                    currentMode: 'chat',
+                    uploadedQuestions: [],
+                    uploadedReturnLog: [],
+                    activeChatSession: null,
+                    status: 'IN_PROGRESS',
+                    prolific: { pid: null, study: null, session: null },
+                    lastProgressPct: 0,
+                    globalPiiCounters: {
+                        ADDRESS: 0, IP_ADDRESS: 0, URL: 0, SSN: 0, PHONE_NUMBER: 0,
+                        EMAIL: 0, DRIVERS_LICENSE: 0, PASSPORT_NUMBER: 0,
+                        TAXPAYER_IDENTIFICATION_NUMBER: 0, ID_NUMBER: 0, NAME: 0,
+                        USERNAME: 0, KEYS: 0, GEOLOCATION: 0, AFFILIATION: 0,
+                        DEMOGRAPHIC_ATTRIBUTE: 0, TIME: 0, HEALTH_INFORMATION: 0,
+                        FINANCIAL_INFORMATION: 0, EDUCATIONAL_RECORD: 0
+                    },
+                    detectedEntities: {},
+                    uiFlags: { hasWelcomed: false, followupsPerQuestion: {} },
+                    qEpoch: 0,
+                    qStatus: {},
+                    followupStatus: {}
+                };
+                global.mainServerSessions.set(sessionId, mainSession);
+                console.log(`🆕 Created main server session: ${sessionId}`);
+            }
+            
+            // 同步状态到activeChatSession
+            mainSession.activeChatSession = {
+                totalQuestions: orchestratorState.totalQuestions,
+                completedQuestions: orchestratorState.completedQuestions,
+                progressPercentage: orchestratorState.progressPercentage,
+                currentMainIdx: orchestratorState.currentMainIdx,
+                surveyCompleted: orchestratorState.surveyCompleted || false,
+                conversationLog: orchestratorState.conversationLog || [],
+                pendingExportAction: orchestratorState.pendingExportAction || false,
+                exportActionCompleted: orchestratorState.exportActionCompleted || false
+            };
+            console.log(`🔄 Synced state to main server: ${orchestratorState.completedQuestions}/${orchestratorState.totalQuestions} questions completed`);
+        }
+    } catch (error) {
+        console.error('Failed to ensure main server session and sync state:', error);
+    }
+}
+
+/**
  * 获取或创建会话
  * @param {string} sessionId 会话ID
  * @param {string} mode 模式
@@ -410,6 +468,9 @@ export async function handleChatSimple(req, res) {
             interviewFinished,
             followUpQuestions: followUpQuestions.length
         });
+
+        // 确保主服务器会话存在并同步状态
+        ensureMainServerSessionAndSync(currentSessionId, session);
 
         return res.json(response);
 

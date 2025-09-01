@@ -538,6 +538,9 @@ app.get('/', (req, res) => {
 // Session-based conversation management
 const sessions = new Map(); // Store conversations by session ID
 
+// 暴露sessions给全局访问，用于简化orchestrator状态同步
+global.mainServerSessions = sessions;
+
 // Helper function to get or create session
 function getSession(sessionId) {
     if (!sessions.has(sessionId)) {
@@ -3400,8 +3403,8 @@ app.post('/api/verify-completion', async (req, res) => {
                         redirectUrl: 'https://app.prolific.com/submissions/complete?cc=C15VDGHG',
                         message: 'Thank you for completing the study!',
                         completedPercentage: 100,
-                        totalQuestions: 7,
-                        completedQuestions: 7,
+                        totalQuestions: unifiedQuestions.length,
+                        completedQuestions: unifiedQuestions.length,
                         verificationMethod: 'upload_record_verification'
                     });
                 } else {
@@ -3421,7 +3424,7 @@ app.post('/api/verify-completion', async (req, res) => {
                 
                 // Get the orchestrator state
                 const chatState = session.activeChatSession;
-                const totalQuestions = chatState.totalQuestions || 7;
+                const totalQuestions = chatState.totalQuestions || unifiedQuestions.length;
                 const completedQuestions = chatState.completedQuestions || 0;
                 const progressPercentage = chatState.progressPercentage || 0;
                 
@@ -3435,7 +3438,7 @@ app.post('/api/verify-completion', async (req, res) => {
                                              (chatState.conversationLog && chatState.conversationLog.length > 0 && surveyCompleted);
                 
                 // Full completion requires:
-                // 1. All conversation questions completed (7/7)
+                // 1. All conversation questions completed (6/6)
                 // 2. Survey completed 
                 // 3. Post-conversation tasks done (editing/analysis depending on mode)
                 const conversationComplete = completedQuestions >= totalQuestions;
@@ -3514,7 +3517,7 @@ app.post('/api/verify-completion', async (req, res) => {
             completionCode: null,
             message: 'No completion evidence found. Please contact support if you believe this is an error.',
             completedPercentage: 0,
-            totalQuestions: 7,
+            totalQuestions: unifiedQuestions.length,
             completedQuestions: 0,
             verificationMethod: 'no_evidence_found'
         });
