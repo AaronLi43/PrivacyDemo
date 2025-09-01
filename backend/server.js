@@ -4114,22 +4114,29 @@ async function streamToString(stream) {
 async function s3ListReturnsForPid(pid) {
     if (!s3Client || !S3_BUCKET) return [];
     const out = [];
-    let ContinuationToken = undefined;
     const pidRe = new RegExp(pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // 安全转义
-    let guard = 0;
-    while (guard++ < 50) {
-        const resp = await s3Client.send(new ListObjectsV2Command({
-            Bucket: S3_BUCKET,
-            Prefix: RETURNS_PREFIX,
-            ContinuationToken
-        }));
-        const contents = resp.Contents || [];
-        for (const obj of contents) {
-            if (obj.Key && pidRe.test(obj.Key)) out.push(obj);
+    
+    // Search both 'returns/' and 'exports/' directories
+    const prefixes = ['returns/', 'exports/'];
+    
+    for (const prefix of prefixes) {
+        let ContinuationToken = undefined;
+        let guard = 0;
+        while (guard++ < 50) {
+            const resp = await s3Client.send(new ListObjectsV2Command({
+                Bucket: S3_BUCKET,
+                Prefix: prefix,
+                ContinuationToken
+            }));
+            const contents = resp.Contents || [];
+            for (const obj of contents) {
+                if (obj.Key && pidRe.test(obj.Key)) out.push(obj);
+            }
+            if (!resp.IsTruncated) break;
+            ContinuationToken = resp.NextContinuationToken;
         }
-        if (!resp.IsTruncated) break;
-        ContinuationToken = resp.NextContinuationToken;
     }
+    
     // 最近的在前
     out.sort((a, b) => new Date(b.LastModified||0) - new Date(a.LastModified||0));
     return out;
@@ -4183,6 +4190,25 @@ async function checkRecentCompleteUpload(prolificPid) {
             const fileContent = await s3GetJSON(fileName);
             const metadata = fileContent.metadata || {};
             
+            // For files in exports/ directory, they are considered complete if they exist
+            // and have been uploaded recently (within 2 hours)
+            if (fileName.startsWith('exports/')) {
+                console.log(`📊 Exports file detected: ${fileName}`);
+                const hasConversation = fileContent.conversation && fileContent.conversation.length > 0;
+                const hasExportData = fileContent.exportData || fileContent.metadata;
+                
+                if (hasConversation || hasExportData) {
+                    return { 
+                        isComplete: true, 
+                        fileName,
+                        uploadTime: fileTime,
+                        metadata: metadata,
+                        verificationMethod: 'exports_file'
+                    };
+                }
+            }
+            
+            // For files in returns/ directory, use the original logic
             const surveyCompleted = metadata.survey_completed || false;
             const hasConversation = fileContent.conversation && fileContent.conversation.length > 0;
             const hasPrivacyAnalysis = fileContent.privacy_suggestions || fileContent.privacy_analysis;
