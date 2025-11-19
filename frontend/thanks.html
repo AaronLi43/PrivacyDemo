@@ -322,6 +322,11 @@
             if (data.completionCode && data.redirectUrl) {
                 document.getElementById('prolific-completion-link').href = data.redirectUrl;
                 document.getElementById('prolific-section').style.display = 'block';
+                
+                // Auto-redirect to completion link after a short delay
+                setTimeout(() => {
+                    window.location.href = data.redirectUrl;
+                }, 2000);
             }
         }
         
