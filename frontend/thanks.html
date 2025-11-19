@@ -287,13 +287,17 @@
                 }
                 
                 const data = await response.json();
+                console.log('📥 API Response:', data);
                 
                 // Update UI based on completion status
                 if (data.status === 'COMPLETE') {
+                    console.log('✅ Status is COMPLETE, showing complete status...');
                     showCompleteStatus(data);
                 } else if (data.status === 'PARTIAL') {
+                    console.log('⚠️ Status is PARTIAL, showing partial status...');
                     showPartialStatus(data);
                 } else {
+                    console.warn('❌ Unknown status:', data.status);
                     showError('Unable to verify completion status.');
                 }
                 
@@ -320,13 +324,20 @@
             
             // Show Prolific link with completion code
             if (data.completionCode && data.redirectUrl) {
+                console.log('✅ Completion verified - redirecting to:', data.redirectUrl);
                 document.getElementById('prolific-completion-link').href = data.redirectUrl;
                 document.getElementById('prolific-section').style.display = 'block';
                 
                 // Auto-redirect to completion link after a short delay
                 setTimeout(() => {
-                    window.location.href = data.redirectUrl;
+                    console.log('🔄 Auto-redirecting to Prolific completion link...');
+                    window.location.replace(data.redirectUrl);
                 }, 2000);
+            } else {
+                console.warn('⚠️ Missing completion code or redirect URL:', {
+                    completionCode: data.completionCode,
+                    redirectUrl: data.redirectUrl
+                });
             }
         }
         
