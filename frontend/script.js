@@ -5392,7 +5392,7 @@ class PrivacyDemoApp {
                         <p><strong>Issue:</strong> ${turn.userPrivacy.type}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
                         ${placeholderVersion ? `<p><strong>Placeholder Version:</strong> ${this.escapeHtml(placeholderVersion)}</p>` : ''}
-                        ${fakeDataVersion ? `<p><strong>Fake Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
+                        ${fakeDataVersion ? `<p><strong>Blurred Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
                         ${contextualRiskInfo}
                         <div class="choice-buttons">
                             ${userChoice === 'none' ? `
@@ -5482,7 +5482,7 @@ class PrivacyDemoApp {
                         <p><strong>Issue:</strong> ${turn.botPrivacy.type}</p>
                         <p><strong>Original:</strong> ${this.escapeHtml(before)}</p>
                         ${placeholderVersion ? `<p><strong>Placeholder Version:</strong> ${this.escapeHtml(placeholderVersion)}</p>` : ''}
-                        ${fakeDataVersion ? `<p><strong>Fake Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
+                        ${fakeDataVersion ? `<p><strong>Blurred Data Version:</strong> ${this.escapeHtml(fakeDataVersion)}</p>` : ''}
                         <div class="choice-buttons">
                             ${botChoice === 'none' ? `
                                 <button class="btn btn-success" onclick="app.makePrivacyChoice(${i}, 'bot', 'accept')" 
